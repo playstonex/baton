@@ -3,10 +3,9 @@ import { useState } from 'react';
 import { useConnectionStore } from '../../src/stores/connection';
 import { wsService } from '../../src/services/websocket';
 import { saveCredentials, clearCredentials } from '../../src/services/secure-storage';
-import { getHttpUrl } from '../../src/services/api';
 
 export default function SettingsScreen() {
-  const { mode, setMode, relayUrl, hostId, token, localHttpUrl, localWsUrl, connected, setCredentials, setConnected } =
+  const { mode, setMode, relayUrl, hostId, localHttpUrl, localWsUrl, connected, setCredentials, setConnected } =
     useConnectionStore();
   const [inputRelayUrl, setInputRelayUrl] = useState(relayUrl);
   const [inputPairingCode, setInputPairingCode] = useState('');

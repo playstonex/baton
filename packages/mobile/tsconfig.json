@@ -1,15 +1,12 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": ".",
+    "strict": true,
     "jsx": "react-jsx",
-    "lib": ["ES2022"],
-    "types": ["react"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["app", "src", "index.js"],
+  "include": ["app", "src", "index.js", ".expo/types/**/*.ts", "expo-env.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

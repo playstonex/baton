@@ -5,3 +5,19 @@ dist/
 .env
 .env.local
 .DS_Store
+
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Native builds
+ios/
+android/
+
+# Expo EAS
+.eas/

@@ -68,7 +68,7 @@ export default function AgentDetailScreen() {
           {fileChanges.slice(0, 10).map((e, i) =>
             e.type === 'file_change' ? (
               <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, overflow: 'hidden', backgroundColor: CHANGE_COLORS[e.changeType]?.bg ?? '#f3f4f6', color: CHANGE_COLORS[e.changeType]?.text ?? '#666', fontWeight: '500' }}>
+                <Text style={{ fontSize: 10, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 3, overflow: 'hidden', backgroundColor: CHANGE_COLORS[e.changeType]?.bg ?? '#f3f4f6', color: CHANGE_COLORS[e.changeType]?.text ?? '#666', fontWeight: '500' }}>
                   {e.changeType}
                 </Text>
                 <Text style={{ fontSize: 12, fontFamily: 'monospace', flex: 1 }} numberOfLines={1}>{e.path}</Text>

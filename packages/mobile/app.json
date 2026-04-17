@@ -6,15 +6,27 @@
     "orientation": "default",
     "scheme": "flowwhips",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.flowwhips.mobile"
     },
     "android": {
-      "adaptiveIcon": {},
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
       "package": "com.flowwhips.mobile"
     },
-    "plugins": ["expo-router", "expo-secure-store"]
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

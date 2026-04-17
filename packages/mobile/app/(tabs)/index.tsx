@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
@@ -78,7 +79,7 @@ export default function DashboardScreen() {
       });
       router.push(`/terminal/${data.sessionId}`);
     } catch (err) {
-      alert(`Failed: ${err}`);
+      Alert.alert('Error', `Failed: ${err}`);
     } finally {
       setLoading(false);
     }

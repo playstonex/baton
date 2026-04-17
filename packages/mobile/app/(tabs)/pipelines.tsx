@@ -1,7 +1,17 @@
+import { Alert } from 'react-native';
 import { View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import type { AgentType } from '@flowwhips/shared';
 import { apiFetch } from '../../src/services/api';
+
+// Generate UUID for React Native
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 interface PipelineStep {
   id: string;
@@ -30,7 +40,7 @@ const STATUS_TEXT: Record<string, string> = { pending: '#6b7280', running: '#3b8
 export default function PipelinesScreen() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [name, setName] = useState('');
-  const [steps, setSteps] = useState<PipelineStep[]>([{ id: crypto.randomUUID(), agentType: 'claude-code', projectPath: '' }]);
+  const [steps, setSteps] = useState<PipelineStep[]>([{ id: generateUUID(), agentType: 'claude-code', projectPath: '' }]);
   const [creating, setCreating] = useState(false);
 
   const fetchPipelines = useCallback(async () => {
@@ -47,7 +57,7 @@ export default function PipelinesScreen() {
   }, [fetchPipelines]);
 
   function addStep() {
-    setSteps([...steps, { id: crypto.randomUUID(), agentType: 'claude-code', projectPath: '' }]);
+    setSteps([...steps, { id: generateUUID(), agentType: 'claude-code', projectPath: '' }]);
   }
 
   function updateStep(index: number, patch: Partial<PipelineStep>) {
@@ -70,10 +80,10 @@ export default function PipelinesScreen() {
       });
       await apiFetch(`/api/pipelines/${pipeline.id}/run`, { method: 'POST' });
       setName('');
-      setSteps([{ id: crypto.randomUUID(), agentType: 'claude-code', projectPath: '' }]);
+      setSteps([{ id: generateUUID(), agentType: 'claude-code', projectPath: '' }]);
       await fetchPipelines();
     } catch (err) {
-      alert(`Failed: ${err}`);
+      Alert.alert('Error', `Failed: ${err}`);
     } finally {
       setCreating(false);
     }
