@@ -1,0 +1,28 @@
+{
+  "name": "flowwhips",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Open-source remote AI Agent orchestration platform",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.8.1",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "eslint packages/*/src --ext .ts,.tsx",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx}\"",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild", "node-pty"]
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.30.0",
+    "@typescript-eslint/parser": "^8.30.0",
+    "eslint": "^9.24.0",
+    "prettier": "^3.5.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3"
+  }
+}

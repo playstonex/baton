@@ -1,0 +1,24 @@
+{
+  "name": "@flowwhips/cli",
+  "version": "0.0.1",
+  "description": "FlowWhips CLI — control AI agents from the terminal",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "flowwhips": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@flowwhips/shared": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/ws": "^8.18.0",
+    "typescript": "^5.8.3"
+  }
+}
