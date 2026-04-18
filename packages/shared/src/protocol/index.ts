@@ -1,9 +1,13 @@
-import type { ParsedEvent, AgentStatus, AgentType, SessionStatus, HostStatus } from '../types/index.js';
+import type {
+  ParsedEvent,
+  AgentStatus,
+  AgentType,
+  SessionStatus,
+  HostStatus,
+} from '../types/index.js';
 
 // WebSocket message types: Client → Daemon
-export type ClientMessage =
-  | TerminalInputMessage
-  | ControlMessage;
+export type ClientMessage = TerminalInputMessage | ControlMessage;
 
 export interface TerminalInputMessage {
   type: 'terminal_input';
@@ -11,7 +15,13 @@ export interface TerminalInputMessage {
   data: string;
 }
 
-export type ControlAction = 'start_agent' | 'stop_agent' | 'list_agents' | 'attach_session' | 'detach_session' | 'resize';
+export type ControlAction =
+  | 'start_agent'
+  | 'stop_agent'
+  | 'list_agents'
+  | 'attach_session'
+  | 'detach_session'
+  | 'resize';
 
 export interface ControlMessage {
   type: 'control';
@@ -92,3 +102,6 @@ export interface HostInfoResponse {
   status: HostStatus;
   agents: { id: string; type: string; status: AgentStatus; projectPath: string }[];
 }
+
+export * from './channels.js';
+export * from './handshake.js';

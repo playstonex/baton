@@ -1,14 +1,17 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { MessageBuffer } from './buffer.js';
+import { PairingService } from './pairing.js';
 
 const DEFAULT_PORT = 3230;
 
 interface HostConnection {
   hostId: string;
   ws: WebSocket;
-  messageBuffer: BufferedMessage[];
+  messageBuffer: MessageBuffer;
   lastSeen: number;
+  publicKeyFingerprint?: string;
 }
 
 interface ClientConnection {
@@ -16,16 +19,8 @@ interface ClientConnection {
   hostId: string;
   ws: WebSocket;
   lastSeen: number;
+  publicKeyFingerprint?: string;
 }
-
-interface BufferedMessage {
-  id: string;
-  data: string;
-  timestamp: number;
-}
-
-const MAX_BUFFER_SIZE = 5000; // ~5000 messages buffered per host
-const BUFFER_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 export class RelayServer {
   private hosts = new Map<string, HostConnection>();
@@ -33,12 +28,12 @@ export class RelayServer {
   private httpServer: ReturnType<typeof createServer> | null = null;
   private wss: WebSocketServer | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private pairing = new PairingService();
 
   constructor(private port = DEFAULT_PORT) {}
 
   start(): void {
     this.httpServer = createServer((req, res) => {
-      // Health check + status endpoint
       if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
@@ -51,6 +46,25 @@ export class RelayServer {
         );
         return;
       }
+
+      if (req.url?.startsWith('/pair?code=')) {
+        const code = req.url.split('code=')[1]?.toUpperCase();
+        if (!code) {
+          res.writeHead(400);
+          res.end('Missing code');
+          return;
+        }
+        const result = this.pairing.redeem(code);
+        if (!result) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: 'Invalid or expired pairing code' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+        return;
+      }
+
       res.writeHead(404);
       res.end('Not found');
     });
@@ -70,8 +84,7 @@ export class RelayServer {
       ws.on('close', () => this.handleDisconnect(ws));
       ws.on('error', () => this.handleDisconnect(ws));
 
-      // Send welcome
-      ws.send(JSON.stringify({ type: 'welcome', message: 'FlowWhips Relay' }));
+      ws.send(JSON.stringify({ type: 'welcome', message: 'FlowWhips Relay v0.0.1' }));
     });
 
     this.httpServer.listen(this.port, () => {
@@ -80,7 +93,6 @@ export class RelayServer {
       console.log(`  Health:    http://localhost:${this.port}/health\n`);
     });
 
-    // Periodic cleanup of stale connections and old buffered messages
     this.cleanupTimer = setInterval(() => this.cleanup(), 60000);
   }
 
@@ -89,11 +101,12 @@ export class RelayServer {
       case 'register':
         this.handleRegister(ws, msg);
         break;
-
+      case 'pair_request':
+        this.handlePairRequest(ws, msg);
+        break;
       case 'ping':
         ws.send(JSON.stringify({ type: 'pong' }));
         break;
-
       default:
         this.handleForward(ws, msg);
         break;
@@ -105,8 +118,8 @@ export class RelayServer {
 
     if (role === 'host') {
       const hostId = (msg.hostId as string) || randomUUID();
+      const publicKeyFingerprint = msg.publicKeyFingerprint as string | undefined;
 
-      // If host reconnects, replace old connection and flush buffer
       const existing = this.hosts.get(hostId);
       if (existing) {
         existing.ws.close(1001, 'Replaced by new connection');
@@ -115,14 +128,14 @@ export class RelayServer {
       this.hosts.set(hostId, {
         hostId,
         ws,
-        messageBuffer: existing?.messageBuffer ?? [],
+        messageBuffer: existing?.messageBuffer ?? new MessageBuffer(),
         lastSeen: Date.now(),
+        publicKeyFingerprint,
       });
 
       ws.send(JSON.stringify({ type: 'registered', hostId }));
       console.log(`Host registered: ${hostId}`);
 
-      // Notify waiting clients
       for (const client of this.clients.values()) {
         if (client.hostId === hostId && client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(JSON.stringify({ type: 'host_online', hostId }));
@@ -136,24 +149,27 @@ export class RelayServer {
       }
 
       const clientId = randomUUID();
+      const publicKeyFingerprint = msg.publicKeyFingerprint as string | undefined;
 
       this.clients.set(clientId, {
         clientId,
         hostId,
         ws,
         lastSeen: Date.now(),
+        publicKeyFingerprint,
       });
 
-      ws.send(JSON.stringify({
-        type: 'connected',
-        clientId,
-        hostId,
-        hostOnline: this.hosts.has(hostId),
-      }));
+      ws.send(
+        JSON.stringify({
+          type: 'connected',
+          clientId,
+          hostId,
+          hostOnline: this.hosts.has(hostId),
+        }),
+      );
 
       console.log(`Client connected: ${clientId} → host ${hostId}`);
 
-      // If host is online, replay buffered messages to this client
       const host = this.hosts.get(hostId);
       if (host) {
         this.flushBufferToClient(host, ws);
@@ -161,25 +177,37 @@ export class RelayServer {
     }
   }
 
+  private handlePairRequest(ws: WebSocket, msg: Record<string, unknown>): void {
+    const hostId = msg.hostId as string;
+    const host = this.hosts.get(hostId);
+
+    if (!host || host.ws !== ws) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Not a registered host' }));
+      return;
+    }
+
+    const fingerprint = (msg.publicKeyFingerprint as string) || host.publicKeyFingerprint || '';
+    const code = this.pairing.createCode(hostId, fingerprint);
+
+    ws.send(
+      JSON.stringify({
+        type: 'pair_code',
+        code,
+        expiresIn: 300,
+        relayUrl: `ws://localhost:${this.port}`,
+      }),
+    );
+  }
+
   private handleForward(ws: WebSocket, msg: Record<string, unknown>): void {
-    // Forward from host → clients
+    // Host → Clients (forward opaque encrypted blobs)
     const host = this.findHostByWs(ws);
     if (host) {
       host.lastSeen = Date.now();
-
       const payload = JSON.stringify(msg);
 
-      // Buffer for offline/reconnecting clients
-      host.messageBuffer.push({
-        id: randomUUID(),
-        data: payload,
-        timestamp: Date.now(),
-      });
-      if (host.messageBuffer.length > MAX_BUFFER_SIZE) {
-        host.messageBuffer = host.messageBuffer.slice(-Math.floor(MAX_BUFFER_SIZE / 2));
-      }
+      host.messageBuffer.push(payload);
 
-      // Forward to all bound clients
       for (const client of this.clients.values()) {
         if (client.hostId === host.hostId && client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(payload);
@@ -188,7 +216,7 @@ export class RelayServer {
       return;
     }
 
-    // Forward from client → host
+    // Client → Host (forward opaque encrypted blobs)
     const client = this.findClientByWs(ws);
     if (client) {
       client.lastSeen = Date.now();
@@ -196,15 +224,13 @@ export class RelayServer {
       if (hostConn?.ws.readyState === WebSocket.OPEN) {
         hostConn.ws.send(JSON.stringify(msg));
       } else {
-        // Host offline — notify client
         ws.send(JSON.stringify({ type: 'error', message: 'Host is offline' }));
       }
     }
   }
 
   private flushBufferToClient(host: HostConnection, clientWs: WebSocket): void {
-    const now = Date.now();
-    const recent = host.messageBuffer.filter((m) => now - m.timestamp < BUFFER_TTL_MS);
+    const recent = host.messageBuffer.recent();
     for (const msg of recent) {
       if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(msg.data);
@@ -213,15 +239,11 @@ export class RelayServer {
   }
 
   private handleDisconnect(ws: WebSocket): void {
-    // Check if it's a host
     for (const [hostId, host] of this.hosts) {
       if (host.ws === ws) {
         console.log(`Host disconnected: ${hostId}`);
-        // Don't delete immediately — keep buffer for reconnection
-        // Just close the WS reference
         this.hosts.delete(hostId);
 
-        // Notify clients
         for (const client of this.clients.values()) {
           if (client.hostId === hostId && client.ws.readyState === WebSocket.OPEN) {
             client.ws.send(JSON.stringify({ type: 'host_disconnected', hostId }));
@@ -231,7 +253,6 @@ export class RelayServer {
       }
     }
 
-    // Check if it's a client
     for (const [clientId, client] of this.clients) {
       if (client.ws === ws) {
         console.log(`Client disconnected: ${clientId}`);
@@ -243,17 +264,16 @@ export class RelayServer {
 
   private cleanup(): void {
     const now = Date.now();
+    const TTL = 10 * 60 * 1000;
 
-    // Clean stale connections
     for (const [clientId, client] of this.clients) {
-      if (now - client.lastSeen > BUFFER_TTL_MS) {
+      if (now - client.lastSeen > TTL) {
         this.clients.delete(clientId);
       }
     }
 
-    // Clean old buffered messages
     for (const host of this.hosts.values()) {
-      host.messageBuffer = host.messageBuffer.filter((m) => now - m.timestamp < BUFFER_TTL_MS);
+      host.messageBuffer.cleanup();
     }
   }
 
@@ -280,7 +300,6 @@ export class RelayServer {
   }
 }
 
-// Run if called directly
 const port = parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
 new RelayServer(port).start();
 

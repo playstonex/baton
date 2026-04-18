@@ -14,13 +14,18 @@
   "dependencies": {
     "@flowwhips/shared": "workspace:*",
     "@hono/node-server": "^1.14.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "chokidar": "^4.0.3",
     "hono": "^4.7.0",
     "node-pty": "^1.0.0",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
     "ws": "^8.18.0",
-    "chokidar": "^4.0.3"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.3"

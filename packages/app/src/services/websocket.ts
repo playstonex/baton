@@ -1,4 +1,5 @@
 import type { DaemonMessage } from '@flowwhips/shared';
+import { Channel, decodeFrame, decodeJsonFrame } from '@flowwhips/shared/protocol';
 
 type MessageHandler = (msg: DaemonMessage) => void;
 
@@ -11,6 +12,11 @@ interface ConnectionConfig {
   relayUrl?: string;
   hostId?: string;
   token?: string;
+  binaryProtocol?: boolean;
+}
+
+function isBinaryData(data: unknown): data is ArrayBuffer | Blob {
+  return data instanceof ArrayBuffer || data instanceof Blob;
 }
 
 export class WebSocketService {
@@ -42,14 +48,15 @@ export class WebSocketService {
 
     let url: string;
     if (this.config.mode === 'remote' && this.config.relayUrl) {
-      // Remote: connect to relay as client
       url = `${this.config.relayUrl}`;
     } else {
-      // Local: connect directly to daemon
       url = this.config.localWsUrl ?? `ws://${window.location.hostname}:3211`;
     }
 
     this.ws = new WebSocket(url);
+    if (this.config.binaryProtocol) {
+      this.ws.binaryType = 'arraybuffer';
+    }
 
     this.ws.onopen = () => {
       this._connected = true;
@@ -57,7 +64,6 @@ export class WebSocketService {
       this.notifyStateChange();
 
       if (this.config.mode === 'remote' && this.config.hostId) {
-        // Register as client on relay
         this.ws!.send(
           JSON.stringify({
             type: 'register',
@@ -71,11 +77,11 @@ export class WebSocketService {
 
     this.ws.onmessage = (e) => {
       try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'welcome' || msg.type === 'connected' || msg.type === 'pong') return;
-        if (!('sessionId' in msg || 'status' in msg || 'agents' in msg)) return;
-        this.dispatch(msg as DaemonMessage);
-        this.dispatch(msg);
+        if (isBinaryData(e.data)) {
+          this.handleBinaryMessage(e.data);
+        } else {
+          this.handleTextMessage(e.data);
+        }
       } catch {
         // ignore
       }
@@ -93,10 +99,45 @@ export class WebSocketService {
     };
   }
 
+  private handleTextMessage(data: string): void {
+    const msg = JSON.parse(data);
+    if (msg.type === 'welcome' || msg.type === 'connected' || msg.type === 'pong') return;
+    if (!('sessionId' in msg || 'status' in msg || 'agents' in msg)) return;
+    this.dispatch(msg as DaemonMessage);
+  }
+
+  private handleBinaryMessage(data: ArrayBuffer | Blob): void {
+    const arrayBuffer = data instanceof Blob ? data.arrayBuffer() : Promise.resolve(data);
+    arrayBuffer.then((buffer) => {
+      const bytes = new Uint8Array(buffer);
+      const frame = decodeFrame(bytes);
+
+      switch (frame.channel) {
+        case Channel.Control: {
+          const ctrl = decodeJsonFrame<Record<string, unknown>>(frame);
+          if (ctrl.type === 'welcome') {
+            // intentionally empty — handshake ack
+          }
+          this.dispatch(ctrl as unknown as DaemonMessage);
+          break;
+        }
+        case Channel.Terminal: {
+          const text = new TextDecoder().decode(frame.payload);
+          this.dispatch({ type: 'terminal_output', sessionId: '', data: text } as DaemonMessage);
+          break;
+        }
+        case Channel.Events: {
+          const event = decodeJsonFrame<Record<string, unknown>>(frame);
+          this.dispatch(event as unknown as DaemonMessage);
+          break;
+        }
+      }
+    });
+  }
+
   send(msg: unknown): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
-    }
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify(msg));
   }
 
   disconnect(): void {
@@ -124,7 +165,11 @@ export class WebSocketService {
     const stateHandlers = this.handlers.get('_state');
     if (stateHandlers) {
       for (const h of stateHandlers) {
-        h({ type: 'status_update', sessionId: '', status: this._connected ? 'running' : 'stopped' });
+        h({
+          type: 'status_update',
+          sessionId: '',
+          status: this._connected ? 'running' : 'stopped',
+        });
       }
     }
   }

@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@flowwhips/shared": "workspace:*",
+    "pino": "^10.3.1",
+    "tweetnacl": "^1.0.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {

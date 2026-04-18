@@ -6,6 +6,8 @@ dist/
 .env.local
 .DS_Store
 
+extends/
+
 # Expo
 .expo/
 *.jks

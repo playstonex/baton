@@ -1,4 +1,5 @@
 import type { DaemonMessage } from '@flowwhips/shared';
+import { Channel, decodeFrame, decodeJsonFrame } from '@flowwhips/shared/protocol';
 
 type MessageHandler = (msg: DaemonMessage) => void;
 
@@ -9,6 +10,11 @@ export interface ConnectionConfig {
   token?: string;
   localWsUrl?: string;
   localHttpUrl?: string;
+  binaryProtocol?: boolean;
+}
+
+function isBinaryData(data: unknown): data is ArrayBuffer {
+  return typeof ArrayBuffer !== 'undefined' && data instanceof ArrayBuffer;
 }
 
 export class WebSocketService {
@@ -40,6 +46,9 @@ export class WebSocketService {
     }
 
     this.ws = new WebSocket(url);
+    if (this.config.binaryProtocol) {
+      this.ws.binaryType = 'arraybuffer';
+    }
 
     this.ws.onopen = () => {
       this._connected = true;
@@ -61,9 +70,11 @@ export class WebSocketService {
 
     this.ws.onmessage = (e: WebSocketMessageEvent) => {
       try {
-        const msg = JSON.parse(e.data as string);
-        if (msg.type === 'welcome' || msg.type === 'connected' || msg.type === 'pong') return;
-        this.dispatch(msg as DaemonMessage);
+        if (isBinaryData(e.data)) {
+          this.handleBinaryMessage(e.data as ArrayBuffer);
+        } else {
+          this.handleTextMessage(e.data as string);
+        }
       } catch {
         // ignore
       }
@@ -79,6 +90,35 @@ export class WebSocketService {
     this.ws.onerror = () => {
       // onclose fires after
     };
+  }
+
+  private handleTextMessage(data: string): void {
+    const msg = JSON.parse(data);
+    if (msg.type === 'welcome' || msg.type === 'connected' || msg.type === 'pong') return;
+    this.dispatch(msg as DaemonMessage);
+  }
+
+  private handleBinaryMessage(data: ArrayBuffer): void {
+    const bytes = new Uint8Array(data);
+    const frame = decodeFrame(bytes);
+
+    switch (frame.channel) {
+      case Channel.Control: {
+        const ctrl = decodeJsonFrame<Record<string, unknown>>(frame);
+        this.dispatch(ctrl as unknown as DaemonMessage);
+        break;
+      }
+      case Channel.Terminal: {
+        const text = new TextDecoder().decode(frame.payload);
+        this.dispatch({ type: 'terminal_output', sessionId: '', data: text } as DaemonMessage);
+        break;
+      }
+      case Channel.Events: {
+        const event = decodeJsonFrame<Record<string, unknown>>(frame);
+        this.dispatch(event as unknown as DaemonMessage);
+        break;
+      }
+    }
   }
 
   send(msg: unknown): void {
@@ -112,7 +152,11 @@ export class WebSocketService {
     const stateHandlers = this.handlers.get('_state');
     if (stateHandlers) {
       for (const h of stateHandlers) {
-        h({ type: 'status_update', sessionId: '', status: this._connected ? ('running' as const) : ('stopped' as const) });
+        h({
+          type: 'status_update',
+          sessionId: '',
+          status: this._connected ? ('running' as const) : ('stopped' as const),
+        });
       }
     }
   }

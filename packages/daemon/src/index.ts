@@ -4,14 +4,22 @@ import { join, basename, extname } from 'node:path';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
+import QRCode from 'qrcode';
+import { generateKeyPair, keyToFingerprint } from '@flowwhips/shared';
 import { AgentManager } from './agent/manager.js';
-import { createAdapter } from './agent/index.js';
+import { createAdapter, ProviderRegistry } from './agent/index.js';
 import { Transport } from './transport/index.js';
 import { RelayConnection } from './transport/relay.js';
 import { FileWatcher } from './watcher/index.js';
 import { Orchestrator } from './orchestrator/index.js';
 import type { PipelineStep } from './orchestrator/index.js';
-import type { StartAgentRequest, HostInfoResponse, ParsedEvent, ClientMessage, DaemonMessage } from '@flowwhips/shared';
+import type {
+  StartAgentRequest,
+  HostInfoResponse,
+  ParsedEvent,
+  ClientMessage,
+  DaemonMessage,
+} from '@flowwhips/shared';
 
 const DEFAULT_PORT = 3210;
 
@@ -115,7 +123,16 @@ export function createDaemon(port = DEFAULT_PORT) {
   });
 
   // File browser API
-  const IGNORE_DIRS = new Set(['node_modules', '.git', 'dist', '.turbo', '.next', '.cache', '__pycache__', '.DS_Store']);
+  const IGNORE_DIRS = new Set([
+    'node_modules',
+    '.git',
+    'dist',
+    '.turbo',
+    '.next',
+    '.cache',
+    '__pycache__',
+    '.DS_Store',
+  ]);
 
   app.get('/api/files', async (c) => {
     const dir = c.req.query('path') ?? '/';
@@ -140,12 +157,10 @@ export function createDaemon(port = DEFAULT_PORT) {
             }
           }),
       );
-      const sorted = items
-        .filter(Boolean)
-        .sort((a, b) => {
-          if (a!.isDir !== b!.isDir) return a!.isDir ? -1 : 1;
-          return a!.name.localeCompare(b!.name);
-        });
+      const sorted = items.filter(Boolean).sort((a, b) => {
+        if (a!.isDir !== b!.isDir) return a!.isDir ? -1 : 1;
+        return a!.name.localeCompare(b!.name);
+      });
       return c.json({ path: dir, items: sorted });
     } catch {
       return c.json({ error: 'Cannot read directory' }, 400);
@@ -162,10 +177,57 @@ export function createDaemon(port = DEFAULT_PORT) {
       if (s.size > 1024 * 1024) return c.json({ error: 'File too large (max 1MB)' }, 400);
 
       const content = await readFile(filePath, 'utf-8');
-      return c.json({ path: filePath, name: basename(filePath), ext: extname(filePath), content, size: s.size });
+      return c.json({
+        path: filePath,
+        name: basename(filePath),
+        ext: extname(filePath),
+        content,
+        size: s.size,
+      });
     } catch {
       return c.json({ error: 'Cannot read file' }, 400);
     }
+  });
+
+  // Provider API
+  const providerRegistry = new ProviderRegistry();
+
+  app.get('/api/providers', async (c) => {
+    if (!providerRegistry.ensureLoaded()) await providerRegistry.load();
+    return c.json(providerRegistry.list());
+  });
+
+  app.get('/api/providers/:name', async (c) => {
+    if (!providerRegistry.ensureLoaded()) await providerRegistry.load();
+    const profile = providerRegistry.get(c.req.param('name'));
+    if (!profile) return c.json({ error: 'Provider not found' }, 404);
+    return c.json(profile);
+  });
+
+  app.post('/api/providers', async (c) => {
+    if (!providerRegistry.ensureLoaded()) await providerRegistry.load();
+    const body = await c.req.json<{
+      name: string;
+      type: string;
+      binary?: string;
+      models?: string[];
+    }>();
+    await providerRegistry.set(body.name, {
+      type: body.type as 'claude-code' | 'codex' | 'opencode' | 'custom',
+      binary: body.binary,
+      args: [],
+      env: {},
+      models: body.models,
+      profiles: {},
+    });
+    return c.json({ ok: true }, 201);
+  });
+
+  app.delete('/api/providers/:name', async (c) => {
+    if (!providerRegistry.ensureLoaded()) await providerRegistry.load();
+    const removed = await providerRegistry.remove(c.req.param('name'));
+    if (!removed) return c.json({ error: 'Provider not found' }, 404);
+    return c.json({ ok: true });
   });
 
   // Pipeline / Orchestration API
@@ -212,7 +274,9 @@ export function createDaemon(port = DEFAULT_PORT) {
           if (clientMsg.type === 'terminal_input' && clientMsg.sessionId) {
             try {
               agentManager.write(clientMsg.sessionId, clientMsg.data);
-            } catch { /* session might not exist */ }
+            } catch {
+              /* session might not exist */
+            }
           }
         }
       },
@@ -235,6 +299,24 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json({
       connected: relayConnection?.connected ?? false,
     });
+  });
+
+  // QR Code Pairing — generates daemon keypair + QR for mobile scanning
+  let daemonKeyPair: ReturnType<typeof generateKeyPair> | null = null;
+
+  app.get('/api/pair/qr', async (c) => {
+    if (!daemonKeyPair) {
+      daemonKeyPair = generateKeyPair();
+    }
+    const fingerprint = keyToFingerprint(daemonKeyPair.publicKey);
+    const relayUrl = c.req.query('relay') ?? `ws://localhost:${DEFAULT_PORT + 20}`;
+    const payload = JSON.stringify({
+      daemonId: 'local',
+      fp: fingerprint,
+      relay: relayUrl,
+    });
+    const qrDataUrl = await QRCode.toDataURL(payload, { width: 256 });
+    return c.json({ qr: qrDataUrl, fingerprint, relayUrl });
   });
 
   return { app, agentManager, transport, port, watchers };

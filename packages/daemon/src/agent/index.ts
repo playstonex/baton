@@ -3,6 +3,7 @@ export { ClaudeCodeAdapter } from './claude-code.js';
 export { CodexAdapter } from './codex.js';
 export { OpenCodeAdapter } from './opencode.js';
 export { AgentManager } from './manager.js';
+export { ProviderRegistry } from './registry.js';
 
 import type { AgentType } from '@flowwhips/shared';
 import { ClaudeCodeAdapter } from './claude-code.js';

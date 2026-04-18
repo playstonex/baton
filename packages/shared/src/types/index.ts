@@ -1,7 +1,15 @@
 // Agent types
 export type AgentType = 'claude-code' | 'codex' | 'opencode' | 'custom';
 
-export type AgentStatus = 'starting' | 'running' | 'idle' | 'thinking' | 'executing' | 'waiting_input' | 'error' | 'stopped';
+export type AgentStatus =
+  | 'starting'
+  | 'running'
+  | 'idle'
+  | 'thinking'
+  | 'executing'
+  | 'waiting_input'
+  | 'error'
+  | 'stopped';
 
 export interface AgentConfig {
   type: AgentType;
@@ -118,3 +126,6 @@ export interface Session {
   startedAt: string;
   stoppedAt?: string;
 }
+
+export * from './agent.js';
+export * from './provider.js';
