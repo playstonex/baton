@@ -1,13 +1,18 @@
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useConnectionStore } from '../src/stores/connection';
 import { wsService } from '../src/services/websocket';
 import { loadCredentials } from '../src/services/secure-storage';
 
 export default function RootLayout() {
-  const { setCredentials, setConnected } = useConnectionStore();
+  const setCredentials = useConnectionStore((s) => s.setCredentials);
+  const setConnected = useConnectionStore((s) => s.setConnected);
+  const initialized = useRef(false);
 
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
     (async () => {
       const saved = await loadCredentials();
       if (saved) {
@@ -22,7 +27,7 @@ export default function RootLayout() {
     });
 
     return unsub;
-  }, [setCredentials, setConnected]);
+  }, []);
 
   return (
     <Stack>

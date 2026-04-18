@@ -9,6 +9,13 @@ const config = getDefaultConfig(projectRoot);
 // Watch all packages in the monorepo
 config.watchFolders = [workspaceRoot];
 
+// Disable watchman — use Node.js fs.watch instead to avoid EMFILE/stuck issues
+config.watcher = {
+  ...config.watcher,
+  useWatchman: false,
+  additionalExts: ['ts', 'tsx'],
+};
+
 // Resolve workspace packages
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),

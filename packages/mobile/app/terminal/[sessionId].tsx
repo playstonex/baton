@@ -6,10 +6,12 @@ import { wsService } from '../../src/services/websocket';
 import { stripAnsi } from '../../src/services/ansi';
 import { STATUS_COLORS } from '../../src/constants/colors';
 
+const EMPTY_LINES: string[] = [];
+
 export default function TerminalScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
-  const lines = useTerminalStore((s) => s.getSession(sessionId ?? ''));
+  const lines = useTerminalStore((s) => s.sessions[sessionId ?? ''] ?? EMPTY_LINES);
   const addOutput = useTerminalStore((s) => s.addOutput);
   const clearSession = useTerminalStore((s) => s.clearSession);
   const [input, setInput] = useState('');

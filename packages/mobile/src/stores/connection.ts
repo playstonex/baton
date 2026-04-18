@@ -15,22 +15,23 @@ interface ConnectionState {
 }
 
 export const useConnectionStore = create<ConnectionState>()((set) => ({
-  mode: 'remote',
+  mode: 'local',
   connected: false,
   relayUrl: '',
   hostId: '',
   token: '',
-  localHttpUrl: 'http://192.168.1.100:3210',
-  localWsUrl: 'ws://192.168.1.100:3211',
+  localHttpUrl: '',
+  localWsUrl: '',
   setMode: (mode) => set({ mode }),
-  setConnected: (connected) => set({ connected }),
+  setConnected: (connected) => set((state) => (state.connected === connected ? state : { connected })),
   setCredentials: (config) =>
     set({
       mode: config.mode,
+      connected: false,
       relayUrl: config.relayUrl ?? '',
       hostId: config.hostId ?? '',
       token: config.token ?? '',
-      localHttpUrl: config.localHttpUrl ?? 'http://192.168.1.100:3210',
-      localWsUrl: config.localWsUrl ?? 'ws://192.168.1.100:3211',
+      localHttpUrl: config.localHttpUrl ?? '',
+      localWsUrl: config.localWsUrl ?? '',
     }),
 }));

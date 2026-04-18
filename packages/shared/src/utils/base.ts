@@ -1,22 +1,24 @@
-// Cross-platform UUID generation
-// In Node.js environment, use node:crypto
-// In React Native, use a polyfill
+// Cross-platform UUID generation (ESM-safe)
+// Node.js: use node:crypto via dynamic import (lazy, cached)
+// Browser / React Native: Math.random polyfill
 
-let randomUUID: () => string;
+let _randomUUID: (() => string) | null = null;
 
-// Check if we're in a Node.js environment
+// Eagerly init Node.js crypto
 if (typeof process !== 'undefined' && process.versions?.node) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  randomUUID = () => require('crypto').randomUUID();
-} else {
-  // React Native / browser polyfill
-  randomUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  };
+  import('node:crypto').then((mod) => {
+    _randomUUID = mod.randomUUID;
+  }).catch(() => {});
+}
+
+function randomUUID(): string {
+  if (_randomUUID) return _randomUUID();
+  // Fallback for environments without node:crypto or before async init completes
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export function generateId(): string {

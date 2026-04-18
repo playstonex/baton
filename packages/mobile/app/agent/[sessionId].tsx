@@ -9,7 +9,11 @@ import { CHANGE_COLORS } from '../../src/constants/colors';
 export default function AgentDetailScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
-  const { events, fileChanges, toolUses, addEvent, clearEvents } = useEventsStore();
+  const events = useEventsStore((s) => s.events);
+  const fileChanges = useEventsStore((s) => s.fileChanges);
+  const toolUses = useEventsStore((s) => s.toolUses);
+  const addEvent = useEventsStore((s) => s.addEvent);
+  const clearEvents = useEventsStore((s) => s.clearEvents);
 
   useEffect(() => {
     if (!sessionId) return;

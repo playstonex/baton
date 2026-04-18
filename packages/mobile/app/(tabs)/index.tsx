@@ -18,7 +18,10 @@ const AGENT_OPTIONS: { type: AgentType; label: string }[] = [
 export default function DashboardScreen() {
   const router = useRouter();
   const agents = useAgentStore((s) => s.agents);
-  const { setAgents, updateAgentStatus, addAgent, removeAgent } = useAgentStore();
+  const setAgents = useAgentStore((s) => s.setAgents);
+  const updateAgentStatus = useAgentStore((s) => s.updateAgentStatus);
+  const addAgent = useAgentStore((s) => s.addAgent);
+  const removeAgent = useAgentStore((s) => s.removeAgent);
   const connected = useConnectionStore((s) => s.connected);
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');

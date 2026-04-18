@@ -5,8 +5,15 @@ import { wsService } from '../../src/services/websocket';
 import { saveCredentials, clearCredentials } from '../../src/services/secure-storage';
 
 export default function SettingsScreen() {
-  const { mode, setMode, relayUrl, hostId, localHttpUrl, localWsUrl, connected, setCredentials, setConnected } =
-    useConnectionStore();
+  const mode = useConnectionStore((s) => s.mode);
+  const setMode = useConnectionStore((s) => s.setMode);
+  const relayUrl = useConnectionStore((s) => s.relayUrl);
+  const hostId = useConnectionStore((s) => s.hostId);
+  const localHttpUrl = useConnectionStore((s) => s.localHttpUrl);
+  const localWsUrl = useConnectionStore((s) => s.localWsUrl);
+  const connected = useConnectionStore((s) => s.connected);
+  const setCredentials = useConnectionStore((s) => s.setCredentials);
+  const setConnected = useConnectionStore((s) => s.setConnected);
   const [inputRelayUrl, setInputRelayUrl] = useState(relayUrl);
   const [inputPairingCode, setInputPairingCode] = useState('');
   const [inputLocalHttp, setInputLocalHttp] = useState(localHttpUrl);

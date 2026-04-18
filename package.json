@@ -23,8 +23,8 @@
       "node-pty"
     ],
     "overrides": {
-      "react": "19.1.0",
-      "@types/react": "19.1.10"
+      "react": "19.2.0",
+      "@types/react": "19.2.14"
     }
   },
   "devDependencies": {
