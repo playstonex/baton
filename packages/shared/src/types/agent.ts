@@ -11,7 +11,7 @@ export type AgentState =
 
 // Legal state transitions — enforces state machine invariants
 export const VALID_TRANSITIONS: Record<string, string[]> = {
-  initializing: ['idle', 'error', 'stopped'],
+  initializing: ['idle', 'running', 'error', 'stopped'],
   idle: ['running', 'waiting_input', 'error', 'stopped'],
   running: ['idle', 'waiting_input', 'error', 'stopped'],
   waiting_input: ['running', 'idle', 'error', 'stopped'],
