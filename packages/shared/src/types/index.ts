@@ -102,7 +102,7 @@ export interface SdkAgentAdapter extends AgentAdapter {
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }>;
 }
 
-export type AdapterMode = 'pty' | 'sdk';
+export type AdapterMode = 'pty' | 'sdk' | 'auto';
 
 export interface SpawnConfig {
   command: string;

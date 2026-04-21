@@ -21,7 +21,7 @@ const adapters: Record<string, new () => BaseAgentAdapter> = {
 };
 
 export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseAgentAdapter {
-  if (mode === 'sdk' && type === 'claude-code') {
+  if (mode === 'sdk' || (mode === 'auto' && type === 'claude-code' && claudeSdkAdapter.isSdkAvailable())) {
     return claudeSdkAdapter;
   }
   const Adapter = adapters[type] ?? adapters['claude-code'];

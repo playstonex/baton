@@ -23,6 +23,18 @@ import type {
 
 const DEFAULT_PORT = 3210;
 
+function getLocalIp(): string | null {
+  const nets = Object.values(os.networkInterfaces());
+  for (const interfaces of nets) {
+    for (const iface of interfaces ?? []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
+}
+
 export function createDaemon(port = DEFAULT_PORT) {
   const app = new Hono();
   const agentManager = new AgentManager();
@@ -59,7 +71,7 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.post('/api/agents/start', async (c) => {
     const body = await c.req.json<StartAgentRequest>();
-    const adapter = createAdapter(body.agentType);
+    const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
 
     const sessionId = await agentManager.start(
       {
@@ -328,10 +340,16 @@ export async function main() {
 
   transport.start();
 
-  serve({ fetch: app.fetch, port }, (info: { port: number }) => {
+  const hostname = process.env.HOST || '0.0.0.0';
+  serve({ fetch: app.fetch, port, hostname }, (info: { port: number; hostname: string }) => {
+    const localIp = getLocalIp();
     console.log(`\n  FlowWhips Daemon v0.0.1`);
-    console.log(`  HTTP:      http://localhost:${info.port}`);
-    console.log(`  WebSocket: ws://localhost:${info.port + 1}`);
+    console.log(`  HTTP:      http://${hostname}:${info.port}`);
+    console.log(`  WebSocket: ws://${hostname}:${info.port + 1}`);
+    if (localIp && hostname === '0.0.0.0') {
+      console.log(`  LAN HTTP:  http://${localIp}:${info.port}`);
+      console.log(`  LAN WS:    ws://${localIp}:${info.port + 1}`);
+    }
     console.log(`  Host: ${os.hostname()} (${process.platform})\n`);
   });
 

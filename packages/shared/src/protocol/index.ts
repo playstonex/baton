@@ -86,6 +86,7 @@ export interface StartAgentRequest {
   projectPath: string;
   args?: string[];
   env?: Record<string, string>;
+  mode?: AdapterMode;
 }
 
 export interface StartAgentResponse {

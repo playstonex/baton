@@ -67,7 +67,7 @@ async function agentRun(args: string[]): Promise<void> {
   const projectPath = args.find((a) => !a.startsWith('-'));
   if (!projectPath) {
     console.error(
-      'Usage: flowwhips agent run <project-path> [--provider claude-code] [--prompt "..."]',
+      'Usage: flowwhips agent run <project-path> [--provider claude-code] [--mode pty|sdk|auto] [--prompt "..."]',
     );
     process.exit(1);
   }
@@ -75,6 +75,9 @@ async function agentRun(args: string[]): Promise<void> {
   const provider = args.includes('--provider')
     ? args[args.indexOf('--provider') + 1]
     : 'claude-code';
+  const mode = args.includes('--mode')
+    ? args[args.indexOf('--mode') + 1] as 'pty' | 'sdk' | 'auto'
+    : undefined;
   const promptIdx = args.indexOf('--prompt');
   const prompt = promptIdx >= 0 ? args[promptIdx + 1] : undefined;
 
@@ -83,10 +86,10 @@ async function agentRun(args: string[]): Promise<void> {
       '/api/agents/start',
       {
         method: 'POST',
-        body: JSON.stringify({ agentType: provider, projectPath, ...(prompt ? { prompt } : {}) }),
+        body: JSON.stringify({ agentType: provider, projectPath, mode, ...(prompt ? { prompt } : {}) }),
       },
     );
-    console.log(`Agent started: ${data.sessionId} (${provider})`);
+    console.log(`Agent started: ${data.sessionId} (${provider}, ${mode ?? 'pty'})`);
     console.log(`  Attach:  flowwhips agent attach ${data.sessionId}`);
     console.log(`  Send:    flowwhips agent send ${data.sessionId} "your message"`);
     console.log(`  Stop:    flowwhips agent stop ${data.sessionId}`);
