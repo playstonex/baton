@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { generateKeyPair, keyToFingerprint } from '@flowwhips/shared/crypto';
 import type { DaemonMessage } from '@flowwhips/shared';
 
 interface RelayConnectionOptions {
@@ -16,6 +17,8 @@ export class RelayConnection {
   private _connected = false;
   private reconnectAttempts = 0;
   private maxReconnectDelay = 30000;
+  private keyPair: ReturnType<typeof generateKeyPair> | null = null;
+  private encryptionReady = false;
 
   constructor(private options: RelayConnectionOptions) {}
 
@@ -26,7 +29,9 @@ export class RelayConnection {
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    const url = `${this.options.relayUrl}?role=host&hostId=${this.options.hostId}`;
+    this.keyPair = generateKeyPair();
+    const fp = keyToFingerprint(this.keyPair.publicKey);
+    const url = `${this.options.relayUrl}?role=host&hostId=${this.options.hostId}&publicKeyFingerprint=${fp}`;
 
     try {
       this.ws = new WebSocket(url);
@@ -51,6 +56,14 @@ export class RelayConnection {
           token: this.options.token,
         }),
       );
+
+      // Send key exchange for E2EE
+      this.ws!.send(
+        JSON.stringify({
+          type: 'key_exchange',
+          publicKey: btoa(String.fromCharCode(...this.keyPair!.publicKey)),
+        }),
+      );
     });
 
     this.ws.on('message', (raw) => {
@@ -58,7 +71,16 @@ export class RelayConnection {
         const msg = JSON.parse(raw.toString());
         if (msg.type === 'welcome' || msg.type === 'registered' || msg.type === 'pong') return;
 
-        // Forward client messages to daemon
+        if (msg.type === 'key_exchange_done') {
+          console.log('E2EE encryption enabled');
+          this.encryptionReady = true;
+          return;
+        }
+
+        if (msg.type === 'encrypted' && msg.payload) {
+          return;
+        }
+
         this.options.onMessage(msg);
       } catch {
         // ignore

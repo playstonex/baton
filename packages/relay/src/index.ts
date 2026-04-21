@@ -380,6 +380,13 @@ export class RelayServer {
       if (client.ws === ws) {
         console.log(`Client disconnected: ${clientId}`);
         this.clients.delete(clientId);
+
+        const hostConn = this.hosts.get(client.hostId);
+        if (hostConn) {
+          console.log(
+            `Host ${client.hostId} retained (encryption: ${hostConn.encryptionEnabled}, key: ${hostConn.sharedKey ? 'yes' : 'no'})`,
+          );
+        }
         return;
       }
     }
