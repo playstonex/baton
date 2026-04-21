@@ -1,15 +1,34 @@
-import type { AgentConfig, ParsedEvent } from '@flowwhips/shared';
-import type { BaseAgentAdapter } from './adapter.js';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentConfig, ParsedEvent, SdkAgentAdapter } from '@flowwhips/shared';
+import { execSync } from 'node:child_process';
 
-export class ClaudeSdkAdapter implements BaseAgentAdapter {
+type SdkMessage = {
+  type: string;
+  subtype?: string;
+  message?: { content?: Array<{ type: string; [key: string]: unknown }> };
+  result?: string;
+};
+
+export class ClaudeSdkAdapter implements SdkAgentAdapter {
   readonly name = 'Claude Code (SDK)';
   readonly agentType = 'claude-code-sdk' as const;
 
   private controller: AbortController | null = null;
+  private sdkAvailable: boolean | null = null;
+
+  isSdkAvailable(): boolean {
+    if (this.sdkAvailable !== null) return this.sdkAvailable;
+    try {
+      require.resolve('@anthropic-ai/claude-agent-sdk');
+      this.sdkAvailable = true;
+    } catch {
+      this.sdkAvailable = false;
+    }
+    return this.sdkAvailable;
+  }
 
   detect(): boolean {
     try {
+      execSync('which claude', { stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -20,10 +39,11 @@ export class ClaudeSdkAdapter implements BaseAgentAdapter {
     config: AgentConfig,
     onEvent: (event: ParsedEvent) => void,
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }> {
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
     this.controller = new AbortController();
 
     const messageQueue: string[] = [];
-    let resolvePrompt: ((value: string) => void) | null = null;
+    let resolvePrompt: ((value: void) => void) | null = null;
 
     async function* promptGen() {
       while (true) {
@@ -60,61 +80,55 @@ export class ClaudeSdkAdapter implements BaseAgentAdapter {
 
     (async () => {
       try {
-        for await (const message of stream) {
-          const msg = message as {
-            type: string;
-            subtype?: string;
-            message?: { content?: Array<{ type: string; [key: string]: unknown }> };
-          };
+        for await (const raw of stream) {
+          const msg = raw as SdkMessage;
 
           if (msg.type === 'system') {
             if (msg.subtype === 'init') {
-              onEvent({
-                type: 'status_change',
-                status: 'running',
-                timestamp: Date.now(),
-              });
+              onEvent({ type: 'status_change', status: 'running', timestamp: Date.now() });
             }
           } else if (msg.type === 'assistant') {
-            const content = msg.message?.content ?? [];
-            for (const block of content) {
-              if (block.type === 'tool_use') {
-                onEvent({
-                  type: 'tool_use',
-                  tool: (block.name as string) ?? 'unknown',
-                  input: block.input as Record<string, unknown>,
-                  timestamp: Date.now(),
-                });
-              } else if (block.type === 'text') {
-                onEvent({
-                  type: 'raw_output',
-                  content: (block.text as string) ?? '',
-                  timestamp: Date.now(),
-                });
-              }
-            }
+            this.processAssistantMessage(msg, onEvent);
           } else if (msg.type === 'result') {
             if (msg.subtype === 'success') {
-              onEvent({
-                type: 'status_change',
-                status: 'stopped',
-                timestamp: Date.now(),
-              });
+              onEvent({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
             }
           }
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
-          onEvent({
-            type: 'error',
-            message: (err as Error).message,
-            timestamp: Date.now(),
-          });
+          onEvent({ type: 'error', message: (err as Error).message, timestamp: Date.now() });
         }
       }
     })();
 
     return { write, stop };
+  }
+
+  private processAssistantMessage(msg: SdkMessage, onEvent: (event: ParsedEvent) => void): void {
+    const content = msg.message?.content ?? [];
+    for (const block of content) {
+      if (block.type === 'tool_use') {
+        onEvent({
+          type: 'tool_use',
+          tool: (block.name as string) ?? 'unknown',
+          args: (block.input as Record<string, unknown>) ?? {},
+          timestamp: Date.now(),
+        });
+      } else if (block.type === 'text') {
+        onEvent({
+          type: 'raw_output',
+          content: (block.text as string) ?? '',
+          timestamp: Date.now(),
+        });
+      } else if (block.type === 'thinking') {
+        onEvent({
+          type: 'thinking',
+          content: (block.thinking as string) ?? '',
+          timestamp: Date.now(),
+        });
+      }
+    }
   }
 
   buildSpawnConfig(): never {

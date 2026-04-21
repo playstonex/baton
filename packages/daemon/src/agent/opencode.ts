@@ -1,14 +1,19 @@
 import type { AgentConfig, ParsedEvent, SpawnConfig } from '@flowwhips/shared';
 import { BaseAgentAdapter } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
+import { execSync } from 'node:child_process';
 
 export class OpenCodeAdapter extends BaseAgentAdapter {
   readonly name = 'OpenCode';
   readonly agentType = 'opencode' as const;
 
-  detect(_projectPath: string): boolean {
-    // Check if opencode is installed
-    return true;
+  detect(): boolean {
+    try {
+      execSync('which opencode', { stdio: 'pipe' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
