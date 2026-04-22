@@ -21,7 +21,8 @@ export class Transport {
     private agentManager: AgentManager,
     private port: number,
   ) {
-    this.wss = new WebSocketServer({ port: this.port + 1 });
+    const hostname = process.env.HOST || '0.0.0.0';
+    this.wss = new WebSocketServer({ port: this.port + 1, host: hostname });
   }
 
   start(): void {

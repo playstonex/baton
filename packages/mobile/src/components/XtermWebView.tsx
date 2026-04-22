@@ -8,6 +8,7 @@ export interface XtermWebViewRef {
 
 interface XtermWebViewProps {
   onInput: (data: string) => void;
+  onResize?: (cols: number, rows: number) => void;
   onStatus?: (loaded: boolean, error?: string) => void;
 }
 
@@ -43,8 +44,8 @@ function buildHtml(): string {
       var fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
       term.open(document.getElementById('terminal'));
-      setTimeout(function() { fitAddon.fit(); }, 100);
-      window.addEventListener('resize', function() { fitAddon.fit(); });
+      setTimeout(function() { fitAddon.fit(); notify({ type: 'resize', cols: term.cols, rows: term.rows }); }, 100);
+      window.addEventListener('resize', function() { fitAddon.fit(); notify({ type: 'resize', cols: term.cols, rows: term.rows }); });
       term.onData(function(data) {
         notify({ type: 'input', data: data });
       });
@@ -65,7 +66,7 @@ function buildHtml(): string {
 const HTML = buildHtml();
 
 export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(function XtermWebView(
-  { onInput, onStatus },
+  { onInput, onResize, onStatus },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
@@ -84,12 +85,14 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
           onInput(msg.data);
         } else if (msg.type === 'status') {
           onStatus?.(msg.loaded, msg.error);
+        } else if (msg.type === 'resize' && typeof msg.cols === 'number' && typeof msg.rows === 'number') {
+          onResize?.(msg.cols, msg.rows);
         }
       } catch {
         // ignore
       }
     },
-    [onInput, onStatus],
+    [onInput, onResize, onStatus],
   );
 
   return (

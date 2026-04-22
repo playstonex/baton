@@ -13,6 +13,20 @@ export default function TerminalScreen() {
   const [xtermStatus, setXtermStatus] = useState<string>('loading...');
   const [wsConnected, setWsConnected] = useState(wsService.connected);
 
+  const handleResize = useCallback(
+    (cols: number, rows: number) => {
+      if (!sessionId) return;
+      wsService.send({
+        type: 'control',
+        action: 'resize',
+        sessionId,
+        payload: { cols, rows },
+      });
+      console.log('[Terminal] resize:', cols, 'x', rows);
+    },
+    [sessionId],
+  );
+
   useEffect(() => {
     if (!sessionId) return;
 
@@ -47,7 +61,7 @@ export default function TerminalScreen() {
 
   const handleInput = useCallback(
     (data: string) => {
-      if (!sessionId) return;
+      if (!sessionId || !wsService.connected) return;
       wsService.send({ type: 'terminal_input', sessionId, data });
     },
     [sessionId],
@@ -98,6 +112,7 @@ export default function TerminalScreen() {
       <XtermWebView
         ref={xtermRef}
         onInput={handleInput}
+        onResize={handleResize}
         onStatus={(loaded, error) => {
           setXtermStatus(loaded ? 'xterm loaded' : `xterm error: ${error}`);
           console.log('[Terminal] xterm status:', loaded, error);
