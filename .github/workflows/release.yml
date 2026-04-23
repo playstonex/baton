@@ -36,7 +36,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm build
+      - run: pnpm --filter @flowwhips/shared build && pnpm --filter @flowwhips/cli build
 
       - name: Compile CLI binary
         run: |
@@ -77,8 +77,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - run: pnpm install --frozen-lockfile
-
-      - run: pnpm build
 
       - name: Build Rust PTY
         run: cargo build --release --manifest-path packages/daemon/pty/Cargo.toml
@@ -126,8 +124,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - run: pnpm install --frozen-lockfile
-
-      - run: pnpm build
 
       - name: Compile relay binary
         run: |

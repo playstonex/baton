@@ -128,3 +128,4 @@ function EventRow({ event }: { event: ParsedEvent }) {
 
 export function TimelineItem({ event }: { event: ParsedEvent }) {
   return <EventRow event={event} />;
+}
