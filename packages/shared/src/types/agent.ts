@@ -39,3 +39,40 @@ export interface AgentSnapshot {
   cols: number;
   rows: number;
 }
+
+export interface AgentConfig {
+  type: AgentType;
+  projectPath: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cols?: number;
+  rows?: number;
+}
+
+export interface SpawnConfig {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  cwd: string;
+  cols?: number;
+  rows?: number;
+}
+
+export interface AgentSession {
+  id: string;
+  write(input: string): void;
+  resize(cols: number, rows: number): void;
+  stop(): Promise<void>;
+  onEvent(handler: (event: ParsedEvent) => void): () => void;
+}
+
+export interface AgentProvider {
+  readonly name: string;
+  readonly type: AgentType;
+  detect(projectPath: string): boolean;
+  isAvailable(): boolean;
+  createSession(config: AgentConfig): Promise<AgentSession>;
+  buildSpawnConfig(config: AgentConfig): SpawnConfig;
+  parseOutput(raw: string): ParsedEvent[];
+}

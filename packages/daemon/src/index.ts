@@ -3,7 +3,6 @@ import { readdir, stat, readFile } from 'node:fs/promises';
 import { join, basename, extname } from 'node:path';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serve } from '@hono/node-server';
 import QRCode from 'qrcode';
 import { generateKeyPair, keyToFingerprint } from '@flowwhips/shared';
 import { AgentManager } from './agent/manager.js';
@@ -67,6 +66,11 @@ export function createDaemon(port = DEFAULT_PORT) {
         projectPath: a.projectPath,
       })),
     } satisfies HostInfoResponse);
+  });
+
+  app.get('/api/system/stats', async (c) => {
+    const { collectSystemStats } = await import('./system/stats.js');
+    return c.json(await collectSystemStats());
   });
 
   app.post('/api/agents/start', async (c) => {
@@ -341,17 +345,22 @@ export async function main() {
   transport.start();
 
   const hostname = process.env.HOST || '0.0.0.0';
-  serve({ fetch: app.fetch, port, hostname }, (info: { port: number; hostname: string }) => {
-    const localIp = getLocalIp();
-    console.log(`\n  FlowWhips Daemon v0.0.1`);
-    console.log(`  HTTP:      http://${hostname}:${info.port}`);
-    console.log(`  WebSocket: ws://${hostname}:${info.port + 1}`);
-    if (localIp && hostname === '0.0.0.0') {
-      console.log(`  LAN HTTP:  http://${localIp}:${info.port}`);
-      console.log(`  LAN WS:    ws://${localIp}:${info.port + 1}`);
-    }
-    console.log(`  Host: ${os.hostname()} (${process.platform})\n`);
+
+  Bun.serve({
+    fetch: app.fetch,
+    port,
+    hostname,
   });
+
+  const localIp = getLocalIp();
+  console.log(`\n  FlowWhips Daemon v0.0.1`);
+  console.log(`  HTTP:      http://${hostname}:${port}`);
+  console.log(`  WebSocket: ws://${hostname}:${port + 1}`);
+  if (localIp && hostname === '0.0.0.0') {
+    console.log(`  LAN HTTP:  http://${localIp}:${port}`);
+    console.log(`  LAN WS:    ws://${localIp}:${port + 1}`);
+  }
+  console.log(`  Host: ${os.hostname()} (${process.platform})\n`);
 
   process.on('SIGINT', () => {
     transport.stop();

@@ -2,6 +2,7 @@ import type { AgentConfig, AgentProcess, ParsedEvent } from '@flowwhips/shared';
 import { VALID_TRANSITIONS, generateId } from '@flowwhips/shared';
 import type { AgentState, AgentSnapshot, TimelineItem } from '@flowwhips/shared';
 import type { BaseAgentAdapter } from './adapter.js';
+import { spawnPty } from '../pty/bridge.js';
 import { mkdir, writeFile, readdir, stat, readFile, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
@@ -226,14 +227,12 @@ export class AgentManager {
     const cols = DEFAULT_COLS;
     const rows = DEFAULT_ROWS;
 
-    const { spawn } = await import('node-pty');
-    const pty = spawn(spawnConfig.command, spawnConfig.args, {
-      name: 'xterm-256color',
-      cols,
-      rows,
+    const pty = await spawnPty(spawnConfig.command, spawnConfig.args, {
       cwd: spawnConfig.cwd,
       env: spawnConfig.env as Record<string, string>,
-    }) as unknown as IPty;
+      cols,
+      rows,
+    });
 
     const agentProcess: AgentProcess = {
       id,

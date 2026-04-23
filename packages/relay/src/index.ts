@@ -1,5 +1,3 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { MessageBuffer } from './buffer.js';
 import { PairingService } from './pairing.js';
@@ -13,10 +11,13 @@ import {
 } from '@flowwhips/shared/crypto';
 
 const DEFAULT_PORT = 3230;
+const OPEN = 1;
+
+type Ws = import('bun').ServerWebSocket<{ id: string }>;
 
 interface HostConnection {
   hostId: string;
-  ws: WebSocket;
+  ws: Ws;
   messageBuffer: MessageBuffer;
   lastSeen: number;
   publicKeyFingerprint?: string;
@@ -28,7 +29,7 @@ interface HostConnection {
 interface ClientConnection {
   clientId: string;
   hostId: string;
-  ws: WebSocket;
+  ws: Ws;
   lastSeen: number;
   publicKeyFingerprint?: string;
   sharedKey?: Uint8Array;
@@ -39,78 +40,71 @@ interface ClientConnection {
 export class RelayServer {
   private hosts = new Map<string, HostConnection>();
   private clients = new Map<string, ClientConnection>();
-  private httpServer: ReturnType<typeof createServer> | null = null;
-  private wss: WebSocketServer | null = null;
+  private server: ReturnType<typeof Bun.serve<{ id: string }>> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private pairing = new PairingService();
 
   constructor(private port = DEFAULT_PORT) {}
 
   start(): void {
-    this.httpServer = createServer((req, res) => {
-      if (req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
+    const self = this;
+
+    this.server = Bun.serve<{ id: string }>({
+      fetch(req, server) {
+        const url = new URL(req.url);
+
+        if (url.pathname === '/health') {
+          return Response.json({
             status: 'ok',
-            hosts: this.hosts.size,
-            clients: this.clients.size,
+            hosts: self.hosts.size,
+            clients: self.clients.size,
             uptime: process.uptime(),
-          }),
-        );
-        return;
-      }
-
-      if (req.url?.startsWith('/pair?code=')) {
-        const code = req.url.split('code=')[1]?.toUpperCase();
-        if (!code) {
-          res.writeHead(400);
-          res.end('Missing code');
-          return;
+          });
         }
-        const result = this.pairing.redeem(code);
-        if (!result) {
-          res.writeHead(404);
-          res.end(JSON.stringify({ error: 'Invalid or expired pairing code' }));
-          return;
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(result));
-        return;
-      }
 
-      res.writeHead(404);
-      res.end('Not found');
+        if (url.pathname === '/pair' && url.searchParams.has('code')) {
+          const code = url.searchParams.get('code')!.toUpperCase();
+          const result = self.pairing.redeem(code);
+          if (!result) {
+            return Response.json({ error: 'Invalid or expired pairing code' }, { status: 404 });
+          }
+          return Response.json(result);
+        }
+
+        if (url.pathname === '/ws' || url.protocol === 'ws:' || req.headers.get('upgrade') === 'websocket') {
+          server.upgrade(req, { data: { id: randomUUID() } });
+          return new Response(null, { status: 101 });
+        }
+
+        return new Response('Not found', { status: 404 });
+      },
+      websocket: {
+        open(ws) {
+          ws.send(JSON.stringify({ type: 'welcome', message: 'FlowWhips Relay v0.0.1' }));
+        },
+        message(ws, message) {
+          try {
+            const msg = JSON.parse(message.toString());
+            self.handleMessage(ws, msg);
+          } catch {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid message' }));
+          }
+        },
+        close(ws) {
+          self.handleDisconnect(ws);
+        },
+      },
+      port: this.port,
     });
 
-    this.wss = new WebSocketServer({ server: this.httpServer });
-
-    this.wss.on('connection', (ws) => {
-      ws.on('message', (raw) => {
-        try {
-          const msg = JSON.parse(raw.toString());
-          this.handleMessage(ws, msg);
-        } catch {
-          ws.send(JSON.stringify({ type: 'error', message: 'Invalid message' }));
-        }
-      });
-
-      ws.on('close', () => this.handleDisconnect(ws));
-      ws.on('error', () => this.handleDisconnect(ws));
-
-      ws.send(JSON.stringify({ type: 'welcome', message: 'FlowWhips Relay v0.0.1' }));
-    });
-
-    this.httpServer.listen(this.port, () => {
-      console.log(`\n  FlowWhips Relay v0.0.1`);
-      console.log(`  WebSocket: ws://localhost:${this.port}`);
-      console.log(`  Health:    http://localhost:${this.port}/health\n`);
-    });
+    console.log(`\n  FlowWhips Relay v0.0.1`);
+    console.log(`  WebSocket: ws://localhost:${this.port}`);
+    console.log(`  Health:    http://localhost:${this.port}/health\n`);
 
     this.cleanupTimer = setInterval(() => this.cleanup(), 60000);
   }
 
-  private handleMessage(ws: WebSocket, msg: Record<string, unknown>): void {
+  private handleMessage(ws: Ws, msg: Record<string, unknown>): void {
     switch (msg.type) {
       case 'encrypted':
         this.handleEncryptedMessage(ws, msg);
@@ -133,7 +127,7 @@ export class RelayServer {
     }
   }
 
-  private handleEncryptedMessage(ws: WebSocket, msg: Record<string, unknown>): void {
+  private handleEncryptedMessage(ws: Ws, msg: Record<string, unknown>): void {
     const payload = msg.payload as string;
     if (!payload) {
       ws.send(JSON.stringify({ type: 'error', message: 'payload required' }));
@@ -158,7 +152,7 @@ export class RelayServer {
     }
   }
 
-  private handleKeyExchange(ws: WebSocket, msg: Record<string, unknown>): void {
+  private handleKeyExchange(ws: Ws, msg: Record<string, unknown>): void {
     const peerPublicKeyBase64 = msg.publicKey as string;
     if (!peerPublicKeyBase64) {
       ws.send(JSON.stringify({ type: 'error', message: 'publicKey required' }));
@@ -197,7 +191,7 @@ export class RelayServer {
     }
   }
 
-  private handleRegister(ws: WebSocket, msg: Record<string, unknown>): void {
+  private handleRegister(ws: Ws, msg: Record<string, unknown>): void {
     const role = msg.role as string;
 
     if (role === 'host') {
@@ -222,7 +216,7 @@ export class RelayServer {
       console.log(`Host registered: ${hostId}`);
 
       for (const client of this.clients.values()) {
-        if (client.hostId === hostId && client.ws.readyState === WebSocket.OPEN) {
+        if (client.hostId === hostId && client.ws.readyState === OPEN) {
           client.ws.send(JSON.stringify({ type: 'host_online', hostId }));
         }
       }
@@ -263,7 +257,7 @@ export class RelayServer {
     }
   }
 
-  private handlePairRequest(ws: WebSocket, msg: Record<string, unknown>): void {
+  private handlePairRequest(ws: Ws, msg: Record<string, unknown>): void {
     const hostId = msg.hostId as string;
     const host = this.hosts.get(hostId);
 
@@ -308,7 +302,7 @@ export class RelayServer {
     }
   }
 
-  private handleForward(ws: WebSocket, msg: Record<string, unknown>): void {
+  private handleForward(ws: Ws, msg: Record<string, unknown>): void {
     const host = this.findHostByWs(ws);
     if (host) {
       host.lastSeen = Date.now();
@@ -316,7 +310,7 @@ export class RelayServer {
       host.messageBuffer.push(payload);
 
       for (const client of this.clients.values()) {
-        if (client.hostId === host.hostId && client.ws.readyState === WebSocket.OPEN) {
+        if (client.hostId === host.hostId && client.ws.readyState === OPEN) {
           if (host.encryptionEnabled && client.encryptionEnabled && host.sharedKey && client.sharedKey) {
             const encrypted = this.encryptPayload(msg, host.sharedKey);
             client.ws.send(JSON.stringify({ type: 'encrypted', payload: encrypted }));
@@ -333,7 +327,7 @@ export class RelayServer {
       client.lastSeen = Date.now();
       const hostConn = this.hosts.get(client.hostId);
 
-      if (hostConn?.ws.readyState === WebSocket.OPEN) {
+      if (hostConn?.ws.readyState === OPEN) {
         if (client.encryptionEnabled && hostConn.encryptionEnabled && client.sharedKey && hostConn.sharedKey) {
           const encrypted = this.encryptPayload(msg, client.sharedKey);
           hostConn.ws.send(JSON.stringify({ type: 'encrypted', payload: encrypted }));
@@ -346,10 +340,10 @@ export class RelayServer {
     }
   }
 
-  private flushBufferToClient(host: HostConnection, clientWs: WebSocket): void {
+  private flushBufferToClient(host: HostConnection, clientWs: Ws): void {
     const recent = host.messageBuffer.recent();
     for (const msg of recent) {
-      if (clientWs.readyState === WebSocket.OPEN) {
+      if (clientWs.readyState === OPEN) {
         const parsed = JSON.parse(msg.data);
         if (host.encryptionEnabled && clientWs.encryptionEnabled && host.sharedKey) {
           const encrypted = this.encryptPayload(parsed, host.sharedKey);
@@ -361,14 +355,14 @@ export class RelayServer {
     }
   }
 
-  private handleDisconnect(ws: WebSocket): void {
+  private handleDisconnect(ws: Ws): void {
     for (const [hostId, host] of this.hosts) {
       if (host.ws === ws) {
         console.log(`Host disconnected: ${hostId}`);
         this.hosts.delete(hostId);
 
         for (const client of this.clients.values()) {
-          if (client.hostId === hostId && client.ws.readyState === WebSocket.OPEN) {
+          if (client.hostId === hostId && client.ws.readyState === OPEN) {
             client.ws.send(JSON.stringify({ type: 'host_disconnected', hostId }));
           }
         }
@@ -411,18 +405,17 @@ export class RelayServer {
     if (this.cleanupTimer) clearInterval(this.cleanupTimer);
     for (const client of this.clients.values()) client.ws.close(1001, 'Shutting down');
     for (const host of this.hosts.values()) host.ws.close(1001, 'Shutting down');
-    this.wss?.close();
-    if (this.httpServer) await new Promise((r) => this.httpServer!.close(r));
+    this.server?.stop();
   }
 
-  private findHostByWs(ws: WebSocket): HostConnection | undefined {
+  private findHostByWs(ws: Ws): HostConnection | undefined {
     for (const host of this.hosts.values()) {
       if (host.ws === ws) return host;
     }
     return undefined;
   }
 
-  private findClientByWs(ws: WebSocket): ClientConnection | undefined {
+  private findClientByWs(ws: Ws): ClientConnection | undefined {
     for (const client of this.clients.values()) {
       if (client.ws === ws) return client;
     }

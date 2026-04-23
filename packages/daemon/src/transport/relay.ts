@@ -1,4 +1,3 @@
-import WebSocket from 'ws';
 import { generateKeyPair, keyToFingerprint } from '@flowwhips/shared/crypto';
 import type { DaemonMessage } from '@flowwhips/shared';
 
@@ -9,6 +8,8 @@ interface RelayConnectionOptions {
   onMessage: (msg: DaemonMessage) => void;
   onStatusChange: (connected: boolean) => void;
 }
+
+const OPEN = 1;
 
 export class RelayConnection {
   private ws: WebSocket | null = null;
@@ -27,7 +28,7 @@ export class RelayConnection {
   }
 
   connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (this.ws?.readyState === OPEN) return;
 
     this.keyPair = generateKeyPair();
     const fp = keyToFingerprint(this.keyPair.publicKey);
@@ -40,14 +41,13 @@ export class RelayConnection {
       return;
     }
 
-    this.ws.on('open', () => {
+    this.ws.onopen = () => {
       console.log(`Connected to Relay: ${this.options.relayUrl}`);
       this._connected = true;
       this.reconnectAttempts = 0;
       this.options.onStatusChange(true);
       this.startHeartbeat();
 
-      // Register as host
       this.ws!.send(
         JSON.stringify({
           type: 'register',
@@ -57,18 +57,17 @@ export class RelayConnection {
         }),
       );
 
-      // Send key exchange for E2EE
       this.ws!.send(
         JSON.stringify({
           type: 'key_exchange',
           publicKey: btoa(String.fromCharCode(...this.keyPair!.publicKey)),
         }),
       );
-    });
+    };
 
-    this.ws.on('message', (raw) => {
+    this.ws.onmessage = (e) => {
       try {
-        const msg = JSON.parse(raw.toString());
+        const msg = JSON.parse(e.data as string);
         if (msg.type === 'welcome' || msg.type === 'registered' || msg.type === 'pong') return;
 
         if (msg.type === 'key_exchange_done') {
@@ -85,22 +84,22 @@ export class RelayConnection {
       } catch {
         // ignore
       }
-    });
+    };
 
-    this.ws.on('close', () => {
+    this.ws.onclose = () => {
       this._connected = false;
       this.options.onStatusChange(false);
       this.stopHeartbeat();
       this.scheduleReconnect();
-    });
+    };
 
-    this.ws.on('error', () => {
+    this.ws.onerror = () => {
       // onclose will handle reconnect
-    });
+    };
   }
 
   send(msg: unknown): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === OPEN) {
       this.ws.send(JSON.stringify(msg));
     }
   }
@@ -115,7 +114,7 @@ export class RelayConnection {
 
   private startHeartbeat(): void {
     this.heartbeatTimer = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
+      if (this.ws?.readyState === OPEN) {
         this.ws.send(JSON.stringify({ type: 'ping' }));
       }
     }, 30000);
@@ -131,7 +130,6 @@ export class RelayConnection {
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
 
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s, 30s...
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), this.maxReconnectDelay);
     this.reconnectAttempts++;
 

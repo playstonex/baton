@@ -1,4 +1,3 @@
-import WebSocket from 'ws';
 import { WS_URL } from '../client/api.js';
 
 export class DaemonWsClient {
@@ -7,8 +6,8 @@ export class DaemonWsClient {
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(WS_URL);
-      this.ws.on('open', () => resolve());
-      this.ws.on('error', (err) => reject(err));
+      this.ws.onopen = () => resolve();
+      this.ws.onerror = (e) => reject(e);
     });
   }
 
@@ -17,17 +16,17 @@ export class DaemonWsClient {
   }
 
   onMessage(handler: (msg: unknown) => void): void {
-    this.ws?.on('message', (raw) => {
+    this.ws!.onmessage = (e) => {
       try {
-        handler(JSON.parse(raw.toString()));
+        handler(JSON.parse(e.data as string));
       } catch {
         /* ignore */
       }
-    });
+    };
   }
 
   onClose(handler: () => void): void {
-    this.ws?.on('close', handler);
+    this.ws!.onclose = handler;
   }
 
   close(): void {

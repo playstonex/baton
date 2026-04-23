@@ -4,6 +4,7 @@ import type {
   AgentType,
   SessionStatus,
   HostStatus,
+  AdapterMode,
 } from '../types/index.js';
 
 // WebSocket message types: Client → Daemon

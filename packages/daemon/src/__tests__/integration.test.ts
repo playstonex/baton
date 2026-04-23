@@ -1,6 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { WebSocketServer, WebSocket } from 'ws';
-import { createServer } from 'node:http';
+import { describe, it, expect } from 'vitest';
 import { generateKeyPair, deriveSharedKey, encrypt, decrypt, generateNonce } from '@flowwhips/shared/crypto';
 
 function encryptPayload(msg: Record<string, unknown>, sharedKey: Uint8Array): string {

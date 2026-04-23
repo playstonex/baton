@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import type { AgentProcess, AgentType } from '@flowwhips/shared';
 import { useAgentStore } from '../stores/connection.js';
 import { wsService } from '../services/websocket.js';
+import { SystemStats } from '../components/SystemStats.js';
 
 const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
   { type: 'claude-code', label: 'Claude Code', desc: 'Anthropic CLI agent' },
@@ -130,6 +131,8 @@ export function DashboardScreen() {
           </span>
         </div>
       </div>
+
+      <SystemStats />
 
       {/* Start Agent Card */}
       <div

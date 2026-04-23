@@ -1,0 +1,9 @@
+WebSocket server listening on ws://localhost:3211
+
+  FlowWhips Daemon v0.0.1
+  HTTP:      http://0.0.0.0:3210
+  WebSocket: ws://0.0.0.0:3211
+  LAN HTTP:  http://192.168.31.102:3210
+  LAN WS:    ws://192.168.31.102:3211
+  Host: Btiger.local (darwin)
+

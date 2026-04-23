@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serve } from '@hono/node-server';
 import { logger } from 'hono/logger';
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,10 +10,9 @@ import { signToken, verifyToken, generatePairingCode } from './services/auth.js'
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 3220;
 
-// In-memory pairing store (codes expire after 10 min)
 const pairingCodes = new Map<string, { hostId: string; code: string; token: string; expiresAt: number }>();
 
-function initDatabase(): Database.Database {
+function initDatabase(): Database {
   const db = new Database(':memory:');
   const migrationSql = readFileSync(join(__dirname, 'db/migrations/0001_init.sql'), 'utf-8');
   for (const stmt of migrationSql.split(';').filter((s) => s.trim())) {
@@ -23,7 +21,7 @@ function initDatabase(): Database.Database {
   return db;
 }
 
-export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database.Database; port: number } {
+export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; port: number } {
   const app = new Hono();
   const db = initDatabase();
 
@@ -32,7 +30,6 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database.Da
 
   app.get('/api/health', (c) => c.json({ status: 'ok', service: 'flowwhips-gateway' }));
 
-  // --- Auth: Generate host token ---
   app.post('/api/v1/auth/host-token', async (c) => {
     await c.req.json<{ hostName?: string }>().catch(() => ({}));
     const hostId = crypto.randomUUID();
@@ -40,7 +37,6 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database.Da
     return c.json({ hostId, token });
   });
 
-  // --- Auth: Generate client pairing code ---
   app.post('/api/v1/auth/pair', async (c) => {
     const auth = c.req.header('Authorization');
     if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
@@ -61,7 +57,6 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database.Da
     return c.json({ code, expiresIn: 600 });
   });
 
-  // --- Auth: Client redeem pairing code ---
   app.post('/api/v1/auth/verify-code', async (c) => {
     const body = await c.req.json<{ code: string }>().catch(() => ({ code: '' }));
     const entry = pairingCodes.get(body.code);
@@ -77,7 +72,6 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database.Da
     return c.json({ token, hostId: entry.hostId });
   });
 
-  // --- Auth: Verify token ---
   app.post('/api/v1/auth/verify', async (c) => {
     const auth = c.req.header('Authorization');
     if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
@@ -88,7 +82,6 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database.Da
     return c.json({ valid: true, role: payload.role, hostId: payload.hostId });
   });
 
-  // --- Hosts ---
   app.get('/api/v1/hosts', (c) => {
     const hosts = db.prepare('SELECT id, name, hostname, os, status, last_seen, created_at FROM hosts').all();
     return c.json(hosts);
@@ -110,10 +103,9 @@ export function main() {
   const port = parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
   const { app } = createGateway(port);
 
-  serve({ fetch: app.fetch, port }, (info) => {
-    console.log(`\n  FlowWhips Gateway v0.0.1`);
-    console.log(`  HTTP: http://localhost:${info.port}\n`);
-  });
+  Bun.serve({ fetch: app.fetch, port });
+  console.log(`\n  FlowWhips Gateway v0.0.1`);
+  console.log(`  HTTP: http://localhost:${port}\n`);
 }
 
 main();

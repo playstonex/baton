@@ -1,4 +1,3 @@
-import { WebSocketServer, WebSocket } from 'ws';
 import type { AgentManager } from '../agent/manager.js';
 import type {
   ClientMessage,
@@ -6,50 +5,63 @@ import type {
   ParsedEvent,
 } from '@flowwhips/shared';
 
+type BunWebSocket = import('bun').ServerWebSocket<{ clientId: string }>;
+
 interface Client {
   id: string;
-  ws: WebSocket;
-  subscriptions: Set<string>; // session IDs this client is watching
+  ws: BunWebSocket;
+  subscriptions: Set<string>;
 }
 
+const OPEN = 1;
+
 export class Transport {
-  private wss: WebSocketServer;
+  private server: ReturnType<typeof Bun.serve<{ clientId: string }>> | null = null;
   private clients = new Map<string, Client>();
   private registeredSessions = new Set<string>();
 
   constructor(
     private agentManager: AgentManager,
     private port: number,
-  ) {
-    const hostname = process.env.HOST || '0.0.0.0';
-    this.wss = new WebSocketServer({ port: this.port + 1, host: hostname });
-  }
+  ) {}
 
   start(): void {
-    this.wss.on('connection', (ws) => {
-      const clientId = crypto.randomUUID();
-      const client: Client = { id: clientId, ws, subscriptions: new Set() };
-      this.clients.set(clientId, client);
+    const manager = this.agentManager;
+    const clients = this.clients;
+    const self = this;
 
-      ws.on('message', (raw) => {
-        try {
-          const msg = JSON.parse(raw.toString()) as ClientMessage;
-          this.handleMessage(clientId, msg);
-        } catch {
-          this.send(clientId, { type: 'error', message: 'Invalid message format' });
+    const hostname = process.env.HOST || '0.0.0.0';
+
+    this.server = Bun.serve<{ clientId: string }>({
+      fetch(req, server) {
+        if (server.upgrade(req)) {
+          return;
         }
-      });
-
-      ws.on('close', () => {
-        this.clients.delete(clientId);
-      });
-
-      ws.on('error', () => {
-        this.clients.delete(clientId);
-      });
-
-      // Send agent list on connect
-      this.sendAgentList(clientId);
+        return new Response('WebSocket expected', { status: 400 });
+      },
+      websocket: {
+        open(ws) {
+          const clientId = crypto.randomUUID();
+          ws.data = { clientId };
+          const client: Client = { id: clientId, ws, subscriptions: new Set() };
+          clients.set(clientId, client);
+          self.sendAgentList(clientId);
+        },
+        message(ws, message) {
+          const clientId = ws.data.clientId;
+          try {
+            const msg = JSON.parse(message.toString()) as ClientMessage;
+            self.handleMessage(clientId, msg);
+          } catch {
+            self.send(clientId, { type: 'error', message: 'Invalid message format' });
+          }
+        },
+        close(ws) {
+          clients.delete(ws.data.clientId);
+        },
+      },
+      hostname,
+      port: this.port + 1,
     });
 
     console.log(`WebSocket server listening on ws://localhost:${this.port + 1}`);
@@ -108,10 +120,17 @@ export class Transport {
         const client = this.clients.get(clientId);
         if (!client) return;
 
+        if (!this.agentManager.get(msg.sessionId)) {
+          this.send(clientId, {
+            type: 'error',
+            message: `Session ${msg.sessionId} not found`,
+          });
+          return;
+        }
+
         client.subscriptions.add(msg.sessionId);
         this.ensureSessionRegistered(msg.sessionId);
 
-        // Replay output history for reconnection
         try {
           const history = this.agentManager.getOutputHistory(msg.sessionId);
           for (const data of history) {
@@ -122,7 +141,6 @@ export class Transport {
             });
           }
 
-          // Replay event history
           const events = this.agentManager.getEventHistory(msg.sessionId);
           for (const event of events) {
             this.send(clientId, {
@@ -132,7 +150,6 @@ export class Transport {
             });
           }
 
-          // Send current status
           const proc = this.agentManager.get(msg.sessionId);
           if (proc) {
             this.send(clientId, {
@@ -171,28 +188,25 @@ export class Transport {
     if (this.registeredSessions.has(sessionId)) return;
     this.registeredSessions.add(sessionId);
 
-    // Wire up raw terminal output
     this.agentManager.onRaw(sessionId, (data, sid) => {
       const msg: DaemonMessage = { type: 'terminal_output', sessionId: sid, data };
       const payload = JSON.stringify(msg);
       for (const client of this.clients.values()) {
-        if (client.subscriptions.has(sid) && client.ws.readyState === WebSocket.OPEN) {
+        if (client.subscriptions.has(sid) && client.ws.readyState === OPEN) {
           client.ws.send(payload);
         }
       }
     });
 
-    // Wire up structured events
     this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {
       const msg: DaemonMessage = { type: 'parsed_event', sessionId: sid, event };
       const payload = JSON.stringify(msg);
       for (const client of this.clients.values()) {
-        if (client.subscriptions.has(sid) && client.ws.readyState === WebSocket.OPEN) {
+        if (client.subscriptions.has(sid) && client.ws.readyState === OPEN) {
           client.ws.send(payload);
         }
       }
 
-      // Broadcast status changes to all clients (not just subscribers)
       if (event.type === 'status_change') {
         const statusMsg: DaemonMessage = {
           type: 'status_update',
@@ -223,7 +237,7 @@ export class Transport {
 
   send(clientId: string, msg: DaemonMessage): void {
     const client = this.clients.get(clientId);
-    if (client?.ws.readyState === WebSocket.OPEN) {
+    if (client?.ws.readyState === OPEN) {
       client.ws.send(JSON.stringify(msg));
     }
   }
@@ -231,7 +245,7 @@ export class Transport {
   broadcast(msg: DaemonMessage): void {
     const data = JSON.stringify(msg);
     for (const client of this.clients.values()) {
-      if (client.ws.readyState === WebSocket.OPEN) {
+      if (client.ws.readyState === OPEN) {
         client.ws.send(data);
       }
     }
@@ -241,6 +255,6 @@ export class Transport {
     for (const client of this.clients.values()) {
       client.ws.close(1001, 'Server shutting down');
     }
-    this.wss.close();
+    this.server?.stop();
   }
 }

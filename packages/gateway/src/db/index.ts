@@ -1,10 +1,10 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { Database } from 'bun:sqlite';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import * as schema from './schema.js';
 
 export function createDb(path = ':memory:') {
-  const sqlite = new Database(path);
-  return drizzle(sqlite, { schema });
+  const sqlite = new Database(path, { create: true });
+  return drizzle({ client: sqlite, schema });
 }
 
 export { schema };

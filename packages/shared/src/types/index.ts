@@ -1,3 +1,5 @@
+import type { AgentConfig, SpawnConfig } from './agent.js';
+
 // Agent types
 export type AgentType = 'claude-code' | 'codex' | 'opencode' | 'custom';
 
@@ -11,14 +13,6 @@ export type AgentStatus =
   | 'error'
   | 'stopped';
 
-export interface AgentConfig {
-  type: AgentType;
-  projectPath: string;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-}
-
 export interface AgentProcess {
   id: string;
   type: AgentType;
@@ -28,6 +22,8 @@ export interface AgentProcess {
   startedAt: string;
   stoppedAt?: string;
 }
+
+export type { AgentConfig, SpawnConfig } from './agent.js';
 
 // Parsed events — core differentiation: structured understanding of Agent output
 export type ParsedEvent =
@@ -104,13 +100,6 @@ export interface SdkAgentAdapter extends AgentAdapter {
 
 export type AdapterMode = 'pty' | 'sdk' | 'auto';
 
-export interface SpawnConfig {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-  cwd: string;
-}
-
 // Host types
 export type HostStatus = 'online' | 'offline' | 'error';
 
@@ -137,5 +126,6 @@ export interface Session {
   stoppedAt?: string;
 }
 
+export * from './system.js';
 export * from './agent.js';
 export * from './provider.js';
