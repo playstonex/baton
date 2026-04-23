@@ -2,6 +2,7 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react
 import { useState, useEffect, useCallback } from 'react';
 import { useAgentStore } from '../../src/stores/agents';
 import { apiFetch } from '../../src/services/api';
+import { FilePreview } from '../../src/components/FilePreview';
 
 interface FileEntry {
   name: string;
@@ -54,23 +55,14 @@ export default function FilesScreen() {
 
   if (fileContent !== null) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#fff' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb', backgroundColor: '#fff' }}>
           <TouchableOpacity onPress={() => setFileContent(null)}>
             <Text style={{ color: '#2563eb', fontSize: 14 }}>Back</Text>
           </TouchableOpacity>
           <Text style={{ flex: 1, marginLeft: 12, fontWeight: '600', fontSize: 14 }} numberOfLines={1}>{fileName}</Text>
         </View>
-        <FlatList
-          data={fileContent.split('\n')}
-          keyExtractor={(_, i) => String(i)}
-          contentContainerStyle={{ padding: 12 }}
-          renderItem={({ item }) => (
-            <Text style={{ fontFamily: 'monospace', fontSize: 12, lineHeight: 18, color: '#333' }}>
-              {item || ' '}
-            </Text>
-          )}
-        />
+        <FilePreview fileName={fileName} content={fileContent} />
       </View>
     );
   }
