@@ -26,8 +26,8 @@ describe('Agent State Machine', () => {
     expect(VALID_TRANSITIONS['stopped']).toEqual([]);
   });
 
-  it('initializing cannot transition to running directly', () => {
-    expect(VALID_TRANSITIONS['initializing']).not.toContain('running');
+  it('initializing can transition to running directly', () => {
+    expect(VALID_TRANSITIONS['initializing']).toContain('running');
   });
 
   it('all states are covered', () => {
