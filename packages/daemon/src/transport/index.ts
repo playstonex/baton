@@ -26,15 +26,14 @@ export class Transport {
   ) {}
 
   start(): void {
-    const manager = this.agentManager;
     const clients = this.clients;
     const self = this;
 
     const hostname = process.env.HOST || '0.0.0.0';
 
     this.server = Bun.serve<{ clientId: string }>({
-      fetch(req: Request, server: import('bun').Server) {
-        if (server.upgrade(req)) {
+      fetch(req, server) {
+        if (server.upgrade(req, { data: { clientId: '' } })) {
           return;
         }
         return new Response('WebSocket expected', { status: 400 });

@@ -125,7 +125,7 @@ describe('CLI Client', () => {
   });
 
   it('StartAgentRequest defaults mode to pty', () => {
-    const body = { agentType: 'claude-code', projectPath: '/tmp/test' };
+    const body: { agentType: string; projectPath: string; mode?: string } = { agentType: 'claude-code', projectPath: '/tmp/test' };
     const mode = body.mode ?? 'pty';
     expect(mode).toBe('pty');
   });

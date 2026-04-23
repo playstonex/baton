@@ -36,7 +36,7 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   }
 
   async startSession(
-    config: AgentConfig,
+    _config: AgentConfig,
     onEvent: (event: ParsedEvent) => void,
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }> {
     const { query } = await import('@anthropic-ai/claude-agent-sdk');
@@ -69,8 +69,11 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
       this.controller?.abort();
     };
 
+    // The SDK's query() prompt expects AsyncIterable<SDKUserMessage> but our
+    // generator produces a compatible subset — cast to satisfy tsc while Bun
+    // handles it correctly at runtime.
     const stream = query({
-      prompt: promptGen(),
+      prompt: promptGen() as unknown as Parameters<typeof query>[0]['prompt'],
       options: {
         model: 'claude-sonnet-7-20251119',
         maxTurns: 50,

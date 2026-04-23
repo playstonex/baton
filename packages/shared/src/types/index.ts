@@ -1,7 +1,7 @@
 import type { AgentConfig, SpawnConfig } from './agent.js';
 
 // Agent types
-export type AgentType = 'claude-code' | 'codex' | 'opencode' | 'custom';
+export type AgentType = 'claude-code' | 'claude-code-sdk' | 'codex' | 'opencode' | 'custom';
 
 export type AgentStatus =
   | 'starting'

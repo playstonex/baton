@@ -19,7 +19,11 @@ export class RelayConnection {
   private reconnectAttempts = 0;
   private maxReconnectDelay = 30000;
   private keyPair: ReturnType<typeof generateKeyPair> | null = null;
-  private encryptionReady = false;
+  get encryptionReady(): boolean {
+    return this._encryptionReady;
+  }
+
+  private _encryptionReady = false;
 
   constructor(private options: RelayConnectionOptions) {}
 
@@ -72,7 +76,7 @@ export class RelayConnection {
 
         if (msg.type === 'key_exchange_done') {
           console.log('E2EE encryption enabled');
-          this.encryptionReady = true;
+          this._encryptionReady = true;
           return;
         }
 
