@@ -71,6 +71,7 @@ fn main() -> Result<()> {
                         let pid = session.pid();
                         let json = serde_json::to_string(&Event::Ready { pid })?;
                         let _ = stdout_tx_main.send(json);
+                        pty_session = Some(session);
                     }
                     Err(e) => {
                         let json = serde_json::to_string(&Event::Error {
@@ -110,12 +111,6 @@ fn main() -> Result<()> {
 
     if let Some(session) = pty_session.take() {
         let _ = session.kill();
-        let status = session.wait();
-        if let Ok(status) = status {
-            let code = status.exit_code() as i32;
-            let json = serde_json::to_string(&Event::Exit { code, signal: None })?;
-            let _ = stdout_tx_main.send(json);
-        }
     }
 
     Ok(())

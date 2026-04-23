@@ -303,7 +303,7 @@ pub struct PtySession {
     grid: Arc<Mutex<TerminalGrid>>,
     master: Box<dyn MasterPty + Send>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
-    child: Mutex<Box<dyn portable_pty::Child + Send>>,
+    child: Arc<Mutex<Option<Box<dyn portable_pty::Child + Send + Sync>>>>,
     pid: u32,
 }
 
@@ -399,11 +399,36 @@ impl PtySession {
             }
         });
 
+        let child_arc = Arc::new(Mutex::new(Some(child)));
+        let child_for_exit = Arc::clone(&child_arc);
+        let event_tx_for_exit = event_tx;
+        let _exit_thread = thread::spawn(move || {
+            let status = {
+                let mut guard = child_for_exit.lock().unwrap();
+                if let Some(ref mut c) = *guard {
+                    c.wait()
+                } else {
+                    return;
+                }
+            };
+            match status {
+                Ok(exit_status) => {
+                    let code = exit_status.exit_code() as i32;
+                    let _ = event_tx_for_exit.send(Event::Exit { code, signal: None });
+                }
+                Err(e) => {
+                    let _ = event_tx_for_exit.send(Event::Error {
+                        message: format!("Child wait failed: {}", e),
+                    });
+                }
+            }
+        });
+
         Ok(Self {
             grid,
             master,
             writer: Arc::new(Mutex::new(writer)),
-            child: Mutex::new(child),
+            child: child_arc,
             pid,
         })
     }
@@ -438,19 +463,29 @@ impl PtySession {
     }
 
     pub fn kill(&self) -> Result<()> {
-        let mut child = self.child.lock().unwrap();
-        child.kill().map_err(|e| anyhow!("Kill failed: {}", e))
+        let mut guard = self.child.lock().unwrap();
+        if let Some(ref mut child) = *guard {
+            child.kill().map_err(|e| anyhow!("Kill failed: {}", e))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn wait(&self) -> Result<portable_pty::ExitStatus> {
-        let mut child = self.child.lock().unwrap();
-        child.wait().map_err(|e| anyhow!("Wait failed: {}", e))
+        let mut guard = self.child.lock().unwrap();
+        if let Some(ref mut child) = *guard {
+            child.wait().map_err(|e| anyhow!("Wait failed: {}", e))
+        } else {
+            Err(anyhow!("No child process"))
+        }
     }
 }
 
 impl Drop for PtySession {
     fn drop(&mut self) {
-        let mut child = self.child.lock().unwrap();
-        let _ = child.kill();
+        let mut guard = self.child.lock().unwrap();
+        if let Some(ref mut child) = *guard {
+            let _ = child.kill();
+        }
     }
 }
