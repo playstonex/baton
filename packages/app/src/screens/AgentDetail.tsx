@@ -41,25 +41,47 @@ export function AgentDetailScreen() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-surface-900 dark:text-white">
-          Agent Detail
-          <span className="ml-2 text-sm font-normal text-surface-400">{sessionId?.slice(0, 8)}</span>
-        </h2>
-        <Button variant="outline" size="sm" onPress={() => navigate(`/terminal/${sessionId}`)}>
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={() => navigate(-1)}
+          className="-ml-2 text-surface-500"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 12L6 8l4-4" />
+          </svg>
+        </Button>
+        <div className="flex items-center gap-1.5 text-xs text-surface-400">
+          <button type="button" onClick={() => navigate('/')} className="transition-colors hover:text-primary-500">Dashboard</button>
+          <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 4l4 4-4 4" /></svg>
+          <span className="font-mono text-surface-600 dark:text-surface-300">{sessionId?.slice(0, 8)}</span>
+        </div>
+        <div className="flex-1" />
+        <Button variant="outline" size="sm" onPress={() => navigate(`/terminal/${sessionId}`)} className="gap-1.5">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
+            <path d="M4 7h2M4 10h5" />
+          </svg>
           Terminal
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="File Changes" value={fileChanges.length} color="border-t-primary-500" />
-        <StatCard label="Tool Uses" value={toolUses.length} color="border-t-purple-500" />
-        <StatCard label="Total Events" value={events.length} color="border-t-success-500" />
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard label="File Changes" value={fileChanges.length} accent="primary" icon="📄" />
+        <StatCard label="Tool Uses" value={toolUses.length} accent="purple" icon="🔧" />
+        <StatCard label="Total Events" value={events.length} accent="success" icon="📊" />
       </div>
 
       {fileChanges.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-surface-900 dark:text-white">File Changes</h3>
+        <div>
+          <div className="mb-3 flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-surface-900 dark:text-white">File Changes</h3>
+            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium tabular-nums text-primary-600 dark:bg-primary-950 dark:text-primary-400">
+              {fileChanges.length}
+            </span>
+            <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
+          </div>
           <div className="space-y-1">
             {fileChanges.map((e, i) =>
               e.type === 'file_change' ? (
@@ -70,16 +92,30 @@ export function AgentDetailScreen() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-surface-900 dark:text-white">Event Timeline</h3>
-        <Card>
-          <CardContent className="max-h-[500px] overflow-auto p-2">
+      <div>
+        <div className="mb-3 flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-surface-900 dark:text-white">Event Timeline</h3>
+          <span className="rounded-full bg-surface-100 px-2 py-0.5 text-xs font-medium tabular-nums text-surface-600 dark:bg-surface-800 dark:text-surface-400">
+            {[...statusEvents, ...toolUses].length}
+          </span>
+          <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
+        </div>
+        <Card className="border border-surface-200 shadow-sm dark:border-surface-700">
+          <CardContent className="max-h-[500px] overflow-auto p-0">
             {statusEvents.length === 0 && toolUses.length === 0 ? (
-              <div className="py-8 text-center text-sm text-surface-400">Waiting for events...</div>
+              <div className="flex flex-col items-center py-16 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-100 dark:bg-surface-800">
+                  <span className="text-xl">⏳</span>
+                </div>
+                <p className="text-sm text-surface-400">Waiting for events...</p>
+              </div>
             ) : (
-              [...statusEvents, ...toolUses]
-                .sort((a, b) => a.timestamp - b.timestamp)
-                .map((event, i) => <EventRow key={i} event={event} />)
+              <div className="relative">
+                <div className="pointer-events-none absolute left-[62px] top-0 bottom-0 w-px bg-surface-100 dark:bg-surface-800" />
+                {[...statusEvents, ...toolUses]
+                  .sort((a, b) => a.timestamp - b.timestamp)
+                  .map((event, i) => <EventRow key={i} event={event} />)}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -88,12 +124,30 @@ export function AgentDetailScreen() {
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, accent, icon }: { label: string; value: number; accent: 'primary' | 'purple' | 'success'; icon: string }) {
+  const borderClasses = {
+    primary: 'border-l-primary-500',
+    purple: 'border-l-purple-500',
+    success: 'border-l-success-500',
+  };
+  const bgClasses = {
+    primary: 'bg-primary-50 dark:bg-primary-950/30',
+    purple: 'bg-purple-50 dark:bg-purple-950/30',
+    success: 'bg-success-50 dark:bg-success-950/30',
+  };
+
   return (
-    <Card className={`border-t-2 ${color}`}>
-      <CardContent className="p-4 text-center">
-        <div className="text-2xl font-bold text-surface-900 dark:text-white">{value}</div>
-        <div className="mt-0.5 text-xs text-surface-500">{label}</div>
+    <Card className={`overflow-hidden border border-surface-200 border-l-4 shadow-sm dark:border-surface-700 ${borderClasses[accent]}`}>
+      <CardContent className={`p-5 ${bgClasses[accent]} relative`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-3xl font-bold tabular-nums text-surface-900 dark:text-white">{value}</div>
+            <div className="mt-1 text-xs font-medium text-surface-500">{label}</div>
+          </div>
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${bgClasses[accent]}`}>
+            {icon}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -105,21 +159,31 @@ function FileChangeRow({ path, changeType }: { path: string; changeType: string 
     modify: 'accent',
     delete: 'danger',
   };
+  const iconMap: Record<string, string> = {
+    create: '+',
+    modify: '~',
+    delete: '−',
+  };
 
   return (
-    <Card>
-      <CardContent className="flex items-center gap-2 px-3 py-1.5">
-        <Chip size="sm" variant="soft" color={colorMap[changeType] ?? 'accent'}>
-          {changeType}
-        </Chip>
-        <span className="truncate font-mono text-[13px] text-surface-700 dark:text-surface-300">{path}</span>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-2.5 rounded-lg border border-surface-100 bg-white px-3.5 py-2.5 transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-800/50 dark:hover:bg-surface-800">
+      <span className={`flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold ${
+        changeType === 'create' ? 'bg-success-100 text-success-700 dark:bg-success-950 dark:text-success-400'
+        : changeType === 'delete' ? 'bg-danger-100 text-danger-700 dark:bg-danger-950 dark:text-danger-400'
+        : 'bg-primary-100 text-primary-700 dark:bg-primary-950 dark:text-primary-400'
+      }`}>
+        {iconMap[changeType] ?? '~'}
+      </span>
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-surface-700 dark:text-surface-300">{path}</span>
+      <Chip size="sm" variant="soft" color={colorMap[changeType] ?? 'accent'}>
+        {changeType}
+      </Chip>
+    </div>
   );
 }
 
 function EventRow({ event }: { event: ParsedEvent }) {
-  const time = new Date(event.timestamp).toLocaleTimeString();
+  const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const dotColors: Record<string, string> = {
     status_change: 'bg-primary-500',
@@ -129,6 +193,13 @@ function EventRow({ event }: { event: ParsedEvent }) {
     command_exec: 'bg-warning-400',
     error: 'bg-danger-500',
     raw_output: 'bg-surface-400',
+  };
+
+  const bgColors: Record<string, string> = {
+    status_change: 'border-l-primary-400',
+    thinking: 'border-l-warning-400',
+    tool_use: 'border-l-purple-400',
+    error: 'border-l-danger-400',
   };
 
   const description = (() => {
@@ -151,10 +222,10 @@ function EventRow({ event }: { event: ParsedEvent }) {
   })();
 
   return (
-    <div className="flex items-center gap-2 border-b border-surface-100 px-2 py-1 text-xs last:border-0 dark:border-surface-700">
-      <span className="w-14 shrink-0 text-surface-400">{time}</span>
-      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotColors[event.type] ?? 'bg-surface-400'}`} />
-      <span className="text-surface-700 dark:text-surface-300">{description}</span>
+    <div className={`flex items-center gap-3 border-l-2 px-4 py-2 transition-colors hover:bg-surface-50/50 dark:hover:bg-surface-800/30 ${bgColors[event.type] ?? 'border-l-transparent'}`}>
+      <span className="w-16 shrink-0 font-mono text-[11px] tabular-nums text-surface-400">{time}</span>
+      <span className={`relative z-10 inline-flex h-2 w-2 rounded-full ${dotColors[event.type] ?? 'bg-surface-400'}`} />
+      <span className="min-w-0 flex-1 truncate text-xs text-surface-700 dark:text-surface-300">{description}</span>
     </div>
   );
 }

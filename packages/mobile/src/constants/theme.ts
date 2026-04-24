@@ -56,16 +56,42 @@ export const Colors = {
     950: '#030712',
   },
   dark: {
-    bg: '#0a0a0f',
-    card: '#141419',
-    cardBorder: '#1e1e26',
-    elevated: '#1a1a22',
-    subtle: '#252530',
+    bg: '#050508',
+    card: '#0e0e14',
+    cardBorder: '#1a1a24',
+    elevated: '#121218',
+    subtle: '#1e1e2a',
+    inputBg: '#141420',
+    inputBorder: '#252536',
+  },
+  glass: {
+    background: 'rgba(14, 14, 20, 0.75)',
+    backgroundLight: 'rgba(14, 14, 20, 0.55)',
+    border: 'rgba(255, 255, 255, 0.06)',
+    borderLight: 'rgba(255, 255, 255, 0.03)',
+    highlight: 'rgba(255, 255, 255, 0.08)',
+  },
+  gradient: {
+    primaryStart: '#3b82f6',
+    primaryEnd: '#8b5cf6',
+    accentStart: '#06b6d4',
+    accentEnd: '#3b82f6',
+    warmStart: '#f59e0b',
+    warmEnd: '#ef4444',
+  },
+  text: {
+    primary: '#f0f0f5',
+    secondary: '#9ca3b8',
+    tertiary: '#5c5c72',
+    inverse: '#050508',
+    accent: '#60a5fa',
   },
 } as const;
 
 export const Spacing = {
-  xs: 4,
+  '3xs': 2,
+  '2xs': 4,
+  xs: 6,
   sm: 8,
   md: 12,
   lg: 16,
@@ -74,46 +100,73 @@ export const Spacing = {
   '3xl': 32,
   '4xl': 40,
   '5xl': 48,
+  '6xl': 64,
 } as const;
 
 export const Typography = {
-  xs: { fontSize: 10, lineHeight: 14 },
-  sm: { fontSize: 12, lineHeight: 16 },
-  base: { fontSize: 14, lineHeight: 20 },
-  lg: { fontSize: 16, lineHeight: 22 },
-  xl: { fontSize: 20, lineHeight: 28 },
-  '2xl': { fontSize: 24, lineHeight: 32 },
+  xs: { fontSize: 10, lineHeight: 14, letterSpacing: 0.04 },
+  sm: { fontSize: 12, lineHeight: 16, letterSpacing: 0.02 },
+  base: { fontSize: 14, lineHeight: 20, letterSpacing: -0.01 },
+  lg: { fontSize: 16, lineHeight: 22, letterSpacing: -0.02 },
+  xl: { fontSize: 20, lineHeight: 28, letterSpacing: -0.02 },
+  '2xl': { fontSize: 24, lineHeight: 32, letterSpacing: -0.03 },
+  '3xl': { fontSize: 30, lineHeight: 38, letterSpacing: -0.03 },
+  '4xl': { fontSize: 36, lineHeight: 44, letterSpacing: -0.04 },
 } as const;
 
 export const Radius = {
+  xs: 4,
   sm: 6,
   md: 8,
   lg: 12,
   xl: 16,
+  '2xl': 20,
+  '3xl': 24,
   full: 9999,
+} as const;
+
+export const Animation = {
+  duration: {
+    fast: 150,
+    normal: 250,
+    slow: 350,
+    gentle: 500,
+  },
+  spring: {
+    gentle: { damping: 20, stiffness: 120 },
+    bouncy: { damping: 12, stiffness: 180 },
+    snappy: { damping: 25, stiffness: 300 },
+  },
 } as const;
 
 export const Shadows = StyleSheet.create({
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.12,
     shadowRadius: 2,
     elevation: 1,
   },
   md: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.16,
     shadowRadius: 4,
     elevation: 2,
   },
   lg: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+  },
+  glow: {
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
 });
 
