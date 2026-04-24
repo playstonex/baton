@@ -47,62 +47,41 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
   }, [oldContent, newContent]);
 
   return (
-    <div
-      style={{
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-        fontSize: 12,
-        lineHeight: 1.5,
-        background: '#1e1e1e',
-        borderRadius: 8,
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ overflowX: 'auto' }}>
+    <div className="overflow-hidden rounded-xl bg-[#1e1e1e] font-mono text-xs leading-relaxed">
+      <div className="overflow-x-auto">
         {diffLines.map((line, idx) => (
           <div
             key={idx}
-            style={{
-              display: 'flex',
-              background:
-                line.type === 'add'
-                  ? 'rgba(34, 197, 94, 0.15)'
-                  : line.type === 'remove'
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : 'transparent',
-            }}
+            className={`flex ${
+              line.type === 'add'
+                ? 'bg-green-500/15'
+                : line.type === 'remove'
+                  ? 'bg-red-500/15'
+                  : ''
+            }`}
           >
-            <div
-              style={{
-                width: 40,
-                padding: '2px 8px',
-                textAlign: 'right',
-                color: '#6b7280',
-                background: 'rgba(0,0,0,0.2)',
-                userSelect: 'none',
-              }}
-            >
+            <div className="w-10 shrink-0 select-none bg-black/20 px-2 py-0.5 text-right text-surface-500">
               {line.lineNumber}
             </div>
             <div
-              style={{
-                width: 20,
-                padding: '2px 4px',
-                textAlign: 'center',
-                color: line.type === 'add' ? '#22c55e' : line.type === 'remove' ? '#ef4444' : '#6b7280',
-                background: 'rgba(0,0,0,0.2)',
-                userSelect: 'none',
-              }}
+              className={`w-5 shrink-0 select-none bg-black/20 px-1 py-0.5 text-center ${
+                line.type === 'add'
+                  ? 'text-green-400'
+                  : line.type === 'remove'
+                    ? 'text-red-400'
+                    : 'text-surface-500'
+              }`}
             >
               {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
             </div>
             <pre
-              style={{
-                margin: 0,
-                padding: '2px 8px',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-                color: line.type === 'add' ? '#4ade80' : line.type === 'remove' ? '#f87171' : '#d1d5db',
-              }}
+              className={`whitespace-pre-wrap break-all px-2 py-0.5 ${
+                line.type === 'add'
+                  ? 'text-green-300'
+                  : line.type === 'remove'
+                    ? 'text-red-300'
+                    : 'text-surface-300'
+              }`}
             >
               {line.content}
             </pre>

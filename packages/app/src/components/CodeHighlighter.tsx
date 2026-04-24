@@ -9,31 +9,11 @@ export function CodeHighlighter({ code, language }: CodeHighlighterProps) {
   const langLabel = language === 'typescript' ? 'ts' : language;
 
   return (
-    <div
-      style={{
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-        fontSize: 12,
-        lineHeight: 1.5,
-        background: '#1e1e1e',
-        borderRadius: 8,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          padding: '4px 12px',
-          background: '#2d2d2d',
-          color: '#9ca3af',
-          fontSize: 10,
-          textTransform: 'uppercase',
-          borderBottom: '1px solid #3d3d3d',
-        }}
-      >
+    <div className="overflow-hidden rounded-xl bg-[#1e1e1e] font-mono text-xs leading-relaxed">
+      <div className="border-b border-white/10 bg-[#2d2d2d] px-3 py-1 text-[10px] uppercase text-surface-400">
         {langLabel}
       </div>
-      <pre style={{ margin: 0, padding: 12, color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-        {code}
-      </pre>
+      <pre className="whitespace-pre-wrap break-all p-3 text-surface-300">{code}</pre>
     </div>
   );
 }

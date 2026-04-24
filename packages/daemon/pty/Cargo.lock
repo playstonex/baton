@@ -15,6 +15,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
+name = "baton-pty"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "portable-pty",
+ "serde",
+ "serde_json",
+ "vte",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -53,17 +64,6 @@ dependencies = [
  "libc",
  "thiserror",
  "winapi",
-]
-
-[[package]]
-name = "flowwhips-pty"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "portable-pty",
- "serde",
- "serde_json",
- "vte",
 ]
 
 [[package]]

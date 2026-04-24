@@ -1,10 +1,17 @@
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { View, Text, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { Button, Card, Chip } from 'heroui-native';
 import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../../src/stores/events';
 import { wsService } from '../../src/services/websocket';
-import { CHANGE_COLORS } from '../../src/constants/colors';
+
+const CHANGE_CHIP_COLOR: Record<string, 'success' | 'accent' | 'danger'> = {
+  create: 'success',
+  modify: 'accent',
+  delete: 'danger',
+};
 
 export default function AgentDetailScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -40,65 +47,63 @@ export default function AgentDetailScreen() {
   const time = (ts: number) => new Date(ts).toLocaleTimeString();
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      {/* Toolbar */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
-        <Text style={{ fontSize: 14, fontWeight: '600' }}>
-          Agent <Text style={{ color: '#6b7280', fontWeight: '400' }}>{sessionId?.slice(0, 8)}</Text>
+    <View style={styles.container}>
+      <View style={styles.toolbar}>
+        <Text style={styles.toolbarTitle}>
+          Agent <Text style={styles.toolbarId}>{sessionId?.slice(0, 8)}</Text>
         </Text>
-        <TouchableOpacity onPress={() => router.push(`/terminal/${sessionId}`)}>
-          <Text style={{ color: '#2563eb', fontSize: 13 }}>Terminal</Text>
-        </TouchableOpacity>
+        <Button variant="ghost" size="sm" onPress={() => router.push(`/terminal/${sessionId}`)}>
+          Terminal →
+        </Button>
       </View>
 
-      {/* Stats */}
-      <View style={{ flexDirection: 'row', gap: 8, padding: 12 }}>
+      <View style={styles.statsRow}>
         {[
-          { label: 'Files', value: fileChanges.length, color: '#3b82f6' },
-          { label: 'Tools', value: toolUses.length, color: '#8b5cf6' },
-          { label: 'Events', value: events.length, color: '#22c55e' },
+          { label: 'Files', value: fileChanges.length, borderColor: '#3b82f6' },
+          { label: 'Tools', value: toolUses.length, borderColor: '#a855f7' },
+          { label: 'Events', value: events.length, borderColor: '#22c55e' },
         ].map((s) => (
-          <View key={s.label} style={{ flex: 1, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontWeight: '600', color: s.color }}>{s.value}</Text>
-            <Text style={{ fontSize: 12, color: '#6b7280' }}>{s.label}</Text>
-          </View>
+          <Card key={s.label} style={{ flex: 1, borderTopWidth: 2, borderTopColor: s.borderColor }}>
+            <Card.Body style={{ padding: 14, alignItems: 'center' }}>
+              <Text style={{ fontSize: 24, fontWeight: '600', color: s.borderColor }}>{s.value}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
+            </Card.Body>
+          </Card>
         ))}
       </View>
 
-      {/* File Changes */}
       {fileChanges.length > 0 && (
-        <View style={{ paddingHorizontal: 12, marginBottom: 8 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', marginBottom: 6 }}>File Changes</Text>
+        <View style={styles.fileChangesSection}>
+          <Text style={styles.sectionTitle}>File Changes</Text>
           {fileChanges.slice(0, 10).map((e, i) =>
             e.type === 'file_change' ? (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 10, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 3, overflow: 'hidden', backgroundColor: CHANGE_COLORS[e.changeType]?.bg ?? '#f3f4f6', color: CHANGE_COLORS[e.changeType]?.text ?? '#666', fontWeight: '500' }}>
+              <View key={i} style={styles.fileChangeRow}>
+                <Chip variant="soft" color={CHANGE_CHIP_COLOR[e.changeType] ?? 'default'} size="sm">
                   {e.changeType}
-                </Text>
-                <Text style={{ fontSize: 12, fontFamily: 'monospace', flex: 1 }} numberOfLines={1}>{e.path}</Text>
+                </Chip>
+                <Text style={styles.changePath} numberOfLines={1}>{e.path}</Text>
               </View>
             ) : null,
           )}
         </View>
       )}
 
-      {/* Event Timeline */}
-      <Text style={{ fontSize: 14, fontWeight: '600', paddingHorizontal: 12, marginBottom: 6 }}>Timeline</Text>
+      <Text style={[styles.sectionTitle, { paddingHorizontal: 14 }]}>Timeline</Text>
       <FlatList
         data={allEvents}
         keyExtractor={(_, i) => String(i)}
-        contentContainerStyle={{ paddingHorizontal: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 14 }}
         ListEmptyComponent={
-          <View style={{ padding: 30, alignItems: 'center' }}>
-            <Text style={{ color: '#9ca3af' }}>Waiting for events...</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>Waiting for events...</Text>
           </View>
         }
         renderItem={({ item: event }) => {
           const desc = eventDescription(event);
           return (
-            <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-              <Text style={{ fontSize: 10, color: '#9ca3af', width: 60 }}>{time(event.timestamp)}</Text>
-              <Text style={{ fontSize: 12, color: '#374151', flex: 1 }} numberOfLines={1}>{desc}</Text>
+            <View style={styles.timelineRow}>
+              <Text style={styles.timelineTime}>{time(event.timestamp)}</Text>
+              <Text style={styles.timelineDesc} numberOfLines={1}>{desc}</Text>
             </View>
           );
         }}
@@ -118,3 +123,21 @@ function eventDescription(event: ParsedEvent): string {
     default: return '';
   }
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0a0a0f' },
+  toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#1e1e26', backgroundColor: '#141419' },
+  toolbarTitle: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  toolbarId: { color: '#6b7280', fontWeight: '400' },
+  statsRow: { flexDirection: 'row', gap: 8, padding: 14 },
+  statLabel: { fontSize: 10, color: '#6b7280', marginTop: 2 },
+  fileChangesSection: { paddingHorizontal: 14, marginBottom: 8 },
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#fff', marginBottom: 6 },
+  fileChangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 },
+  changePath: { fontSize: 12, fontFamily: 'monospace', flex: 1, color: '#9ca3af' },
+  emptyState: { padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 14, color: '#4b5563' },
+  timelineRow: { flexDirection: 'row', gap: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#1e1e26' },
+  timelineTime: { fontSize: 10, color: '#4b5563', width: 60 },
+  timelineDesc: { fontSize: 12, color: '#d1d5db', flex: 1 },
+});

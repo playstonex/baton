@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { Button, Card, CardContent, Chip } from '@heroui/react';
 import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../stores/events.js';
 import { wsService } from '../services/websocket.js';
@@ -26,7 +27,6 @@ export function AgentDetailScreen() {
       }
     });
 
-    // Ensure we're attached
     wsService.send({ type: 'control', action: 'attach_session', sessionId });
 
     return () => {
@@ -40,31 +40,27 @@ export function AgentDetailScreen() {
   );
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-surface-900 dark:text-white">
           Agent Detail
-          <span style={{ color: '#6b7280', fontWeight: 400, marginLeft: 8, fontSize: 14 }}>
-            {sessionId?.slice(0, 8)}
-          </span>
+          <span className="ml-2 text-sm font-normal text-surface-400">{sessionId?.slice(0, 8)}</span>
         </h2>
-        <button onClick={() => navigate(`/terminal/${sessionId}`)} style={{ fontSize: 13, padding: '4px 14px', cursor: 'pointer' }}>
+        <Button variant="outline" size="sm" onPress={() => navigate(`/terminal/${sessionId}`)}>
           Terminal
-        </button>
+        </Button>
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-        <StatCard label="File Changes" value={fileChanges.length} color="#3b82f6" />
-        <StatCard label="Tool Uses" value={toolUses.length} color="#8b5cf6" />
-        <StatCard label="Total Events" value={events.length} color="#22c55e" />
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard label="File Changes" value={fileChanges.length} color="border-t-primary-500" />
+        <StatCard label="Tool Uses" value={toolUses.length} color="border-t-purple-500" />
+        <StatCard label="Total Events" value={events.length} color="border-t-success-500" />
       </div>
 
-      {/* File Changes */}
       {fileChanges.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, marginBottom: 8 }}>File Changes</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-surface-900 dark:text-white">File Changes</h3>
+          <div className="space-y-1">
             {fileChanges.map((e, i) =>
               e.type === 'file_change' ? (
                 <FileChangeRow key={i} path={e.path} changeType={e.changeType} />
@@ -74,27 +70,19 @@ export function AgentDetailScreen() {
         </div>
       )}
 
-      {/* Event Timeline */}
-      <h3 style={{ fontSize: 14, marginBottom: 8 }}>Event Timeline</h3>
-      <div
-        style={{
-          maxHeight: 500,
-          overflow: 'auto',
-          border: '1px solid #e5e7eb',
-          borderRadius: 8,
-          padding: 8,
-          background: '#fafafa',
-        }}
-      >
-        {statusEvents.length === 0 && toolUses.length === 0 ? (
-          <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af' }}>
-            Waiting for events...
-          </div>
-        ) : (
-          [...statusEvents, ...toolUses]
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .map((event, i) => <EventRow key={i} event={event} />)
-        )}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-surface-900 dark:text-white">Event Timeline</h3>
+        <Card>
+          <CardContent className="max-h-[500px] overflow-auto p-2">
+            {statusEvents.length === 0 && toolUses.length === 0 ? (
+              <div className="py-8 text-center text-sm text-surface-400">Waiting for events...</div>
+            ) : (
+              [...statusEvents, ...toolUses]
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .map((event, i) => <EventRow key={i} event={event} />)
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -102,70 +90,45 @@ export function AgentDetailScreen() {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div
-      style={{
-        padding: 16,
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
-        textAlign: 'center',
-      }}
-    >
-      <div style={{ fontSize: 24, fontWeight: 600, color }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{label}</div>
-    </div>
+    <Card className={`border-t-2 ${color}`}>
+      <CardContent className="p-4 text-center">
+        <div className="text-2xl font-bold text-surface-900 dark:text-white">{value}</div>
+        <div className="mt-0.5 text-xs text-surface-500">{label}</div>
+      </CardContent>
+    </Card>
   );
 }
 
 function FileChangeRow({ path, changeType }: { path: string; changeType: string }) {
-  const colors: Record<string, { bg: string; text: string }> = {
-    create: { bg: '#dcfce7', text: '#166534' },
-    modify: { bg: '#dbeafe', text: '#1e40af' },
-    delete: { bg: '#fef2f2', text: '#991b1b' },
+  const colorMap: Record<string, 'success' | 'accent' | 'danger'> = {
+    create: 'success',
+    modify: 'accent',
+    delete: 'danger',
   };
-  const style = colors[changeType] ?? colors.modify;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '6px 10px',
-        background: '#fff',
-        borderRadius: 4,
-        border: '1px solid #f3f4f6',
-      }}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          padding: '1px 6px',
-          borderRadius: 3,
-          background: style.bg,
-          color: style.text,
-          fontWeight: 500,
-          textTransform: 'uppercase',
-        }}
-      >
-        {changeType}
-      </span>
-      <span style={{ fontSize: 13, fontFamily: 'monospace' }}>{path}</span>
-    </div>
+    <Card>
+      <CardContent className="flex items-center gap-2 px-3 py-1.5">
+        <Chip size="sm" variant="soft" color={colorMap[changeType] ?? 'accent'}>
+          {changeType}
+        </Chip>
+        <span className="truncate font-mono text-[13px] text-surface-700 dark:text-surface-300">{path}</span>
+      </CardContent>
+    </Card>
   );
 }
 
 function EventRow({ event }: { event: ParsedEvent }) {
   const time = new Date(event.timestamp).toLocaleTimeString();
 
-  const icon: Record<string, string> = {
-    status_change: '●',
-    thinking: '💬',
-    tool_use: '🔧',
-    file_change: '📄',
-    command_exec: '⚡',
-    error: '❌',
-    raw_output: '📝',
+  const dotColors: Record<string, string> = {
+    status_change: 'bg-primary-500',
+    thinking: 'bg-warning-500',
+    tool_use: 'bg-purple-500',
+    file_change: 'bg-primary-400',
+    command_exec: 'bg-warning-400',
+    error: 'bg-danger-500',
+    raw_output: 'bg-surface-400',
   };
 
   const description = (() => {
@@ -188,19 +151,10 @@ function EventRow({ event }: { event: ParsedEvent }) {
   })();
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '4px 8px',
-        fontSize: 12,
-        borderBottom: '1px solid #f3f4f6',
-      }}
-    >
-      <span style={{ fontSize: 10, color: '#9ca3af', width: 60, flexShrink: 0 }}>{time}</span>
-      <span>{icon[event.type] ?? '●'}</span>
-      <span style={{ color: '#374151' }}>{description}</span>
+    <div className="flex items-center gap-2 border-b border-surface-100 px-2 py-1 text-xs last:border-0 dark:border-surface-700">
+      <span className="w-14 shrink-0 text-surface-400">{time}</span>
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotColors[event.type] ?? 'bg-surface-400'}`} />
+      <span className="text-surface-700 dark:text-surface-300">{description}</span>
     </div>
   );
 }

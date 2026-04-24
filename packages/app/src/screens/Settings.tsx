@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button, Input, Chip } from '@heroui/react';
 import { wsService, type ConnectionMode } from '../services/websocket.js';
 
 export function SettingsScreen() {
@@ -23,7 +24,6 @@ export function SettingsScreen() {
   }
 
   async function applyRemote() {
-    // Step 1: If we have a pairing code, verify it
     if (pairingCode && !hostId) {
       try {
         const gatewayUrl = `${relayUrl.replace('ws', 'http')}`.replace(/:\d+/, ':3220');
@@ -54,7 +54,6 @@ export function SettingsScreen() {
       return;
     }
 
-    // Step 2: If we have hostId, just connect
     if (hostId) {
       wsService.configure({ mode: 'remote', relayUrl, hostId });
       wsService.disconnect();
@@ -65,112 +64,102 @@ export function SettingsScreen() {
   }
 
   return (
-    <div style={{ maxWidth: 600 }}>
-      <h2>Settings</h2>
+    <div className="mx-auto max-w-lg space-y-8">
+      <h2 className="text-xl font-bold text-surface-900 dark:text-white">Settings</h2>
 
-      {/* Connection Mode */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15 }}>Connection</h3>
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-surface-900 dark:text-white">Connection</h3>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button
+        <div className="flex gap-3">
+          <div
+            className={`flex-1 cursor-pointer rounded-xl border-2 p-4 transition-colors ${mode === 'local' ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/50' : 'border-surface-200 bg-white hover:border-surface-300 dark:border-surface-700 dark:bg-surface-800'}`}
             onClick={() => setMode('local')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: `2px solid ${mode === 'local' ? '#2563eb' : '#e5e7eb'}`,
-              borderRadius: 8,
-              background: mode === 'local' ? '#eff6ff' : '#fff',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
           >
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Local</div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Same network, direct connection</div>
-          </button>
-          <button
+            <div className="flex items-center gap-2">
+              <LocalIcon className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+              <span className="text-sm font-semibold text-surface-900 dark:text-white">Local</span>
+            </div>
+            <p className="mt-1 text-xs text-surface-500">Same network, direct connection</p>
+          </div>
+          <div
+            className={`flex-1 cursor-pointer rounded-xl border-2 p-4 transition-colors ${mode === 'remote' ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/50' : 'border-surface-200 bg-white hover:border-surface-300 dark:border-surface-700 dark:bg-surface-800'}`}
             onClick={() => setMode('remote')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: `2px solid ${mode === 'remote' ? '#2563eb' : '#e5e7eb'}`,
-              borderRadius: 8,
-              background: mode === 'remote' ? '#eff6ff' : '#fff',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
           >
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Remote</div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Via Relay, anywhere</div>
-          </button>
+            <div className="flex items-center gap-2">
+              <RemoteIcon className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+              <span className="text-sm font-semibold text-surface-900 dark:text-white">Remote</span>
+            </div>
+            <p className="mt-1 text-xs text-surface-500">Via Relay, anywhere</p>
+          </div>
         </div>
 
         {mode === 'local' ? (
-          <div>
-            <label style={{ fontSize: 13, color: '#374151', display: 'block', marginBottom: 4 }}>
-              Daemon URL
-            </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="text"
-                value={localHttpUrl}
-                onChange={(e) => setLocalHttpUrl(e.target.value)}
-                style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontFamily: 'monospace' }}
-              />
-              <button onClick={applyLocal} style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                Connect
-              </button>
-            </div>
+          <div className="space-y-2">
+            <Input
+              value={localHttpUrl}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalHttpUrl(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <Button variant="primary" onPress={applyLocal}>
+              Connect
+            </Button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 13, color: '#374151', display: 'block', marginBottom: 4 }}>
-                Relay URL
-              </label>
-              <input
-                type="text"
-                placeholder="ws://relay.example.com:3230"
-                value={relayUrl}
-                onChange={(e) => setRelayUrl(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontFamily: 'monospace', boxSizing: 'border-box' }}
+          <div className="space-y-3">
+            <Input
+              placeholder="ws://relay.example.com:3230"
+              value={relayUrl}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRelayUrl(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <div className="flex gap-2 items-end">
+              <Input
+                placeholder="123456"
+                value={pairingCode}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPairingCode(e.target.value)}
+                className="w-32 font-mono text-sm text-center tracking-widest"
+                maxLength={6}
               />
+              <Button variant="primary" onPress={applyRemote}>
+                Pair & Connect
+              </Button>
             </div>
-            <div>
-              <label style={{ fontSize: 13, color: '#374151', display: 'block', marginBottom: 4 }}>
-                Pairing Code
-              </label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="text"
-                  placeholder="123456"
-                  value={pairingCode}
-                  onChange={(e) => setPairingCode(e.target.value)}
-                  maxLength={6}
-                  style={{ width: 120, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontFamily: 'monospace', textAlign: 'center', letterSpacing: 4 }}
-                />
-                <button onClick={applyRemote} style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                  Pair & Connect
-                </button>
-              </div>
-              <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>
-                Get the code from your host machine's Daemon terminal
-              </p>
-            </div>
+            <p className="text-xs text-surface-400">
+              Get the code from your host machine's Daemon terminal
+            </p>
             {hostId && (
-              <p style={{ fontSize: 12, color: '#22c55e' }}>
+              <Chip size="sm" variant="primary">
                 Paired with host: {hostId.slice(0, 8)}...
-              </p>
+              </Chip>
             )}
           </div>
         )}
       </div>
 
       {status && (
-        <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 13, color: '#166534' }}>
+        <Chip variant="soft" color={status.includes('Connected') || status.includes('Connecting') ? 'success' : 'danger'}>
           {status}
-        </div>
+        </Chip>
       )}
     </div>
+  );
+}
+
+function LocalIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="12" height="8" rx="1" />
+      <path d="M5 14h6M8 11v3" />
+    </svg>
+  );
+}
+
+function RemoteIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2" />
+      <path d="M4.93 4.93a5 5 0 0 0 0 6.14M11.07 4.93a5 5 0 0 1 0 6.14" />
+      <path d="M2.5 2.5a9 9 0 0 0 0 11M13.5 2.5a9 9 0 0 1 0 11" />
+    </svg>
   );
 }

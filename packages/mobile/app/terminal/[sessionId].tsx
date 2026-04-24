@@ -1,8 +1,10 @@
-import { View, Text, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { Button, Chip } from 'heroui-native';
 import { wsService } from '../../src/services/websocket';
-import { STATUS_COLORS } from '../../src/constants/colors';
+import { STATUS_COLORS, Colors } from '../../src/constants/theme';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 
 export default function TerminalScreen() {
@@ -22,18 +24,15 @@ export default function TerminalScreen() {
         sessionId,
         payload: { cols, rows },
       });
-      console.log('[Terminal] resize:', cols, 'x', rows);
     },
     [sessionId],
   );
 
-  // Subscribe to events (once per sessionId)
   useEffect(() => {
     if (!sessionId) return;
 
     const unsubOutput = wsService.on('terminal_output', (msg) => {
       if (msg.type === 'terminal_output' && msg.sessionId === sessionId) {
-        console.log('[Terminal] output received, len:', msg.data?.length);
         xtermRef.current?.write(msg.data);
       }
     });
@@ -62,11 +61,9 @@ export default function TerminalScreen() {
     };
   }, [sessionId]);
 
-  // Attach/detach session — re-sends attach when WS (re)connects
   useEffect(() => {
     if (!sessionId || !wsConnected) return;
 
-    console.log('[Terminal] attaching session:', sessionId);
     wsService.send({ type: 'control', action: 'attach_session', sessionId });
 
     return () => {
@@ -82,77 +79,67 @@ export default function TerminalScreen() {
     [sessionId],
   );
 
+  const STATUS_CHIP_COLOR: Record<string, 'success' | 'accent' | 'default' | 'warning' | 'danger'> = {
+    running: 'success',
+    thinking: 'accent',
+    executing: 'default',
+    waiting_input: 'warning',
+    idle: 'default',
+    stopped: 'danger',
+    starting: 'default',
+    error: 'danger',
+  };
+
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#1e1e1e' }}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Toolbar */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          padding: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: '#333',
-          backgroundColor: '#2d2d2d',
-        }}
-      >
+      <View style={styles.toolbar}>
         <View
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: STATUS_COLORS[status] ?? '#94a3b8',
-            marginRight: 8,
-          }}
+          style={[styles.statusDot, { backgroundColor: STATUS_COLORS[status] ?? Colors.surface[400] }]}
         />
-        <Text style={{ color: '#ccc', fontSize: 12, fontFamily: 'monospace' }}>
-          {sessionId?.slice(0, 8)}
-        </Text>
-        <Text style={{ color: '#666', fontSize: 11, marginLeft: 8 }}>{status}</Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity
-          onPress={() => router.push(`/agent/${sessionId}`)}
-          style={{ paddingHorizontal: 8 }}
-        >
-          <Text style={{ color: '#3b82f6', fontSize: 13 }}>Events</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8 }}>
-          <Text style={{ color: '#999', fontSize: 13 }}>Done</Text>
-        </TouchableOpacity>
+        <Text style={styles.sessionId}>{sessionId?.slice(0, 8)}</Text>
+        <Chip variant="soft" color={STATUS_CHIP_COLOR[status] ?? 'default'} size="sm">
+          {status}
+        </Chip>
+        <View style={styles.spacer} />
+        <Button variant="ghost" size="sm" onPress={() => router.push(`/agent/${sessionId}`)}>
+          Events
+        </Button>
+        <Button variant="outline" size="sm" onPress={() => router.back()}>
+          Done
+        </Button>
       </View>
 
-      {/* xterm.js Terminal */}
       <XtermWebView
         ref={xtermRef}
         onInput={handleInput}
         onResize={handleResize}
         onStatus={(loaded, error) => {
           setXtermStatus(loaded ? 'xterm loaded' : `xterm error: ${error}`);
-          console.log('[Terminal] xterm status:', loaded, error);
         }}
       />
 
-      {/* Debug overlay — remove after testing */}
       {!wsConnected && (
-        <View
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            left: 16,
-            right: 16,
-            backgroundColor: '#991b1b',
-            padding: 10,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ color: '#fff', fontSize: 12 }}>⚠️ WebSocket not connected</Text>
-          <Text style={{ color: '#fecaca', fontSize: 11 }}>
-            Go to Settings → configure daemon URL → Connect
+        <View style={styles.disconnectBanner}>
+          <Text style={styles.disconnectBannerTitle}>WebSocket not connected</Text>
+          <Text style={styles.disconnectBannerDesc}>
+            Go to Settings, configure daemon URL, then Connect
           </Text>
         </View>
       )}
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.surface[900] },
+  toolbar: { flexDirection: 'row', alignItems: 'center', padding: 8, borderBottomWidth: 1, borderBottomColor: '#333', backgroundColor: '#2d2d2d', gap: 8 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  sessionId: { color: '#ccc', fontSize: 12, fontFamily: 'monospace' },
+  spacer: { flex: 1 },
+  disconnectBanner: { position: 'absolute', bottom: 12, left: 12, right: 12, backgroundColor: Colors.danger[700], padding: 12, borderRadius: 8 },
+  disconnectBannerTitle: { color: '#fff', fontSize: 12 },
+  disconnectBannerDesc: { color: '#fecaca', fontSize: 10, marginTop: 2 },
+});

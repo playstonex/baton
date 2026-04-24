@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import { Button, Card, CardContent, Input, Chip } from '@heroui/react';
 import type { AgentProcess, AgentType } from '@baton/shared';
 import { useAgentStore } from '../stores/connection.js';
 import { wsService } from '../services/websocket.js';
@@ -10,6 +11,17 @@ const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
   { type: 'codex', label: 'Codex', desc: 'OpenAI CLI agent' },
   { type: 'opencode', label: 'OpenCode', desc: 'Open-source agent' },
 ];
+
+const STATUS_COLORS: Record<string, 'success' | 'accent' | 'default' | 'warning' | 'danger'> = {
+  running: 'success',
+  thinking: 'accent',
+  executing: 'default',
+  waiting_input: 'warning',
+  idle: 'default',
+  stopped: 'danger',
+  starting: 'default',
+  error: 'danger',
+};
 
 export function DashboardScreen() {
   const navigate = useNavigate();
@@ -111,134 +123,88 @@ export function DashboardScreen() {
   const running = agents.filter((a) => a.status !== 'stopped').length;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0 }}>Dashboard</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#6b7280' }}>
+    <div className="mx-auto max-w-4xl space-y-8">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-surface-900 dark:text-white">Dashboard</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-surface-500">
             {running} running / {agents.length} total
           </span>
-          <span
-            style={{
-              fontSize: 12,
-              padding: '4px 10px',
-              borderRadius: 4,
-              background: daemonOnline ? '#dcfce7' : '#fef2f2',
-              color: daemonOnline ? '#166534' : '#991b1b',
-            }}
-          >
+          <Chip size="sm" variant="soft" color={daemonOnline ? 'success' : 'danger'}>
             {daemonOnline ? 'Daemon Online' : 'Daemon Offline'}
-          </span>
+          </Chip>
         </div>
       </div>
 
       <SystemStats />
 
-      {/* Start Agent Card */}
-      <div
-        style={{
-          marginBottom: 24,
-          padding: 20,
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 10,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 15 }}>Start Agent</h3>
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-sm font-semibold text-surface-900 dark:text-white">Start Agent</h3>
 
-        {/* Agent type selector */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          {AGENT_OPTIONS.map((opt) => (
-            <button
-              key={opt.type}
-              onClick={() => setAgentType(opt.type)}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                background: agentType === opt.type ? '#eff6ff' : '#f9fafb',
-                border: `1px solid ${agentType === opt.type ? '#2563eb' : '#e5e7eb'}`,
-                borderRadius: 6,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
+          <div className="mb-3 flex gap-2">
+            {AGENT_OPTIONS.map((opt) => (
+              <Button
+                key={opt.type}
+                variant={agentType === opt.type ? 'primary' : 'secondary'}
+                className="flex-1 justify-start text-left"
+                onPress={() => setAgentType(opt.type)}
+              >
+                <div>
+                  <div className="text-[13px] font-semibold">{opt.label}</div>
+                  <div className="text-[11px] opacity-60">{opt.desc}</div>
+                </div>
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                placeholder="/path/to/your/project"
+                value={projectPath}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProjectPath(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && startAgent()}
+                className="font-mono text-sm"
+              />
+            </div>
+            <Button
+              variant="primary"
+              isDisabled={loading || !projectPath.trim() || !daemonOnline}
+              onPress={startAgent}
+              className="px-6"
             >
-              <div style={{ fontSize: 13, fontWeight: 600, color: agentType === opt.type ? '#2563eb' : '#374151' }}>
-                {opt.label}
-              </div>
-              <div style={{ fontSize: 11, color: '#9ca3af' }}>{opt.desc}</div>
-            </button>
-          ))}
-        </div>
+              {loading ? 'Starting...' : `Start ${AGENT_OPTIONS.find((o) => o.type === agentType)?.label}`}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Project path + start */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            placeholder="/path/to/your/project"
-            value={projectPath}
-            onChange={(e) => setProjectPath(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && startAgent()}
-            style={{
-              flex: 1,
-              padding: '10px 14px',
-              border: '1px solid #d1d5db',
-              borderRadius: 6,
-              fontSize: 14,
-              fontFamily: 'monospace',
-              outline: 'none',
-            }}
-          />
-          <button
-            onClick={startAgent}
-            disabled={loading || !projectPath.trim() || !daemonOnline}
-            style={{
-              padding: '10px 20px',
-              background: loading || !daemonOnline ? '#93c5fd' : '#2563eb',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: loading ? 'wait' : 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {loading ? 'Starting...' : `Start ${AGENT_OPTIONS.find((o) => o.type === agentType)?.label}`}
-          </button>
-        </div>
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-surface-900 dark:text-white">
+          Active Agents
+          <span className="ml-1.5 font-normal text-surface-400">({agents.length})</span>
+        </h3>
+
+        {agents.length === 0 ? (
+          <Card>
+            <CardContent className="py-16 text-center text-sm text-surface-400">
+              No agents running. Enter a project path above to start.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {agents.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onOpen={() => navigate(`/terminal/${agent.id}`)}
+                onStop={() => stopAgent(agent.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Agent List */}
-      <h3 style={{ fontSize: 15, marginBottom: 12 }}>
-        Active Agents{' '}
-        <span style={{ color: '#6b7280', fontWeight: 400 }}>({agents.length})</span>
-      </h3>
-
-      {agents.length === 0 ? (
-        <div
-          style={{
-            padding: 40,
-            textAlign: 'center',
-            color: '#9ca3af',
-            border: '1px dashed #d1d5db',
-            borderRadius: 10,
-          }}
-        >
-          No agents running. Enter a project path above to start.
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 8 }}>
-          {agents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              onOpen={() => navigate(`/terminal/${agent.id}`)}
-              onStop={() => stopAgent(agent.id)}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -246,87 +212,31 @@ export function DashboardScreen() {
 function AgentCard({ agent, onOpen, onStop }: { agent: AgentProcess; onOpen: () => void; onStop: () => void }) {
   const isStopped = agent.status === 'stopped';
   return (
-    <div
-      style={{
-        padding: 14,
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        opacity: isStopped ? 0.6 : 1,
-      }}
-    >
-      <div
-        onClick={onOpen}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          cursor: 'pointer',
-          flex: 1,
-        }}
-      >
-        <StatusDot status={agent.status} />
-        <div>
-          <div style={{ fontWeight: 500, fontSize: 14 }}>
-            {AGENT_OPTIONS.find((o) => o.type === agent.type)?.label ?? agent.type}
+    <Card className={isStopped ? 'opacity-50' : ''}>
+      <CardContent className="flex items-center justify-between px-4 py-3">
+        <Button variant="ghost" onPress={onOpen} className="flex flex-1 items-center gap-3 justify-start">
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${agent.status === 'running' ? 'bg-success-500' : agent.status === 'thinking' ? 'bg-primary-500 animate-pulse-dot' : agent.status === 'stopped' ? 'bg-danger-500' : 'bg-surface-300'}`} />
+          <div className="text-left">
+            <div className="text-sm font-medium text-surface-900 dark:text-white">
+              {AGENT_OPTIONS.find((o) => o.type === agent.type)?.label ?? agent.type}
+            </div>
+            <div className="font-mono text-xs text-surface-400">{agent.projectPath}</div>
           </div>
-          <div style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>{agent.projectPath}</div>
+        </Button>
+        <div className="flex items-center gap-2.5">
+          <Chip size="sm" variant="soft" color={STATUS_COLORS[agent.status] ?? 'default'}>
+            {agent.status}
+          </Chip>
+          <span className="text-[11px] text-surface-400">
+            {agent.startedAt ? new Date(agent.startedAt).toLocaleTimeString() : ''}
+          </span>
+          {!isStopped && (
+            <Button size="sm" variant="danger" onPress={onStop}>
+              Stop
+            </Button>
+          )}
         </div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#f3f4f6', color: '#6b7280' }}>
-          {agent.status}
-        </span>
-        <span style={{ fontSize: 12, color: '#9ca3af' }}>
-          {agent.startedAt ? new Date(agent.startedAt).toLocaleTimeString() : ''}
-        </span>
-        {!isStopped && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStop();
-            }}
-            style={{
-              padding: '4px 8px',
-              fontSize: 11,
-              border: '1px solid #fca5a5',
-              borderRadius: 4,
-              background: '#fff',
-              color: '#dc2626',
-              cursor: 'pointer',
-            }}
-          >
-            Stop
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    running: '#22c55e',
-    thinking: '#3b82f6',
-    executing: '#8b5cf6',
-    waiting_input: '#f59e0b',
-    idle: '#6b7280',
-    stopped: '#ef4444',
-    starting: '#94a3b8',
-    error: '#ef4444',
-  };
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: 10,
-        height: 10,
-        borderRadius: '50%',
-        background: colors[status] ?? '#94a3b8',
-      }}
-    />
+      </CardContent>
+    </Card>
   );
 }

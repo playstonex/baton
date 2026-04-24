@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Button, Card, CardContent, Input, Chip } from '@heroui/react';
 import type { AgentType } from '@baton/shared';
 
 interface PipelineStep {
@@ -29,6 +30,14 @@ interface Pipeline {
 
 const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode'];
 
+const STEP_CHIP_COLOR: Record<string, 'default' | 'accent' | 'success' | 'danger'> = {
+  pending: 'default',
+  running: 'accent',
+  completed: 'success',
+  failed: 'danger',
+  skipped: 'default',
+};
+
 export function PipelinesScreen() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [creating, setCreating] = useState(false);
@@ -42,7 +51,7 @@ export function PipelinesScreen() {
       const res = await fetch('/api/pipelines');
       if (res.ok) setPipelines((await res.json()) as Pipeline[]);
     } catch {
-      // ignore
+      // offline
     }
   }, []);
 
@@ -78,7 +87,6 @@ export function PipelinesScreen() {
         setNewName('');
         setNewSteps([{ id: crypto.randomUUID(), agentType: 'claude-code', projectPath: '' }]);
         await fetchPipelines();
-        // Auto-run
         runPipeline(pipeline.id);
       }
     } finally {
@@ -88,7 +96,6 @@ export function PipelinesScreen() {
 
   async function runPipeline(id: string) {
     await fetch(`/api/pipelines/${id}/run`, { method: 'POST' });
-    // Poll for updates
     const interval = setInterval(async () => {
       await fetchPipelines();
       const p = pipelines.find((p) => p.id === id);
@@ -96,112 +103,85 @@ export function PipelinesScreen() {
     }, 1000);
   }
 
+  const PIPELINE_STATUS_COLOR: Record<string, 'default' | 'accent' | 'success' | 'danger'> = {
+    pending: 'default',
+    running: 'accent',
+    completed: 'success',
+    failed: 'danger',
+  };
+
   return (
-    <div>
-      <h2 style={{ marginBottom: 20 }}>Pipelines</h2>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <h2 className="text-xl font-bold text-surface-900 dark:text-white">Pipelines</h2>
 
-      {/* Create Pipeline */}
-      <div
-        style={{
-          marginBottom: 24,
-          padding: 20,
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 10,
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 15 }}>New Pipeline</h3>
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-sm font-semibold text-surface-900 dark:text-white">New Pipeline</h3>
 
-        <input
-          type="text"
-          placeholder="Pipeline name"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px solid #d1d5db',
-            borderRadius: 6,
-            fontSize: 14,
-            marginBottom: 12,
-            boxSizing: 'border-box',
-          }}
-        />
-
-        {/* Steps */}
-        {newSteps.map((step, i) => (
-          <div key={step.id} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#6b7280', width: 20 }}>{i + 1}.</span>
-            <select
-              value={step.agentType}
-              onChange={(e) => updateStep(i, { agentType: e.target.value as AgentType })}
-              style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }}
-            >
-              {AGENT_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="/path/to/project"
-              value={step.projectPath}
-              onChange={(e) => updateStep(i, { projectPath: e.target.value })}
-              style={{
-                flex: 1,
-                padding: '6px 10px',
-                border: '1px solid #d1d5db',
-                borderRadius: 4,
-                fontSize: 13,
-                fontFamily: 'monospace',
-              }}
+          <div className="mb-3">
+            <Input
+              placeholder="Pipeline name"
+              value={newName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)}
             />
-            {newSteps.length > 1 && (
-              <button
-                onClick={() => removeStep(i)}
-                style={{ padding: '4px 8px', fontSize: 12, border: '1px solid #fca5a5', borderRadius: 4, background: '#fff', color: '#dc2626', cursor: 'pointer' }}
-              >
-                X
-              </button>
-            )}
           </div>
-        ))}
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={addStep}
-            style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f9fafb', cursor: 'pointer', fontSize: 13 }}
-          >
-            + Add Step
-          </button>
-          <button
-            onClick={createPipeline}
-            disabled={creating || !newName.trim()}
-            style={{
-              padding: '6px 14px',
-              border: 'none',
-              borderRadius: 6,
-              background: creating ? '#93c5fd' : '#2563eb',
-              color: '#fff',
-              cursor: creating ? 'wait' : 'pointer',
-              fontSize: 13,
-              fontWeight: 500,
-              marginLeft: 'auto',
-            }}
-          >
-            {creating ? 'Creating...' : 'Create & Run'}
-          </button>
-        </div>
-      </div>
+          <div className="space-y-2">
+            {newSteps.map((step, i) => (
+              <div key={step.id} className="flex items-center gap-2">
+                <span className="w-5 text-right text-xs font-semibold text-surface-400">{i + 1}.</span>
+                {i > 0 && <span className="text-surface-300 dark:text-surface-600">-</span>}
+                <select
+                  value={step.agentType}
+                  onChange={(e) => updateStep(i, { agentType: e.target.value as AgentType })}
+                  className="rounded-md border border-surface-300 bg-white px-2 py-1.5 text-[13px] text-surface-700 outline-none dark:border-surface-600 dark:bg-surface-900 dark:text-surface-300"
+                >
+                  {AGENT_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <Input
+                  placeholder="/path/to/project"
+                  value={step.projectPath}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateStep(i, { projectPath: e.target.value })}
+                  className="flex-1 font-mono text-[13px]"
+                />
+                {newSteps.length > 1 && (
+                  <Button size="sm" variant="danger-soft" onPress={() => removeStep(i)}>
+                    ✕
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
 
-      {/* Pipeline List */}
+          <div className="mt-3 flex gap-2">
+            <Button variant="outline" size="sm" onPress={addStep}>
+              + Add Step
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={createPipeline}
+              isDisabled={creating || !newName.trim()}
+              className="ml-auto"
+            >
+              {creating ? 'Creating...' : 'Create & Run'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {pipelines.length === 0 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', border: '1px dashed #d1d5db', borderRadius: 10 }}>
-          No pipelines yet. Create one above to run agents sequentially.
-        </div>
+        <Card>
+          <CardContent className="py-16 text-center text-sm text-surface-400">
+            No pipelines yet. Create one above to run agents sequentially.
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div className="space-y-3">
           {pipelines.map((p) => (
-            <PipelineCard key={p.id} pipeline={p} onRun={() => runPipeline(p.id)} />
+            <PipelineCard key={p.id} pipeline={p} onRun={() => runPipeline(p.id)} statusColor={PIPELINE_STATUS_COLOR} />
           ))}
         </div>
       )}
@@ -209,70 +189,43 @@ export function PipelinesScreen() {
   );
 }
 
-function PipelineCard({ pipeline, onRun }: { pipeline: Pipeline; onRun: () => void }) {
-  const statusColors: Record<string, string> = {
-    pending: '#6b7280',
-    running: '#3b82f6',
-    completed: '#22c55e',
-    failed: '#ef4444',
-  };
-
+function PipelineCard({ pipeline, onRun, statusColor }: { pipeline: Pipeline; onRun: () => void; statusColor: Record<string, 'default' | 'accent' | 'success' | 'danger'> }) {
   return (
-    <div
-      style={{
-        padding: 16,
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 8,
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>{pipeline.name}</span>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#f3f4f6', color: statusColors[pipeline.status] }}>
-            {pipeline.status}
-          </span>
+    <Card>
+      <CardContent className="p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-surface-900 dark:text-white">{pipeline.name}</span>
+            <Chip size="sm" variant="soft" color={statusColor[pipeline.status] ?? 'default'}>
+              {pipeline.status}
+            </Chip>
+          </div>
+          {pipeline.status === 'pending' && (
+            <Button size="sm" variant="primary" onPress={onRun}>
+              Run
+            </Button>
+          )}
         </div>
-        {pipeline.status === 'pending' && (
-          <button
-            onClick={onRun}
-            style={{ padding: '4px 12px', border: 'none', borderRadius: 4, background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 12 }}
-          >
-            Run
-          </button>
-        )}
-      </div>
 
-      {/* Steps visualization */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        {pipeline.steps.map((step, i) => {
-          const result = pipeline.results[i];
-          const stepColors: Record<string, string> = {
-            pending: '#f3f4f6',
-            running: '#dbeafe',
-            completed: '#dcfce7',
-            failed: '#fef2f2',
-            skipped: '#f9fafb',
-          };
-          return (
-            <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {i > 0 && <span style={{ color: '#d1d5db', fontSize: 12 }}>→</span>}
-              <div
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 4,
-                  background: stepColors[result?.status ?? 'pending'],
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span style={{ fontWeight: 500 }}>{step.agentType}</span>
-                <span style={{ color: '#9ca3af', marginLeft: 4 }}>{step.projectPath.split('/').pop()}</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {pipeline.steps.map((step, i) => {
+            const result = pipeline.results[i];
+            return (
+              <div key={step.id} className="flex items-center gap-1.5">
+                {i > 0 && (
+                  <svg className="h-3 w-3 text-surface-300 dark:text-surface-600" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 8h10M10 5l3 3-3 3" />
+                  </svg>
+                )}
+                <Chip size="sm" variant="soft" color={STEP_CHIP_COLOR[result?.status ?? 'pending']}>
+                  <span className="font-medium">{step.agentType}</span>
+                  <span className="ml-1 opacity-60">{step.projectPath.split('/').pop()}</span>
+                </Chip>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Card, CardContent, ProgressBar } from '@heroui/react';
 
 interface SystemStats {
   cpu: { usage: number; cores: number };
@@ -39,7 +40,7 @@ export function SystemStats() {
           setError(false);
           setLoading(false);
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
           setError(true);
           setLoading(false);
@@ -58,19 +59,12 @@ export function SystemStats() {
 
   if (loading) {
     return (
-      <div
-        style={{
-          marginBottom: 24,
-          padding: 20,
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 10,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        }}
-      >
-        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 15 }}>System Status</h3>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>Loading...</div>
-      </div>
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-sm font-semibold text-surface-900 dark:text-white">System Status</h3>
+          <div className="text-[13px] text-surface-400">Loading...</div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -79,57 +73,47 @@ export function SystemStats() {
   }
 
   return (
-    <div
-      style={{
-        marginBottom: 24,
-        padding: 20,
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 10,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      }}
-    >
-      <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 15 }}>System Status</h3>
-      
-      <div style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace', marginBottom: 16 }}>
-        {stats.hostname} ({stats.platform}) • Uptime: {formatUptime(stats.uptime)} • Load: {stats.loadAvg.map(n => n.toFixed(2)).join(', ')}
+    <Card>
+      <CardContent className="p-5">
+        <h3 className="mb-3 text-sm font-semibold text-surface-900 dark:text-white">System Status</h3>
+
+        <div className="mb-4 font-mono text-xs text-surface-400">
+          {stats.hostname} ({stats.platform}) &middot; Uptime: {formatUptime(stats.uptime)} &middot; Load: {stats.loadAvg.map((n) => n.toFixed(2)).join(', ')}
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <StatBar
+            label={`CPU (${stats.cpu.cores} cores)`}
+            value={`${stats.cpu.usage.toFixed(1)}%`}
+            pct={stats.cpu.usage}
+            color="accent"
+          />
+          <StatBar
+            label="Memory"
+            value={`${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`}
+            pct={stats.memory.percentage}
+            color="success"
+          />
+          <StatBar
+            label="Disk"
+            value={`${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)}`}
+            pct={stats.disk.percentage}
+            color="warning"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatBar({ label, value, pct, color }: { label: string; value: string; pct: number; color: 'accent' | 'success' | 'warning' }) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[13px] font-medium text-surface-700 dark:text-surface-300">{label}</span>
+        <span className="font-mono text-xs text-surface-400">{value}</span>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>CPU ({stats.cpu.cores} cores)</span>
-            <span style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>{stats.cpu.usage.toFixed(1)}%</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: '#f3f4f6', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#3b82f6', width: `${Math.min(100, Math.max(0, stats.cpu.usage))}%` }} />
-          </div>
-        </div>
-
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>Memory</span>
-            <span style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>
-              {formatBytes(stats.memory.used)} / {formatBytes(stats.memory.total)}
-            </span>
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: '#f3f4f6', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#22c55e', width: `${Math.min(100, Math.max(0, stats.memory.percentage))}%` }} />
-          </div>
-        </div>
-
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>Disk</span>
-            <span style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>
-              {formatBytes(stats.disk.used)} / {formatBytes(stats.disk.total)}
-            </span>
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: '#f3f4f6', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#f59e0b', width: `${Math.min(100, Math.max(0, stats.disk.percentage))}%` }} />
-          </div>
-        </div>
-      </div>
+      <ProgressBar value={Math.min(100, Math.max(0, pct))} color={color} size="sm" />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { SettingsScreen } from './screens/Settings.js';
 import { FilesScreen } from './screens/Files.js';
 import { PipelinesScreen } from './screens/Pipelines.js';
 import '@xterm/xterm/css/xterm.css';
+import './app.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
