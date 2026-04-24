@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Card, CardContent, Chip } from '@heroui/react';
 import type { ParsedEvent } from '@baton/shared';
 
@@ -23,13 +24,13 @@ const TYPE_DOT: Record<string, string> = {
 };
 
 export function EventTimeline({ events, maxHeight = 400 }: EventTimelineProps) {
-  const statusEvents = events.filter(
-    (e) => e.type === 'status_change' || e.type === 'thinking' || e.type === 'error',
-  );
-
-  const toolEvents = events.filter((e) => e.type === 'tool_use');
-
-  const sorted = [...statusEvents, ...toolEvents].sort((a, b) => a.timestamp - b.timestamp);
+  const sorted = useMemo(() => {
+    const statusEvents = events.filter(
+      (e) => e.type === 'status_change' || e.type === 'thinking' || e.type === 'error',
+    );
+    const toolEvents = events.filter((e) => e.type === 'tool_use');
+    return [...statusEvents, ...toolEvents].sort((a, b) => a.timestamp - b.timestamp);
+  }, [events]);
 
   return (
     <Card style={{ maxHeight }}>
@@ -37,7 +38,7 @@ export function EventTimeline({ events, maxHeight = 400 }: EventTimelineProps) {
         {events.length === 0 ? (
           <div className="py-8 text-center text-sm text-surface-400">Waiting for events...</div>
         ) : (
-          sorted.map((event, idx) => <TimelineEventRow key={idx} event={event} />)
+          sorted.map((event, idx) => <TimelineEventRow key={`${event.type}-${event.timestamp}-${idx}`} event={event} />)
         )}
       </CardContent>
     </Card>

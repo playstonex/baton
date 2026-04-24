@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button, Card, CardContent, Input, Chip } from '@heroui/react';
 import type { AgentProcess, AgentType } from '@baton/shared';
@@ -32,21 +32,12 @@ export function DashboardScreen() {
   const [loading, setLoading] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
 
-  const fetchAgents = useCallback(async () => {
-    try {
-      const res = await fetch('/api/agents');
-      if (res.ok) {
-        const list: AgentProcess[] = await res.json();
-        setAgents(list);
-        setDaemonOnline(true);
-      }
-    } catch {
-      setDaemonOnline(false);
-    }
-  }, [setAgents]);
-
   useEffect(() => {
-    fetchAgents();
+    const controller = new AbortController();
+    fetch('/api/agents', { signal: controller.signal })
+      .then((res) => res.ok ? res.json() : Promise.reject())
+      .then((list: AgentProcess[]) => { setAgents(list); setDaemonOnline(true); })
+      .catch((err) => { if (err.name !== 'AbortError') setDaemonOnline(false); });
 
     const unsubList = wsService.on('agent_list', (msg) => {
       if (msg.type === 'agent_list') {
@@ -75,11 +66,12 @@ export function DashboardScreen() {
     wsService.connect();
 
     return () => {
+      controller.abort();
       unsubList();
       unsubStatus();
       unsubState();
     };
-  }, [fetchAgents, setAgents, updateAgentStatus]);
+  }, [setAgents, updateAgentStatus]);
 
   async function startAgent() {
     if (!projectPath.trim()) return;

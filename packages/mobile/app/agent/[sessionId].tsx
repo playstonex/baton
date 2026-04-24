@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Button, Card, Chip } from 'heroui-native';
 import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../../src/stores/events';
@@ -56,11 +56,14 @@ export default function AgentDetailScreen() {
     };
   }, [sessionId, addEvent, clearEvents]);
 
-  const statusEvents = events.filter(
-    (e) => e.type === 'status_change' || e.type === 'thinking' || e.type === 'error',
-  );
-
-  const allEvents = [...statusEvents, ...toolUses].sort((a, b) => a.timestamp - b.timestamp);
+  const allEvents = useMemo(() => {
+    const statusEvts = events.filter(
+      (e) => e.type === 'status_change' || e.type === 'thinking' || e.type === 'error',
+    );
+    return [...statusEvts, ...toolUses]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-500);
+  }, [events, toolUses]);
 
   const time = (ts: number) => new Date(ts).toLocaleTimeString();
 

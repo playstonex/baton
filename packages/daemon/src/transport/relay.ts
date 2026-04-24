@@ -19,6 +19,7 @@ export class RelayConnection {
   private reconnectAttempts = 0;
   private maxReconnectDelay = 30000;
   private keyPair: ReturnType<typeof generateKeyPair> | null = null;
+  private intentionalDisconnect = false;
   get encryptionReady(): boolean {
     return this._encryptionReady;
   }
@@ -33,6 +34,7 @@ export class RelayConnection {
 
   connect(): void {
     if (this.ws?.readyState === OPEN) return;
+    this.intentionalDisconnect = false;
 
     this.keyPair = generateKeyPair();
     const fp = keyToFingerprint(this.keyPair.publicKey);
@@ -94,7 +96,9 @@ export class RelayConnection {
       this._connected = false;
       this.options.onStatusChange(false);
       this.stopHeartbeat();
-      this.scheduleReconnect();
+      if (!this.intentionalDisconnect) {
+        this.scheduleReconnect();
+      }
     };
 
     this.ws.onerror = () => {
@@ -109,6 +113,7 @@ export class RelayConnection {
   }
 
   disconnect(): void {
+    this.intentionalDisconnect = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.stopHeartbeat();
     this.ws?.close();

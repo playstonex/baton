@@ -26,6 +26,7 @@ export class WebSocketService {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private _connected = false;
   private config: ConnectionConfig = { mode: 'local' };
+  private intentionalClose = false;
 
   get connected(): boolean {
     return this._connected;
@@ -45,6 +46,7 @@ export class WebSocketService {
 
   connect(): void {
     this.disconnect();
+    this.intentionalClose = false;
 
     let url: string;
     if (this.config.mode === 'remote' && this.config.relayUrl) {
@@ -91,7 +93,9 @@ export class WebSocketService {
       this._connected = false;
       this.stopHeartbeat();
       this.notifyStateChange();
-      this.scheduleReconnect();
+      if (!this.intentionalClose) {
+        this.scheduleReconnect();
+      }
     };
 
     this.ws.onerror = () => {
@@ -123,7 +127,12 @@ export class WebSocketService {
         }
         case Channel.Terminal: {
           const text = new TextDecoder().decode(frame.payload);
-          this.dispatch({ type: 'terminal_output', sessionId: '', data: text } as DaemonMessage);
+          const handlers = this.handlers.get('terminal_output');
+          if (handlers) {
+            for (const h of handlers) {
+              h({ type: 'terminal_output', sessionId: '', data: text } as DaemonMessage);
+            }
+          }
           break;
         }
         case Channel.Events: {
@@ -141,6 +150,7 @@ export class WebSocketService {
   }
 
   disconnect(): void {
+    this.intentionalClose = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.stopHeartbeat();
     this.ws?.close();

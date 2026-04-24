@@ -27,6 +27,11 @@ function createRateLimiter(maxRequests = 100, windowMs = 60 * 1000) {
   return function rateLimit(c: any): boolean {
     const ip = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || c.env.REQUEST_IP || 'unknown';
     const now = Date.now();
+
+    for (const [key, record] of requests) {
+      if (now > record.resetAt) requests.delete(key);
+    }
+
     const record = requests.get(ip);
 
     if (!record || now > record.resetAt) {

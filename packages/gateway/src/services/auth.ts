@@ -33,9 +33,11 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });
+    const role = payload.role;
+    if (role !== 'host' && role !== 'client') return null;
     return {
       sub: payload.sub ?? '',
-      role: (payload.role as 'host' | 'client') ?? 'client',
+      role,
       hostId: payload.hostId as string | undefined,
     };
   } catch {

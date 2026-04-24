@@ -19,6 +19,7 @@ export class Transport {
   private server: ReturnType<typeof Bun.serve<{ clientId: string }>> | null = null;
   private clients = new Map<string, Client>();
   private registeredSessions = new Set<string>();
+  private sessionUnsubs = new Map<string, { unsubRaw: () => void; unsubEvent: () => void }>();
 
   constructor(
     private agentManager: AgentManager,
@@ -187,7 +188,7 @@ export class Transport {
     if (this.registeredSessions.has(sessionId)) return;
     this.registeredSessions.add(sessionId);
 
-    this.agentManager.onRaw(sessionId, (data, sid) => {
+    const unsubRaw = this.agentManager.onRaw(sessionId, (data, sid) => {
       const msg: DaemonMessage = { type: 'terminal_output', sessionId: sid, data };
       const payload = JSON.stringify(msg);
       for (const client of this.clients.values()) {
@@ -197,7 +198,7 @@ export class Transport {
       }
     });
 
-    this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {
+    const unsubEvent = this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {
       const msg: DaemonMessage = { type: 'parsed_event', sessionId: sid, event };
       const payload = JSON.stringify(msg);
       for (const client of this.clients.values()) {
@@ -215,6 +216,8 @@ export class Transport {
         this.broadcast(statusMsg);
       }
     });
+
+    this.sessionUnsubs.set(sessionId, { unsubRaw, unsubEvent });
   }
 
   registerSessionEvents(sessionId: string): void {
@@ -251,6 +254,12 @@ export class Transport {
   }
 
   stop(): void {
+    for (const { unsubRaw, unsubEvent } of this.sessionUnsubs.values()) {
+      unsubRaw();
+      unsubEvent();
+    }
+    this.sessionUnsubs.clear();
+    this.registeredSessions.clear();
     for (const client of this.clients.values()) {
       client.ws.close(1001, 'Server shutting down');
     }

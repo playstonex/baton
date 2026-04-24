@@ -28,7 +28,14 @@ function classifyFile(name: string): { category: FileCategory; lang?: string } {
 }
 
 function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/`/g, '&#96;')
+    .replace(/\//g, '&#x2F;');
 }
 
 const HLJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
@@ -67,7 +74,8 @@ body{font-family:-apple-system,'SF Pro Text','Helvetica Neue',sans-serif;line-he
 `;
 
 function buildMarkdownHtml(content: string): string {
-  const body = content
+  const safe = content.replace(/on\w+\s*=\s*["']/gi, '').replace(/javascript:/gi, 'blocked:');
+  const body = safe
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')

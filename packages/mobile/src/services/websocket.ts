@@ -1,5 +1,6 @@
 import type { DaemonMessage } from '@baton/shared';
 import { Channel, decodeFrame, decodeJsonFrame } from '@baton/shared/protocol';
+import { AppState, type AppStateStatus } from 'react-native';
 
 type MessageHandler = (msg: DaemonMessage) => void;
 
@@ -26,6 +27,7 @@ export class WebSocketService {
   private config: ConnectionConfig = { mode: 'remote' };
   private reconnectDelay = 1000;
   private activeSessionId: string | null = null;
+  private appStateSub: { remove: () => void } | null = null;
 
   get connected(): boolean {
     return this._connected;
@@ -38,6 +40,12 @@ export class WebSocketService {
   connect(): void {
     this.disconnect();
     this.reconnectDelay = 1000;
+
+    this.appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active' && !this._connected && !this.reconnectTimer) {
+        this.connect();
+      }
+    });
 
     let url: string;
     if (this.config.mode === 'remote' && this.config.relayUrl) {
@@ -141,6 +149,8 @@ export class WebSocketService {
   }
 
   disconnect(): void {
+    this.appStateSub?.remove();
+    this.appStateSub = null;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.stopHeartbeat();
     this.ws?.close();

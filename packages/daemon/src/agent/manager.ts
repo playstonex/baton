@@ -310,6 +310,8 @@ export class AgentManager {
     pty.onExit(({ exitCode }) => {
       managed.process.pid = undefined;
       managed.process.stoppedAt = new Date().toISOString();
+      managed.eventCallbacks.clear();
+      managed.rawCallbacks.clear();
 
       try {
         if (exitCode === 0) {
@@ -342,12 +344,13 @@ export class AgentManager {
     if (!managed) throw new Error(`Agent ${id} not found`);
     if (managed.state.status === 'stopped') return;
 
+    managed.eventCallbacks.clear();
+    managed.rawCallbacks.clear();
+
     if (managed.pty) {
       managed.pty.kill();
     }
 
-    // State transition will happen in onExit handler,
-    // but force-stop if pty is null (restored agent)
     if (!managed.pty) {
       managed.process.stoppedAt = new Date().toISOString();
       managed.state = { status: 'stopped', at: Date.now(), exitCode: 0 };

@@ -2,18 +2,23 @@ import type { AgentType, ParsedEvent } from './index.js';
 
 // Discriminated union agent state — each status carries contextual metadata
 export type AgentState =
+  | { status: 'starting'; at: number }
   | { status: 'initializing'; at: number }
   | { status: 'idle'; at: number; lastActivity: number }
   | { status: 'running'; at: number; toolCount: number }
+  | { status: 'thinking'; at: number }
+  | { status: 'executing'; at: number; tool: string }
   | { status: 'waiting_input'; at: number; prompt: string }
   | { status: 'error'; at: number; error: string; code?: number }
   | { status: 'stopped'; at: number; exitCode: number };
 
-// Legal state transitions — enforces state machine invariants
 export const VALID_TRANSITIONS: Record<string, string[]> = {
+  starting: ['initializing', 'running', 'error', 'stopped'],
   initializing: ['idle', 'running', 'error', 'stopped'],
-  idle: ['running', 'waiting_input', 'error', 'stopped'],
-  running: ['idle', 'waiting_input', 'error', 'stopped'],
+  idle: ['running', 'thinking', 'waiting_input', 'error', 'stopped'],
+  running: ['idle', 'thinking', 'executing', 'waiting_input', 'error', 'stopped'],
+  thinking: ['running', 'executing', 'idle', 'error', 'stopped'],
+  executing: ['running', 'thinking', 'idle', 'error', 'stopped'],
   waiting_input: ['running', 'idle', 'error', 'stopped'],
   error: ['stopped'],
   stopped: [],
