@@ -24,3 +24,6 @@ android/
 
 # Expo EAS
 .eas/
+
+# Rust build artifacts
+packages/daemon/pty/target/
