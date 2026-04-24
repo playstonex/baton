@@ -26,6 +26,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "21da053a-4ea2-4a49-809a-f6e8ef8f7a21"
+      }
+    },
+    "owner": "playstone"
   }
 }
