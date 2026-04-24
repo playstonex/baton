@@ -1,7 +1,10 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { randomInt } from 'node:crypto';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? 'baton-dev-secret-change-in-production',
+  process.env.JWT_SECRET ?? (() => {
+    throw new Error('JWT_SECRET environment variable is required');
+  })(),
 );
 
 const JWT_ISSUER = 'baton';
@@ -41,6 +44,5 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
 }
 
 export function generatePairingCode(): string {
-  // 6-digit pairing code for easy device pairing
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }

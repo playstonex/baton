@@ -1,6 +1,7 @@
 import os from 'node:os';
 import { readdir, stat, readFile } from 'node:fs/promises';
-import { join, basename, extname } from 'node:path';
+import { join, basename, extname, resolve, sep } from 'node:path';
+import { access } from 'node:fs/promises';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import QRCode from 'qrcode';
@@ -42,6 +43,19 @@ export function createDaemon(port = DEFAULT_PORT) {
   const watchers = new Map<string, FileWatcher>();
   let relayConnection: RelayConnection | null = null;
 
+  const allowedProjectPaths = new Set<string>();
+
+  function isPathAllowed(targetPath: string): boolean {
+    const resolved = resolve(targetPath);
+    for (const allowed of allowedProjectPaths) {
+      const allowedResolved = resolve(allowed) + sep;
+      if (resolved.startsWith(allowedResolved) || resolved === resolve(allowed)) {
+        return true;
+      }
+    }
+    return allowedProjectPaths.size === 0;
+  }
+
   app.use('*', cors());
 
   app.get('/api/health', (c) => {
@@ -77,6 +91,13 @@ export function createDaemon(port = DEFAULT_PORT) {
     const body = await c.req.json<StartAgentRequest>();
     const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
 
+    const absPath = resolve(body.projectPath);
+    const safe = await access(absPath).then(() => true).catch(() => false);
+    if (!safe) {
+      return c.json({ error: 'Invalid project path' }, 400);
+    }
+    allowedProjectPaths.add(absPath);
+
     const sessionId = await agentManager.start(
       {
         type: body.agentType,
@@ -89,7 +110,6 @@ export function createDaemon(port = DEFAULT_PORT) {
 
     transport.registerSessionEvents(sessionId);
 
-    // Start file watcher for the project
     if (!watchers.has(body.projectPath)) {
       const watcher = new FileWatcher({ projectPath: body.projectPath });
       watcher.onFileChange((event: ParsedEvent) => {
@@ -152,6 +172,10 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.get('/api/files', async (c) => {
     const dir = c.req.query('path') ?? '/';
+    if (!isPathAllowed(dir)) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
+
     try {
       const entries = await readdir(dir, { withFileTypes: true });
       const items = await Promise.all(
@@ -186,6 +210,9 @@ export function createDaemon(port = DEFAULT_PORT) {
   app.get('/api/files/content', async (c) => {
     const filePath = c.req.query('path');
     if (!filePath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(filePath)) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
 
     try {
       const s = await stat(filePath);

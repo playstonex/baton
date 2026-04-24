@@ -9,7 +9,8 @@ export interface PipelineStep {
   projectPath: string;
   args?: string[];
   env?: Record<string, string>;
-  waitForStatus?: string; // Wait for this status before considering step done (default: 'stopped')
+  timeoutMs?: number;
+  waitForStatus?: string;
 }
 
 export interface Pipeline {
@@ -28,12 +29,16 @@ export interface PipelineStepResult {
   events: ParsedEvent[];
   startedAt?: string;
   completedAt?: string;
+  error?: string;
 }
+
+const STEP_TIMEOUT_DEFAULT = 10 * 60 * 1000;
 
 export class Orchestrator {
   private pipelines = new Map<string, Pipeline>();
   private agentManager: AgentManager;
   private onPipelineUpdate?: (pipeline: Pipeline) => void;
+  private abortControllers = new Map<string, AbortController>();
 
   constructor(agentManager: AgentManager) {
     this.agentManager = agentManager;
@@ -56,14 +61,24 @@ export class Orchestrator {
     return pipeline;
   }
 
-  async run(pipelineId: string): Promise<void> {
+  async run(pipelineId: string, signal?: AbortSignal): Promise<void> {
     const pipeline = this.pipelines.get(pipelineId);
     if (!pipeline || pipeline.status === 'running') return;
+
+    const abortController = new AbortController();
+    this.abortControllers.set(pipelineId, abortController);
 
     pipeline.status = 'running';
     this.notify(pipeline);
 
     for (let i = 0; i < pipeline.steps.length; i++) {
+      if (signal?.aborted || abortController.signal.aborted) {
+        pipeline.status = 'failed';
+        pipeline.results[i].status = 'skipped';
+        this.notify(pipeline);
+        break;
+      }
+
       pipeline.currentStepIndex = i;
       const step = pipeline.steps[i];
       const result = pipeline.results[i];
@@ -75,25 +90,35 @@ export class Orchestrator {
         const sessionId = await this.runStep(step, (event) => {
           result.events.push(event);
           this.notify(pipeline);
-        });
+        }, abortController.signal);
+
         result.sessionId = sessionId;
 
-        // Wait for agent to stop
-        await this.waitForCompletion(sessionId);
+        await this.waitForCompletion(sessionId, step.timeoutMs ?? STEP_TIMEOUT_DEFAULT, abortController.signal);
 
         result.status = 'completed';
         result.completedAt = new Date().toISOString();
       } catch (err) {
         result.status = 'failed';
         result.completedAt = new Date().toISOString();
+        result.error = err instanceof Error ? err.message : String(err);
+
+        if (result.sessionId) {
+          await this.agentManager.stop(result.sessionId).catch(() => {});
+        }
+
         pipeline.status = 'failed';
         this.notify(pipeline);
         return;
       }
     }
 
-    pipeline.status = 'completed';
-    this.notify(pipeline);
+    if (!abortController.signal.aborted) {
+      pipeline.status = 'completed';
+      this.notify(pipeline);
+    }
+
+    this.abortControllers.delete(pipelineId);
   }
 
   list(): Pipeline[] {
@@ -104,9 +129,17 @@ export class Orchestrator {
     return this.pipelines.get(id);
   }
 
+  cancel(pipelineId: string): void {
+    const controller = this.abortControllers.get(pipelineId);
+    if (controller) {
+      controller.abort();
+    }
+  }
+
   private async runStep(
     step: PipelineStep,
     onEvent: (event: ParsedEvent) => void,
+    signal: AbortSignal,
   ): Promise<string> {
     const adapter: BaseAgentAdapter = createAdapter(step.agentType);
     const sessionId = await this.agentManager.start(
@@ -119,28 +152,40 @@ export class Orchestrator {
       adapter,
     );
 
-    // Subscribe to parsed events
     const unsub = this.agentManager.onEvent(sessionId, (event) => {
       onEvent(event);
     });
 
-    // Store unsub for cleanup
     this._stepUnsubs.set(sessionId, unsub);
+
+    signal.addEventListener('abort', () => {
+      this.agentManager.stop(sessionId).catch(() => {});
+    });
 
     return sessionId;
   }
 
   private _stepUnsubs = new Map<string, () => void>();
 
-  private waitForCompletion(sessionId: string): Promise<void> {
-    return new Promise((resolve) => {
+  private waitForCompletion(sessionId: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Step timed out'));
+      }, timeoutMs);
+
       const check = () => {
         const agent = this.agentManager.get(sessionId);
         if (!agent || agent.status === 'stopped' || agent.status === 'error') {
+          clearTimeout(timeout);
           const unsub = this._stepUnsubs.get(sessionId);
           unsub?.();
           this._stepUnsubs.delete(sessionId);
           resolve();
+          return;
+        }
+        if (signal.aborted) {
+          clearTimeout(timeout);
+          reject(new Error('Pipeline cancelled'));
           return;
         }
         setTimeout(check, 500);

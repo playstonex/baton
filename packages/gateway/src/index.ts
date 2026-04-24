@@ -21,9 +21,32 @@ function initDatabase(): Database {
   return db;
 }
 
+function createRateLimiter(maxRequests = 100, windowMs = 60 * 1000) {
+  const requests = new Map<string, { count: number; resetAt: number }>();
+
+  return function rateLimit(c: any): boolean {
+    const ip = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || c.env.REQUEST_IP || 'unknown';
+    const now = Date.now();
+    const record = requests.get(ip);
+
+    if (!record || now > record.resetAt) {
+      requests.set(ip, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+
+    if (record.count >= maxRequests) {
+      return false;
+    }
+
+    record.count++;
+    return true;
+  };
+}
+
 export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; port: number } {
   const app = new Hono();
   const db = initDatabase();
+  const rateLimit = createRateLimiter(30, 60 * 1000);
 
   app.use('*', logger());
   app.use('*', cors());
@@ -31,6 +54,8 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; p
   app.get('/api/health', (c) => c.json({ status: 'ok', service: 'baton-gateway' }));
 
   app.post('/api/v1/auth/host-token', async (c) => {
+    if (!rateLimit(c)) return c.json({ error: 'Too many requests' }, 429);
+
     await c.req.json<{ hostName?: string }>().catch(() => ({}));
     const hostId = crypto.randomUUID();
     const token = await signToken({ sub: hostId, role: 'host', hostId });
@@ -38,6 +63,8 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; p
   });
 
   app.post('/api/v1/auth/pair', async (c) => {
+    if (!rateLimit(c)) return c.json({ error: 'Too many requests' }, 429);
+
     const auth = c.req.header('Authorization');
     if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
 
