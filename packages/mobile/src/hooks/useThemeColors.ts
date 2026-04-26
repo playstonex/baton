@@ -11,16 +11,9 @@ export interface ThemeColors {
   subtle: string;
   inputBg: string;
   inputBorder: string;
-  glassBg: string;
-  glassBgLight: string;
-  glassBorder: string;
-  glassBorderLight: string;
-  glassHighlight: string;
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
-  textInverse: string;
-  textAccent: string;
 }
 
 export function useThemeColors(): ThemeColors {
@@ -29,28 +22,23 @@ export function useThemeColors(): ThemeColors {
 
   const isDark = theme === 'dark' || (theme === 'system' && systemScheme !== 'light');
 
-  const surface = isDark ? Colors.dark : Colors.light;
-  const text = isDark ? Colors.text : Colors.lightText;
-  const glass = isDark ? Colors.glass : Colors.lightGlass;
+  const palette = isDark ? Colors.dark : Colors.light;
 
   return {
     isDark,
-    bg: surface.bg,
-    card: surface.card,
-    cardBorder: surface.cardBorder,
-    elevated: surface.elevated,
-    subtle: surface.subtle,
-    inputBg: surface.inputBg,
-    inputBorder: surface.inputBorder,
-    glassBg: glass.background,
-    glassBgLight: glass.backgroundLight,
-    glassBorder: glass.border,
-    glassBorderLight: glass.borderLight,
-    glassHighlight: glass.highlight,
-    textPrimary: text.primary,
-    textSecondary: text.secondary,
-    textTertiary: text.tertiary,
-    textInverse: text.inverse,
-    textAccent: text.accent,
+    bg: palette.bg,
+    card: palette.card,
+    cardBorder: palette.cardBorder,
+    elevated: palette.elevated,
+    subtle: palette.subtle,
+    inputBg: palette.inputBg,
+    inputBorder: palette.inputBorder,
+    textPrimary: palette.text,
+    textSecondary: palette.textSecondary,
+    textTertiary: palette.textTertiary,
   };
+}
+
+export function getTerminalColors(isDark: boolean) {
+  return isDark ? Colors.terminal.dark : Colors.terminal.light;
 }

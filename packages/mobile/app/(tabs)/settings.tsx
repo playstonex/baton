@@ -1,5 +1,4 @@
-import { StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { StyleSheet, KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView } from 'react-native';
 import { useState } from 'react';
 import { Button, Input, Spinner } from 'heroui-native';
 import { useConnectionStore } from '../../src/stores/connection';
@@ -8,10 +7,10 @@ import { saveCredentials, clearCredentials } from '../../src/services/secure-sto
 import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 
-const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string; desc: string }[] = [
-  { key: 'dark', label: 'Dark', icon: '\u{1F319}', desc: 'Always dark' },
-  { key: 'light', label: 'Light', icon: '\u2600\uFE0F', desc: 'Always light' },
-  { key: 'system', label: 'System', icon: '\u{1F4BB}', desc: 'Follow system' },
+const THEME_OPTIONS: { key: ThemeMode; label: string; desc: string }[] = [
+  { key: 'system', label: 'System', desc: 'Follow device' },
+  { key: 'light', label: 'Light', desc: 'Always light' },
+  { key: 'dark', label: 'Dark', desc: 'Always dark' },
 ];
 
 export default function SettingsScreen() {
@@ -110,13 +109,10 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[styles.pageTitle, { color: c.textPrimary }]}>Settings</Text>
-        <Text style={[styles.pageSubtitle, { color: c.textTertiary }]}>
-          Configure your connection to the daemon
-        </Text>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Theme</Text>
-          <View style={styles.modeRow}>
+        <View style={[styles.section, { borderColor: c.cardBorder }]}>
+          <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Appearance</Text>
+          <View style={styles.optionRow}>
             {THEME_OPTIONS.map((opt) => {
               const active = themeMode === opt.key;
               return (
@@ -124,31 +120,20 @@ export default function SettingsScreen() {
                   key={opt.key}
                   onPress={() => setThemeMode(opt.key)}
                   style={[
-                    styles.modeCard,
+                    styles.optionButton,
                     {
-                      backgroundColor: active ? '#3b82f610' : c.card,
-                      borderColor: active ? '#3b82f6' : c.cardBorder,
+                      backgroundColor: active ? '#eff6ff' : c.subtle,
+                      borderColor: active ? '#2383e2' : c.cardBorder,
                     },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.modeIconContainer,
-                      { backgroundColor: c.elevated },
-                    ]}
-                  >
-                    <Text style={styles.modeIcon}>{opt.icon}</Text>
-                  </View>
                   <Text
                     style={[
-                      styles.modeTitle,
-                      { color: active ? '#3b82f6' : c.textSecondary },
+                      styles.optionText,
+                      { color: active ? '#1d4ed8' : c.textSecondary },
                     ]}
                   >
                     {opt.label}
-                  </Text>
-                  <Text style={[styles.modeDesc, { color: c.textTertiary }]}>
-                    {opt.desc}
                   </Text>
                 </Pressable>
               );
@@ -156,47 +141,30 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={[styles.divider, { backgroundColor: c.cardBorder }]} />
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>
-            Connection Mode
-          </Text>
-          <View style={styles.modeRow}>
-            {(['remote', 'local'] as const).map((m) => {
+        <View style={[styles.section, { borderColor: c.cardBorder }]}>
+          <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Connection</Text>
+          <View style={styles.optionRow}>
+            {(['local', 'remote'] as const).map((m) => {
               const active = mode === m;
               return (
                 <Pressable
                   key={m}
                   onPress={() => setMode(m)}
                   style={[
-                    styles.modeCard,
+                    styles.optionButton,
                     {
-                      backgroundColor: active ? '#3b82f610' : c.card,
-                      borderColor: active ? '#3b82f6' : c.cardBorder,
+                      backgroundColor: active ? '#eff6ff' : c.subtle,
+                      borderColor: active ? '#2383e2' : c.cardBorder,
                     },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.modeIconContainer,
-                      { backgroundColor: c.elevated },
-                    ]}
-                  >
-                    <Text style={styles.modeIcon}>
-                      {m === 'remote' ? '\u{1F310}' : '\u{1F5A7}'}
-                    </Text>
-                  </View>
                   <Text
                     style={[
-                      styles.modeTitle,
-                      { color: active ? '#3b82f6' : c.textSecondary },
+                      styles.optionText,
+                      { color: active ? '#1d4ed8' : c.textSecondary },
                     ]}
                   >
                     {m === 'remote' ? 'Remote' : 'Local'}
-                  </Text>
-                  <Text style={[styles.modeDesc, { color: c.textTertiary }]}>
-                    {m === 'remote' ? 'Via relay server' : 'Same network'}
                   </Text>
                 </Pressable>
               );
@@ -204,35 +172,22 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={[styles.divider, { backgroundColor: c.cardBorder }]} />
-
         {mode === 'remote' ? (
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>
-              Remote Connection
-            </Text>
-            <Text style={[styles.sectionDesc, { color: c.textTertiary }]}>
-              Enter relay URL and 6-digit pairing code from the host machine
-            </Text>
+          <View style={[styles.section, { borderColor: c.cardBorder }]}>
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>
-                Relay URL
-              </Text>
+              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Relay URL</Text>
               <Input
-                placeholder="ws://192.168.1.100:3230"
+                placeholder="ws://host:3230"
                 value={inputRelayUrl}
                 onChangeText={setInputRelayUrl}
                 autoCapitalize="none"
                 autoCorrect={false}
                 variant="secondary"
               />
-              <Text style={[styles.fieldHint, { color: c.textTertiary }]}>
-                WebSocket address of your relay server
-              </Text>
             </View>
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>
-                Pairing Code
+                Pairing Code ({inputPairingCode.length}/6)
               </Text>
               <Input
                 placeholder="000000"
@@ -242,114 +197,77 @@ export default function SettingsScreen() {
                 maxLength={6}
                 variant="secondary"
               />
-              <Text style={[styles.fieldHint, { color: c.textTertiary }]}>
-                6-digit code shown on the host terminal
-              </Text>
             </View>
-            <Pressable
+            <Button
+              variant="primary"
+              size="md"
               onPress={pairAndConnect}
-              style={[
-                styles.primaryButton,
-                (loading ||
-                  !inputRelayUrl.trim() ||
-                  inputPairingCode.length < 6) &&
-                  styles.primaryButtonDisabled,
-              ]}
-              disabled={
-                loading ||
-                !inputRelayUrl.trim() ||
-                inputPairingCode.length < 6
-              }
+              isDisabled={loading || !inputRelayUrl.trim() || inputPairingCode.length < 6}
             >
-              {loading ? (
-                <Spinner size="sm" color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Pair & Connect</Text>
-              )}
-            </Pressable>
-            {connected && hostId ? (
-              <View style={styles.successBox}>
-                <Text style={styles.successIcon}>{'\u2705'}</Text>
-                <View>
-                  <Text style={styles.successTitle}>Connected</Text>
-                  <Text style={styles.successText}>
-                    Host: {hostId.slice(0, 8)}...
-                  </Text>
-                </View>
-              </View>
-            ) : null}
+              {loading ? <Spinner size="sm" color="#fff" /> : 'Pair & Connect'}
+            </Button>
           </View>
         ) : (
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>
-              Local Connection
-            </Text>
-            <Text style={[styles.sectionDesc, { color: c.textTertiary }]}>
-              Connect directly to the daemon on the same network
-            </Text>
+          <View style={[styles.section, { borderColor: c.cardBorder }]}>
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>
-                HTTP URL
-              </Text>
+              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>HTTP URL</Text>
               <Input
-                placeholder="http://192.168.1.100:3210"
+                placeholder="http://localhost:3210"
                 value={inputLocalHttp}
                 onChangeText={setInputLocalHttp}
                 autoCapitalize="none"
                 autoCorrect={false}
                 variant="secondary"
               />
-              <Text style={[styles.fieldHint, { color: c.textTertiary }]}>
-                Daemon HTTP endpoint
-              </Text>
             </View>
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>
-                WebSocket URL
+                WebSocket URL (optional)
               </Text>
               <Input
-                placeholder="Auto-derived from HTTP URL"
+                placeholder="Auto-derived"
                 value={inputLocalWs}
                 onChangeText={setInputLocalWs}
                 autoCapitalize="none"
                 autoCorrect={false}
                 variant="secondary"
               />
-              <Text style={[styles.fieldHint, { color: c.textTertiary }]}>
-                Leave empty to auto-derive
-              </Text>
             </View>
-            <Pressable
+            <Button
+              variant="primary"
+              size="md"
               onPress={connectLocal}
-              style={[
-                styles.primaryButton,
-                (loading || !inputLocalHttp.trim()) &&
-                  styles.primaryButtonDisabled,
-              ]}
-              disabled={loading || !inputLocalHttp.trim()}
+              isDisabled={loading || !inputLocalHttp.trim()}
             >
-              {loading ? (
-                <Spinner size="sm" color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Connect</Text>
-              )}
-            </Pressable>
+              {loading ? <Spinner size="sm" color="#fff" /> : 'Connect'}
+            </Button>
           </View>
         )}
 
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorIcon}>{'\u26A0'}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.errorTitle}>Connection Failed</Text>
-              <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.errorBox, { borderColor: '#fecaca' }]}>
+            <Text style={[styles.errorText, { color: '#dc2626' }]}>{error}</Text>
+          </View>
+        ) : null}
+
+        {connected && hostId ? (
+          <View style={[styles.successBox, { borderColor: '#bbf7d0' }]}>
+            <View style={[styles.successDot, { backgroundColor: '#22c55e' }]} />
+            <View>
+              <Text style={[styles.successTitle, { color: '#16a34a' }]}>Connected</Text>
+              <Text style={[styles.successId, { color: '#16a34a' }]}>
+                {hostId.slice(0, 8)}...
+              </Text>
             </View>
           </View>
         ) : null}
 
         {connected && (
-          <Pressable onPress={disconnect} style={styles.disconnectButton}>
-            <Text style={styles.disconnectButtonText}>Disconnect</Text>
+          <Pressable
+            onPress={disconnect}
+            style={[styles.disconnectButton, { borderColor: '#fecaca' }]}
+          >
+            <Text style={[styles.disconnectText, { color: '#dc2626' }]}>Disconnect</Text>
           </Pressable>
         )}
 
@@ -361,165 +279,82 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, gap: 4 },
+  content: { padding: 16, gap: 12 },
   pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    marginTop: 4,
-    marginBottom: 16,
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   section: {
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.8,
-    marginBottom: 2,
-  },
-  sectionDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  modeCard: {
-    flex: 1,
-    borderRadius: 14,
-    borderCurve: 'continuous',
+    borderRadius: 8,
     borderWidth: 1,
     padding: 16,
+    gap: 12,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  optionButton: {
+    flex: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    padding: 10,
     alignItems: 'center',
-    gap: 6,
-    minHeight: 100,
   },
-  modeIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  modeIcon: {
-    fontSize: 20,
-  },
-  modeTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  modeDesc: {
-    fontSize: 11,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 16,
+  optionText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   fieldGroup: {
-    gap: 4,
+    gap: 6,
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    fontWeight: '500',
   },
-  fieldHint: {
-    fontSize: 11,
-    marginLeft: 2,
+  errorBox: {
+    borderRadius: 6,
+    borderWidth: 1,
+    padding: 12,
   },
-  primaryButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    marginTop: 4,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.4,
-  },
-  primaryButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
+  errorText: {
+    fontSize: 13,
   },
   successBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 14,
-    backgroundColor: 'rgba(34,197,94,0.08)',
-    borderRadius: 12,
-    borderCurve: 'continuous',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.2)',
+    padding: 12,
   },
-  successIcon: {
-    fontSize: 16,
+  successDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
   },
   successTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#4ade80',
+    fontSize: 14,
+    fontWeight: '500',
   },
-  successText: {
+  successId: {
     fontSize: 12,
-    color: '#4ade80',
-    opacity: 0.8,
     fontFamily: 'monospace',
   },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    backgroundColor: 'rgba(239,68,68,0.08)',
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.2)',
-    marginTop: 10,
-  },
-  errorIcon: {
-    fontSize: 16,
-  },
-  errorTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#f87171',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#f87171',
-    opacity: 0.8,
-    lineHeight: 16,
-  },
   disconnectButton: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    borderRadius: 12,
-    borderCurve: 'continuous',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.2)',
-    paddingVertical: 14,
+    padding: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    marginTop: 10,
   },
-  disconnectButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#f87171',
+  disconnectText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

@@ -1,72 +1,107 @@
 import { Tabs } from 'expo-router';
-import { View, Text, Platform, StyleSheet } from 'react-native';
-import { Typography, Radius, Spacing } from '../../src/constants/theme';
+import { View, Text, Platform, Pressable } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Typography, Spacing } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 
 const TAB_ITEMS = [
-  { name: 'index', label: 'Agents', icon: '\u{1F9E0}', title: 'Dashboard' },
-  { name: 'files', label: 'Files', icon: '\u{1F4C2}', title: 'Files' },
-  { name: 'pipelines', label: 'Pipelines', icon: '\u{1F500}', title: 'Pipelines' },
-  { name: 'settings', label: 'Settings', icon: '\u2699\uFE0F', title: 'Settings' },
+  { name: 'index', label: 'Agents', icon: 'grid' as const, title: 'Dashboard' },
+  { name: 'files', label: 'Files', icon: 'folder' as const, title: 'Files' },
+  { name: 'pipelines', label: 'Pipelines', icon: 'git-branch' as const, title: 'Pipelines' },
+  { name: 'settings', label: 'Settings', icon: 'settings' as const, title: 'Settings' },
 ] as const;
 
-function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
+function FloatingTabBar({ state, descriptors, navigation }: any) {
+  const c = useThemeColors();
+  const insets = useSafeAreaInsets();
+
   return (
     <View
       style={{
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 52,
-        minHeight: 42,
+        position: 'absolute',
+        bottom: insets.bottom + 8,
+        left: 20,
+        right: 20,
       }}
     >
-      <View
+      <BlurView
+        tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
+        intensity={c.isDark ? 50 : 65}
         style={{
-          minWidth: 42,
-          minHeight: 34,
-          borderRadius: Platform.OS === 'ios' ? Radius['2xl'] : Radius.lg,
+          flexDirection: 'row',
+          justifyContent: 'space-around',
           alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: focused
-            ? Platform.OS === 'ios'
-              ? 'rgba(59,130,246,0.12)'
-              : 'rgba(59,130,246,0.16)'
-            : 'transparent',
-          borderWidth: focused ? 0.5 : 0,
-          borderColor: focused ? 'rgba(59,130,246,0.18)' : 'transparent',
-          ...(Platform.OS === 'ios' && focused
-            ? {
-                shadowColor: '#3b82f6',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 6,
-              }
-            : {}),
+          borderRadius: 28,
+          paddingVertical: 10,
+          paddingHorizontal: 8,
+          overflow: 'hidden',
+          borderWidth: 0.5,
+          borderColor: c.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.6)',
         }}
       >
-        <Text
-          style={{
-            fontSize: focused ? 22 : 20,
-            opacity: focused ? 1 : 0.48,
-            lineHeight: 24,
-            textAlign: 'center',
-          }}
-        >
-          {icon}
-        </Text>
-      </View>
-      {focused ? (
-        <View
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            width: 18,
-            height: 3,
-            borderRadius: Radius.full,
-            backgroundColor: '#3b82f6',
-          }}
-        />
-      ) : null}
+        {state.routes.map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const isFocused = state.index === index;
+          const tabItem = TAB_ITEMS.find((t) => t.name === route.name);
+          const iconName = tabItem?.icon ?? 'ellipse';
+
+          const onPress = () => {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 32,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isFocused
+                    ? c.isDark
+                      ? 'rgba(59,130,246,0.2)'
+                      : 'rgba(59,130,246,0.12)'
+                    : 'transparent',
+                }}
+              >
+                <Ionicons
+                  name={(isFocused ? iconName : `${iconName}-outline`) as any}
+                  size={isFocused ? 24 : 22}
+                  color={isFocused ? '#3b82f6' : c.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)'}
+                />
+              </View>
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: isFocused ? '600' : '500',
+                  color: isFocused
+                    ? '#3b82f6'
+                    : c.isDark
+                      ? 'rgba(255,255,255,0.4)'
+                      : 'rgba(0,0,0,0.3)',
+                }}
+              >
+                {options.tabBarLabel ?? options.title ?? route.name}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </BlurView>
     </View>
   );
 }
@@ -76,62 +111,21 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: c.textPrimary,
-        tabBarInactiveTintColor: c.textTertiary,
-        tabBarStyle: {
-          backgroundColor: c.isDark
-            ? Platform.OS === 'ios'
-              ? 'rgba(14,14,20,0.72)'
-              : 'rgba(14,14,20,0.92)'
-            : Platform.OS === 'ios'
-              ? 'rgba(255,255,255,0.78)'
-              : 'rgba(255,255,255,0.95)',
-          borderTopColor: c.cardBorder,
-          borderTopWidth: Platform.OS === 'android' ? 0 : StyleSheet.hairlineWidth,
-          height: Platform.OS === 'ios' ? 94 : 72,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
-          paddingTop: Spacing.sm,
-          paddingHorizontal: Spacing.sm,
-          position: 'absolute',
-          elevation: Platform.OS === 'android' ? 3 : 0,
-          ...(Platform.OS === 'ios'
-            ? {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: c.isDark ? 0.2 : 0.06,
-                shadowRadius: 8,
-              }
-            : {}),
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: Platform.OS === 'android' ? '600' : '700',
-          letterSpacing: 0.02,
-          marginTop: Platform.OS === 'ios' ? 0 : 2,
-        },
         headerStyle: {
           backgroundColor: c.bg,
           shadowColor: 'transparent',
           elevation: 0,
-          borderBottomColor: c.cardBorder,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          height: 52,
         },
         headerTitleStyle: {
           ...Typography.lg,
-          fontWeight: '700',
+          fontWeight: '600',
           color: c.textPrimary,
           letterSpacing: -0.02,
         },
         headerShadowVisible: false,
         headerTintColor: c.textPrimary,
-        tabBarIconStyle: {
-          marginTop: 0,
-          marginBottom: 0,
-          height: 42,
-          width: 52,
-        },
         tabBarAllowFontScaling: false,
       }}
     >
@@ -142,7 +136,6 @@ export default function TabLayout() {
           options={{
             title: tab.title,
             tabBarLabel: tab.label,
-            tabBarIcon: ({ focused }) => <TabIcon icon={tab.icon} focused={focused} />,
           }}
         />
       ))}

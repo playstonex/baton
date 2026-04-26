@@ -153,7 +153,7 @@ export default function TerminalScreen() {
       <View style={[styles.inputBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
         <TextInput
           ref={textInputRef}
-          style={[styles.textInput, { backgroundColor: c.elevated, borderColor: c.inputBorder, color: c.textPrimary }]}
+          style={[styles.textInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.textPrimary }]}
           value={inputText}
           onChangeText={setInputText}
           onSubmitEditing={handleTextInputSend}
@@ -308,12 +308,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    height: 36,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderCurve: 'continuous',
     borderWidth: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'monospace',
   },
   sendBtn: {

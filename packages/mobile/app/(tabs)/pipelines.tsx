@@ -135,7 +135,7 @@ export default function PipelinesScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholderTextColor={c.textTertiary}
-                style={[styles.nameInput, { backgroundColor: c.elevated, borderColor: c.cardBorder, color: c.textPrimary }]}
+                style={[styles.nameInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.textPrimary }]}
               />
 
               <View style={styles.stepsContainer}>
@@ -167,7 +167,7 @@ export default function PipelinesScreen() {
                           value={step.projectPath}
                           onChangeText={(v) => updateStep(i, { projectPath: v })}
                           placeholderTextColor={c.textTertiary}
-                          style={[styles.pathInput, { backgroundColor: c.elevated, borderColor: c.cardBorder, color: c.textSecondary }]}
+                          style={[styles.pathInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.textSecondary }]}
                         />
                       </View>
                       {steps.length > 1 && (
@@ -280,11 +280,12 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   nameInput: {
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderRadius: 10,
     borderCurve: 'continuous',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   stepsContainer: {
@@ -341,12 +342,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pathInput: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     borderCurve: 'continuous',
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'monospace',
     fontWeight: '500',
   },

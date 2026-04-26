@@ -1,8 +1,10 @@
 import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Platform, StyleSheet } from 'react-native';
 import { useEffect, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BlurView } from 'expo-blur';
 import { HeroUINativeProvider } from 'heroui-native';
 
 import { useConnectionStore } from '../src/stores/connection';
@@ -45,7 +47,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <HeroUINativeProvider>
-        <StatusBar style={c.isDark ? 'light' : 'dark'} backgroundColor={c.bg} />
+        <StatusBar style={c.isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerBackButtonDisplayMode: 'minimal',
@@ -70,9 +72,6 @@ export default function RootLayout() {
             name="terminal/[sessionId]"
             options={{
               title: 'Terminal',
-              headerStyle: {
-                backgroundColor: c.bg,
-              },
               headerTintColor: c.textPrimary,
             }}
           />
@@ -80,9 +79,6 @@ export default function RootLayout() {
             name="agent/[sessionId]"
             options={{
               title: 'Agent Detail',
-              headerStyle: {
-                backgroundColor: c.bg,
-              },
               headerTintColor: c.textPrimary,
             }}
           />

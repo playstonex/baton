@@ -124,7 +124,7 @@ export default function FilesScreen() {
               style={({ pressed }) => [s.fileRow, { borderBottomColor: c.cardBorder }, pressed && { backgroundColor: c.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}
             >
               <View style={[s.fileIconContainer, { backgroundColor: item.isDir ? 'rgba(59,130,246,0.09)' : c.elevated }]}>
-                <Text style={[s.fileIcon, { color: item.isDir ? c.textAccent : c.textTertiary }]}>
+                <Text style={[s.fileIcon, { color: item.isDir ? '#3b82f6' : c.textTertiary }]}>
                   {item.isDir ? '\u{1F4C1}' : '\u{1F4C4}'}
                 </Text>
               </View>

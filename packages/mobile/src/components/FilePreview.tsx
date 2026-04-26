@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { WebView } from 'react-native-webview';
+import MarkdownIt from 'markdown-it';
 
 type FileCategory = 'code' | 'markdown' | 'html' | 'text';
 
@@ -73,26 +74,10 @@ const BASE_STYLE = `
 body{font-family:-apple-system,'SF Pro Text','Helvetica Neue',sans-serif;line-height:1.6;-webkit-text-size-adjust:100%}
 `;
 
+const MD = new MarkdownIt({ html: false, linkify: true, typographer: true });
+
 function buildMarkdownHtml(content: string): string {
-  const safe = content.replace(/on\w+\s*=\s*["']/gi, '').replace(/javascript:/gi, 'blocked:');
-  const body = safe
-    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    .replace(/^---$/gm, '<hr/>')
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-      `<pre><code class="language-${lang || 'plaintext'}">${esc(code.trimEnd())}</code></pre>`
-    )
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br/>');
+  const body = MD.render(content);
 
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -107,13 +92,19 @@ code{font-family:'SF Mono',Menlo,monospace;font-size:13px;background:#f1f3f5;pad
 pre{margin:12px 0;border-radius:8px;overflow-x:auto}
 pre code{display:block;padding:14px;font-size:12px;line-height:1.5;border-radius:8px}
 blockquote{border-left:3px solid #2563eb;padding:4px 12px;margin:8px 0;color:#6b7280;background:#f8fafc;border-radius:0 4px 4px 0}
-li{margin:4px 0 4px 20px}
+li{margin:4px 0 4px 8px}
+ul,ol{padding-left:20px;margin:8px 0}
 a{color:#2563eb;text-decoration:none}
 hr{border:none;border-top:1px solid #e5e7eb;margin:16px 0}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+th{background:#f6f8fa;font-weight:600;text-align:left;padding:8px 12px;border:1px solid #d0d7de}
+td{padding:8px 12px;border:1px solid #d0d7de}
+tr:nth-child(even){background:#f6f8fa}
+img{max-width:100%;height:auto;border-radius:8px;margin:8px 0}
 ${THEME_CSS}
 </style>
 <script src="${HLJS_CDN}"></script>
-</head><body><p>${body}</p>
+</head><body>${body}
 <script>document.querySelectorAll('pre code').forEach(function(b){try{hljs.highlightElement(b)}catch(e){}});</script>
 </body></html>`;
 }

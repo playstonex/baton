@@ -1,6 +1,6 @@
-import { Alert, FlatList, Pressable, StyleSheet } from 'react-native';
-import { View, Text } from 'react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Button, Input, Spinner } from 'heroui-native';
 import type { AgentProcess, AgentType } from '@baton/shared';
@@ -8,13 +8,13 @@ import { apiFetch } from '../../src/services/api';
 import { wsService } from '../../src/services/websocket';
 import { useAgentStore } from '../../src/stores/agents';
 import { useConnectionStore } from '../../src/stores/connection';
-import { Colors, STATUS_COLORS } from '../../src/constants/theme';
+import { STATUS_COLORS } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 
-const AGENT_OPTIONS: { type: AgentType; label: string; icon: string; caption: string }[] = [
-  { type: 'claude-code', label: 'Claude', icon: '\u{1F9E0}', caption: 'Deep code work' },
-  { type: 'codex', label: 'Codex', icon: '\u26A1', caption: 'Fast execution' },
-  { type: 'opencode', label: 'OpenCode', icon: '\u{1F6E0}', caption: 'Open stack' },
+const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
+  { type: 'claude-code', label: 'Claude Code', desc: 'Deep code work' },
+  { type: 'codex', label: 'Codex', desc: 'Fast execution' },
+  { type: 'opencode', label: 'OpenCode', desc: 'Open stack' },
 ];
 
 export default function DashboardScreen() {
@@ -99,17 +99,8 @@ export default function DashboardScreen() {
   }
 
   const running = agents.filter((agent) => agent.status !== 'stopped').length;
-  const thinking = agents.filter((agent) => agent.status === 'thinking').length;
   const selectedAgent =
     AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
-  const stats = useMemo(
-    () => [
-      { label: 'Running', value: String(running).padStart(2, '0') },
-      { label: 'Thinking', value: String(thinking).padStart(2, '0') },
-      { label: 'Fleet', value: String(agents.length).padStart(2, '0') },
-    ],
-    [agents.length, running, thinking],
-  );
 
   return (
     <FlatList
@@ -119,53 +110,33 @@ export default function DashboardScreen() {
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
         <View style={styles.headerContent}>
-          <View
-            style={[
-              styles.heroCard,
-              {
-                backgroundColor: c.card,
-                borderColor: c.cardBorder,
-                shadowColor: c.isDark ? '#000' : '#1d4ed8',
-              },
-            ]}
-          >
-            <View style={styles.heroGlowLeft} />
-            <View
-              style={[
-                styles.heroGlowRight,
-                { backgroundColor: c.isDark ? 'rgba(146,104,255,0.16)' : 'rgba(146,104,255,0.12)' },
-              ]}
-            />
-            <View style={styles.heroTopRow}>
+          <View style={[styles.headerCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+            <View style={styles.headerTop}>
               <View>
-                <Text style={[styles.eyebrow, { color: c.textAccent }]}>Baton Mobile</Text>
-                <Text style={[styles.heroTitle, { color: c.textPrimary }]}>
-                  Agent control, now with more presence.
-                </Text>
-                <Text style={[styles.heroSubtitle, { color: c.textSecondary }]}>
-                  Launch sessions, monitor live state, and move through your agent fleet from a
-                  cleaner mobile command surface.
+                <Text style={[styles.title, { color: c.textPrimary }]}>Baton</Text>
+                <Text style={[styles.subtitle, { color: c.textSecondary }]}>
+                  Agent orchestration
                 </Text>
               </View>
               <View
                 style={[
-                  styles.connectionPill,
+                  styles.connectionBadge,
                   {
-                    backgroundColor: connected ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-                    borderColor: connected ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)',
+                    backgroundColor: connected ? '#f0fdf4' : '#fef2f2',
+                    borderColor: connected ? '#22c55e' : '#ef4444',
                   },
                 ]}
               >
                 <View
                   style={[
                     styles.connectionDot,
-                    { backgroundColor: connected ? Colors.success[500] : Colors.danger[500] },
+                    { backgroundColor: connected ? '#22c55e' : '#ef4444' },
                   ]}
                 />
                 <Text
                   style={[
                     styles.connectionText,
-                    { color: connected ? Colors.success[500] : Colors.danger[500] },
+                    { color: connected ? '#16a34a' : '#dc2626' },
                   ]}
                 >
                   {connected ? 'Online' : 'Offline'}
@@ -173,45 +144,22 @@ export default function DashboardScreen() {
               </View>
             </View>
 
-            <View style={styles.metricRow}>
-              {stats.map((stat) => (
-                <View
-                  key={stat.label}
-                  style={[
-                    styles.metricCard,
-                    { backgroundColor: c.elevated, borderColor: c.cardBorder },
-                  ]}
-                >
-                  <Text style={[styles.metricValue, { color: c.textPrimary }]}>{stat.value}</Text>
-                  <Text style={[styles.metricLabel, { color: c.textTertiary }]}>{stat.label}</Text>
-                </View>
-              ))}
+            <View style={styles.statsRow}>
+              <View style={[styles.statItem, { backgroundColor: c.subtle }]}>
+                <Text style={[styles.statValue, { color: c.textPrimary }]}>{running}</Text>
+                <Text style={[styles.statLabel, { color: c.textTertiary }]}>Running</Text>
+              </View>
+              <View style={[styles.statItem, { backgroundColor: c.subtle }]}>
+                <Text style={[styles.statValue, { color: c.textPrimary }]}>{agents.length}</Text>
+                <Text style={[styles.statLabel, { color: c.textTertiary }]}>Total</Text>
+              </View>
             </View>
           </View>
 
           <View style={[styles.launchCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            <View style={styles.sectionTop}>
-              <View>
-                <Text style={[styles.sectionEyebrow, { color: c.textTertiary }]}>
-                  Launch Studio
-                </Text>
-                <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
-                  Start a new session
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.focusBadge,
-                  { backgroundColor: c.elevated, borderColor: c.cardBorder },
-                ]}
-              >
-                <Text style={[styles.focusBadgeText, { color: c.textAccent }]}>
-                  {selectedAgent.label}
-                </Text>
-              </View>
-            </View>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Launch Session</Text>
 
-            <View style={styles.agentOptionRow}>
+            <View style={styles.agentOptions}>
               {AGENT_OPTIONS.map((option) => {
                 const active = option.type === agentType;
                 return (
@@ -221,30 +169,26 @@ export default function DashboardScreen() {
                     style={[
                       styles.agentOption,
                       {
-                        backgroundColor: active ? 'rgba(52,124,255,0.14)' : c.elevated,
-                        borderColor: active ? Colors.primary[500] : c.cardBorder,
+                        backgroundColor: active ? '#eff6ff' : c.subtle,
+                        borderColor: active ? '#2383e2' : c.cardBorder,
                       },
                     ]}
                   >
-                    <Text style={styles.agentOptionIcon}>{option.icon}</Text>
                     <Text
                       style={[
                         styles.agentOptionLabel,
-                        { color: active ? c.textPrimary : c.textSecondary },
+                        { color: active ? '#1d4ed8' : c.textSecondary },
                       ]}
                     >
                       {option.label}
-                    </Text>
-                    <Text style={[styles.agentOptionCaption, { color: c.textTertiary }]}>
-                      {option.caption}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
 
-            <View style={styles.inputSection}>
-              <Text style={[styles.inputLabel, { color: c.textTertiary }]}>Project Path</Text>
+            <View style={styles.inputWrapper}>
+              <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Project Path</Text>
               <Input
                 placeholder="/path/to/project"
                 value={projectPath}
@@ -253,6 +197,8 @@ export default function DashboardScreen() {
                 variant="secondary"
               />
             </View>
+
+            <Text style={[styles.agentDesc, { color: c.textTertiary }]}>{selectedAgent.desc}</Text>
 
             <Button
               variant="primary"
@@ -265,26 +211,15 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.fleetHeader}>
-            <View>
-              <Text style={[styles.sectionEyebrow, { color: c.textTertiary }]}>Session Fleet</Text>
-              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Active agents</Text>
-            </View>
-            <View
-              style={[styles.countPill, { backgroundColor: c.elevated, borderColor: c.cardBorder }]}
-            >
-              <Text style={[styles.countPillText, { color: c.textSecondary }]}>
-                {agents.length}
-              </Text>
-            </View>
+            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Active Sessions</Text>
+            <Text style={[styles.fleetCount, { color: c.textTertiary }]}>{agents.length}</Text>
           </View>
         </View>
       }
       ListEmptyComponent={
         <View style={[styles.emptyCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-          <Text style={styles.emptyIcon}>{'\u2728'}</Text>
-          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>No sessions yet</Text>
-          <Text style={[styles.emptySubtitle, { color: c.textSecondary }]}>
-            Launch a project above to turn this screen into a live agent control board.
+          <Text style={[styles.emptyText, { color: c.textSecondary }]}>
+            No active sessions
           </Text>
         </View>
       }
@@ -309,7 +244,7 @@ function AgentRow({
   onStop: () => void;
 }) {
   const c = useThemeColors();
-  const statusColor = STATUS_COLORS[agent.status] ?? Colors.surface[400];
+  const statusColor = STATUS_COLORS[agent.status] ?? '#a8a29e';
   const isStopped = agent.status === 'stopped';
   const label = AGENT_OPTIONS.find((option) => option.type === agent.type)?.label ?? agent.type;
 
@@ -321,46 +256,31 @@ function AgentRow({
         {
           backgroundColor: c.card,
           borderColor: c.cardBorder,
-          opacity: isStopped ? 0.58 : 1,
-          transform: [{ scale: pressed ? 0.985 : 1 }],
+          opacity: isStopped ? 0.5 : 1,
         },
       ]}
     >
-      <View style={[styles.agentAccent, { backgroundColor: statusColor }]} />
-      <View style={styles.agentBody}>
-        <View style={styles.agentTopLine}>
-          <View style={styles.agentTitleWrap}>
-            <View style={[styles.agentDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.agentTitle, { color: c.textPrimary }]}>{label}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}18` }]}>
-            <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-              {agent.status.replace('_', ' ')}
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.agentPath, { color: c.textSecondary }]} numberOfLines={1}>
-          {agent.projectPath}
-        </Text>
-        <View style={styles.agentFooter}>
-          <Text style={[styles.agentTime, { color: c.textTertiary }]}>
-            {agent.startedAt ? new Date(agent.startedAt).toLocaleTimeString() : 'Ready'}
+      <View style={styles.agentLeft}>
+        <View style={[styles.agentDot, { backgroundColor: statusColor }]} />
+        <View style={styles.agentInfo}>
+          <Text style={[styles.agentTitle, { color: c.textPrimary }]}>{label}</Text>
+          <Text style={[styles.agentPath, { color: c.textSecondary }]} numberOfLines={1}>
+            {agent.projectPath}
           </Text>
-          {!isStopped && (
-            <Pressable
-              onPress={onStop}
-              style={[
-                styles.stopButton,
-                {
-                  borderColor: `${Colors.danger[500]}30`,
-                  backgroundColor: `${Colors.danger[500]}14`,
-                },
-              ]}
-            >
-              <Text style={[styles.stopButtonText, { color: Colors.danger[500] }]}>Stop</Text>
-            </Pressable>
-          )}
         </View>
+      </View>
+      <View style={styles.agentRight}>
+        <Text style={[styles.statusText, { color: statusColor }]}>
+          {agent.status.replace('_', ' ')}
+        </Text>
+        {!isStopped && (
+          <Pressable
+            onPress={onStop}
+            style={[styles.stopButton, { borderColor: '#fecaca' }]}
+          >
+            <Text style={[styles.stopText, { color: '#dc2626' }]}>Stop</Text>
+          </Pressable>
+        )}
       </View>
     </Pressable>
   );
@@ -368,288 +288,170 @@ function AgentRow({
 
 const styles = StyleSheet.create({
   listContent: {
-    padding: 20,
-    paddingBottom: 120,
-    gap: 14,
+    padding: 16,
+    paddingBottom: 100,
+    gap: 12,
   },
   headerContent: {
-    gap: 16,
-    marginBottom: 12,
+    gap: 12,
   },
-  heroCard: {
-    overflow: 'hidden',
-    borderRadius: 28,
-    borderCurve: 'continuous',
+  headerCard: {
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 20,
-    gap: 18,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.12,
-    shadowRadius: 28,
-    elevation: 8,
+    padding: 16,
+    gap: 16,
   },
-  heroGlowLeft: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 999,
-    backgroundColor: 'rgba(52,124,255,0.18)',
-    top: -40,
-    left: -24,
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  heroGlowRight: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 999,
-    right: -28,
-    bottom: -16,
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
   },
-  heroTopRow: {
-    gap: 14,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  heroTitle: {
-    marginTop: 8,
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    lineHeight: 32,
-  },
-  heroSubtitle: {
-    marginTop: 10,
+  subtitle: {
     fontSize: 14,
-    lineHeight: 22,
+    marginTop: 2,
   },
-  connectionPill: {
-    alignSelf: 'flex-start',
+  connectionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     borderRadius: 999,
-    borderCurve: 'continuous',
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   connectionDot: {
-    width: 7,
-    height: 7,
+    width: 6,
+    height: 6,
     borderRadius: 99,
   },
   connectionText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
   },
-  metricRow: {
+  statsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
-  metricCard: {
+  statItem: {
     flex: 1,
-    borderRadius: 18,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    gap: 4,
+    borderRadius: 6,
+    padding: 12,
+    alignItems: 'center',
   },
-  metricValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-  },
-  metricLabel: {
-    fontSize: 11,
+  statValue: {
+    fontSize: 20,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  },
+  statLabel: {
+    fontSize: 12,
+    marginTop: 2,
   },
   launchCard: {
-    borderRadius: 28,
-    borderCurve: 'continuous',
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 18,
-    gap: 16,
-  },
-  sectionTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    padding: 16,
     gap: 12,
   },
-  sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
   sectionTitle: {
-    marginTop: 4,
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.6,
+    fontSize: 16,
+    fontWeight: '600',
   },
-  focusBadge: {
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  focusBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  agentOptionRow: {
+  agentOptions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   agentOption: {
     flex: 1,
-    minHeight: 108,
-    borderRadius: 20,
-    borderCurve: 'continuous',
+    borderRadius: 6,
     borderWidth: 1,
-    padding: 14,
-    gap: 6,
-    justifyContent: 'space-between',
-  },
-  agentOptionIcon: {
-    fontSize: 20,
+    padding: 10,
+    alignItems: 'center',
   },
   agentOptionLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  agentOptionCaption: {
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  inputSection: {
-    gap: 8,
+  inputWrapper: {
+    gap: 6,
   },
   inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  agentDesc: {
+    fontSize: 13,
   },
   fleetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 4,
   },
-  countPill: {
-    minWidth: 40,
-    alignItems: 'center',
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  countPillText: {
-    fontSize: 12,
-    fontWeight: '700',
+  fleetCount: {
+    fontSize: 14,
   },
   emptyCard: {
-    borderRadius: 24,
-    borderCurve: 'continuous',
+    borderRadius: 8,
     borderWidth: 1,
-    paddingVertical: 30,
-    paddingHorizontal: 24,
+    borderStyle: 'dashed',
+    padding: 24,
     alignItems: 'center',
   },
-  emptyIcon: {
-    fontSize: 26,
-  },
-  emptyTitle: {
-    marginTop: 12,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  emptySubtitle: {
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: 'center',
+  emptyText: {
+    fontSize: 14,
   },
   agentRow: {
     flexDirection: 'row',
-    overflow: 'hidden',
-    borderRadius: 24,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-  },
-  agentAccent: {
-    width: 4,
-  },
-  agentBody: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    gap: 10,
-  },
-  agentTopLine: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
   },
-  agentTitleWrap: {
+  agentLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 10,
     flex: 1,
   },
   agentDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 99,
   },
+  agentInfo: {
+    flex: 1,
+  },
   agentTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  statusBadge: {
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'capitalize',
+    fontSize: 14,
+    fontWeight: '500',
   },
   agentPath: {
     fontSize: 12,
-    lineHeight: 18,
+    marginTop: 2,
   },
-  agentFooter: {
+  agentRight: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
-  agentTime: {
-    fontSize: 11,
-    fontWeight: '600',
+  statusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
   stopButton: {
-    borderRadius: 999,
-    borderCurve: 'continuous',
+    borderRadius: 4,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  stopButtonText: {
+  stopText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 });
