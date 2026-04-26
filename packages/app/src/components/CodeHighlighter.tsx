@@ -9,7 +9,7 @@ export function CodeHighlighter({ code, language }: CodeHighlighterProps) {
   const langLabel = language === 'typescript' ? 'ts' : language;
 
   return (
-    <div className="overflow-hidden rounded-xl bg-[#1e1e1e] font-mono text-xs leading-relaxed">
+    <div className="overflow-hidden rounded-lg bg-[#1e1e1e] font-mono text-xs leading-relaxed">
       <div className="border-b border-white/10 bg-[#2d2d2d] px-3 py-1 text-[10px] uppercase text-surface-400">
         {langLabel}
       </div>

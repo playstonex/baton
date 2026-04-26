@@ -47,7 +47,7 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
   }, [oldContent, newContent]);
 
   return (
-    <div className="overflow-hidden rounded-xl bg-[#1e1e1e] font-mono text-xs leading-relaxed">
+    <div className="overflow-hidden rounded-lg bg-[#1e1e1e] font-mono text-xs leading-relaxed">
       <div className="overflow-x-auto">
         {diffLines.map((line, idx) => (
           <div

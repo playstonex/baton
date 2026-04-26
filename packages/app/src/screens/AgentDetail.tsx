@@ -101,7 +101,7 @@ export function AgentDetailScreen() {
           <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
         </div>
         <Card className="border border-surface-200 shadow-sm dark:border-surface-700">
-          <CardContent className="max-h-[500px] overflow-auto p-0">
+          <CardContent className="max-h-[500px] overflow-auto p-3">
             {statusEvents.length === 0 && toolUses.length === 0 ? (
               <div className="flex flex-col items-center py-16 text-center">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-100 dark:bg-surface-800">

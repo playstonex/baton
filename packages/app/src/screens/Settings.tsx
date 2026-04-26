@@ -82,195 +82,170 @@ export function SettingsScreen() {
 
   const isSuccess = status.includes('Connected') || status.includes('Connecting');
 
-  return (
-    <div className="space-y-8">
-      <section className="ambient-grid relative overflow-hidden rounded-[32px] border border-white/60 bg-white/72 px-6 py-6 shadow-2xl shadow-surface-900/8 backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/72 dark:shadow-black/25 md:px-8 md:py-8">
-        <div className="pointer-events-none absolute -left-20 top-8 h-48 w-48 rounded-full bg-primary-500/12 blur-3xl" />
-        <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-purple-500/10 blur-3xl" />
+return (
+    <div className="space-y-6">
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-surface-900 dark:text-white">
+          Settings
+        </h1>
+        <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+          Tune the way Baton reaches every agent.
+        </p>
+      </div>
 
-        <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_360px]">
-          <div className="space-y-4">
-            <div className="inline-flex rounded-full border border-primary-200/80 bg-primary-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-primary-700 dark:border-primary-800/70 dark:bg-primary-950/40 dark:text-primary-300">
-              Connection Control
-            </div>
-            <div className="max-w-2xl">
-              <h1 className="text-4xl font-semibold tracking-[-0.04em] text-surface-900 dark:text-white">
-                Tune the way Baton reaches every agent.
-              </h1>
-              <p className="mt-3 text-sm leading-7 text-surface-600 dark:text-surface-300">
-                The settings experience now reads like a product control room: clearer transport
-                choices, stronger grouping, and better signal when pairing succeeds or fails.
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-[28px] bg-surface-950 px-6 py-6 text-white shadow-xl shadow-surface-950/30">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/50">
-              Current Mode
-            </div>
-            <div className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
-              {mode === 'local' ? 'Local Network' : 'Remote Relay'}
-            </div>
-            <p className="mt-3 text-sm leading-6 text-white/70">
-              {mode === 'local'
-                ? 'Direct HTTP and WebSocket connectivity for the lowest latency setup.'
-                : 'Relay and pairing flow for secure access outside the local environment.'}
-            </p>
-            <div className="mt-5 rounded-[22px] border border-white/10 bg-white/5 px-4 py-4">
-              <div className="text-[11px] uppercase tracking-[0.2em] text-white/45">
-                Protocol Stack
-              </div>
-              <div className="mt-2 text-sm text-white/75">
-                HTTP 3210, WebSocket 3211, relay routing, and NaCl encryption support.
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_340px]">
-        <div className="space-y-6">
-          <div className="grid gap-3 md:grid-cols-2">
-            {CONNECTION_MODES.map((item) => {
-              const active = mode === item.key;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setMode(item.key)}
-                  className={`rounded-[26px] border p-5 text-left transition-all duration-200 ${
-                    active
-                      ? 'border-primary-400 bg-primary-50 shadow-lg shadow-primary-500/10 dark:border-primary-500 dark:bg-primary-950/40'
-                      : 'glass-panel'
-                  }`}
-                >
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 dark:text-surface-500">
-                    {item.label}
-                  </div>
-                  <div className="mt-3 text-lg font-semibold tracking-[-0.03em] text-surface-900 dark:text-white">
-                    {item.title}
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-surface-500 dark:text-surface-400">
-                    {item.body}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-
-          {mode === 'local' ? (
-            <div className="glass-panel rounded-[28px] px-6 py-6">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 dark:text-surface-500">
-                Local Connection
-              </div>
-              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-surface-900 dark:text-white">
-                Point Baton at the daemon
-              </div>
-              <div className="mt-5 space-y-4">
-                <FieldBlock
-                  label="Daemon HTTP URL"
-                  hint="The HTTP endpoint where your Baton daemon is listening."
-                >
-                  <Input
-                    value={localHttpUrl}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setLocalHttpUrl(e.target.value)
-                    }
-                    className="font-mono text-sm"
-                  />
-                </FieldBlock>
-                <Button variant="primary" onPress={applyLocal} className="h-12 w-full">
-                  Connect to Local Daemon
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="glass-panel rounded-[28px] px-6 py-6">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 dark:text-surface-500">
-                Remote Pairing
-              </div>
-              <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-surface-900 dark:text-white">
-                Pair through the relay
-              </div>
-              <div className="mt-5 space-y-4">
-                <FieldBlock
-                  label="Relay WebSocket URL"
-                  hint="The public WebSocket address of your Baton relay server."
-                >
-                  <Input
-                    placeholder="ws://relay.example.com:3230"
-                    value={relayUrl}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setRelayUrl(e.target.value)
-                    }
-                    className="font-mono text-sm"
-                  />
-                </FieldBlock>
-
-                <FieldBlock
-                  label="Pairing Code"
-                  hint="Use the 6-digit code displayed by the host daemon."
-                >
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="000000"
-                        value={pairingCode}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setPairingCode(e.target.value)
-                        }
-                        className="font-mono text-center text-sm tracking-[0.4em]"
-                        maxLength={6}
-                      />
-                    </div>
-                    <Button variant="primary" onPress={applyRemote} className="h-12 px-5">
-                      Pair & Connect
-                    </Button>
-                  </div>
-                </FieldBlock>
-
-                {hostId && (
-                  <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-4 dark:border-emerald-900/70 dark:bg-emerald-950/25">
-                    <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                      Paired host
-                    </div>
-                    <div className="mt-1 font-mono text-xs text-emerald-700/80 dark:text-emerald-400/85">
-                      {hostId.slice(0, 8)}...
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {status && (
-            <div
-              className={`rounded-[24px] border px-4 py-4 ${
-                isSuccess
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-400'
-                  : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/25 dark:text-rose-400'
+      <div className="grid gap-3 md:grid-cols-2">
+        {CONNECTION_MODES.map((item) => {
+          const active = mode === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setMode(item.key)}
+              className={`rounded-lg border p-4 text-left transition-colors ${
+                active
+                  ? 'border-primary-500 bg-primary-50 dark:border-primary-500 dark:bg-primary-950/40'
+                  : 'border-surface-200 bg-white dark:border-surface-700 dark:bg-surface-800/50 hover:border-surface-300 dark:hover:border-surface-600'
               }`}
             >
-              <div className="text-sm font-semibold">
-                {isSuccess ? 'Connection Status' : 'Action Required'}
+              <div className="text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">
+                {item.label}
               </div>
-              <div className="mt-1 text-sm opacity-90">{status}</div>
-            </div>
-          )}
-        </div>
+              <div className="mt-2 text-base font-medium text-surface-900 dark:text-white">
+                {item.title}
+              </div>
+              <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+                {item.body}
+              </p>
+            </button>
+          );
+        })}
+      </div>
 
-        <aside className="glass-panel rounded-[28px] px-6 py-6">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 dark:text-surface-500">
-            Environment
+      {mode === 'local' ? (
+        <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-700 dark:bg-surface-800/50">
+          <div className="text-sm font-semibold text-surface-900 dark:text-white">
+            Local Connection
           </div>
+          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+            Point Baton at the daemon
+          </p>
           <div className="mt-4 space-y-4">
-            <InfoRow label="Application" value="Baton" />
-            <InfoRow label="Version" value="0.1.0" />
-            <InfoRow label="Transport" value="WebSocket + HTTP" />
-            <InfoRow label="Encryption" value="NaCl box" />
+            <FieldBlock
+              label="Daemon HTTP URL"
+              hint="The HTTP endpoint where your Baton daemon is listening."
+            >
+              <Input
+                value={localHttpUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setLocalHttpUrl(e.target.value)
+                }
+                className="font-mono text-sm"
+              />
+            </FieldBlock>
+            <Button variant="primary" onPress={applyLocal} className="w-full">
+              Connect to Local Daemon
+            </Button>
           </div>
-        </aside>
-      </section>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-700 dark:bg-surface-800/50">
+          <div className="text-sm font-semibold text-surface-900 dark:text-white">
+            Remote Pairing
+          </div>
+          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+            Pair through the relay
+          </p>
+          <div className="mt-4 space-y-4">
+            <FieldBlock
+              label="Relay WebSocket URL"
+              hint="The public WebSocket address of your Baton relay server."
+            >
+              <Input
+                placeholder="ws://relay.example.com:3230"
+                value={relayUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setRelayUrl(e.target.value)
+                }
+                className="font-mono text-sm"
+              />
+            </FieldBlock>
+
+            <FieldBlock
+              label="Pairing Code"
+              hint="Use the 6-digit code displayed by the host daemon."
+            >
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Input
+                    placeholder="000000"
+                    value={pairingCode}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setPairingCode(e.target.value)
+                    }
+                    className="font-mono text-center text-sm tracking-[0.4em]"
+                    maxLength={6}
+                  />
+                </div>
+                <Button variant="primary" onPress={applyRemote} className="px-5">
+                  Pair & Connect
+                </Button>
+              </div>
+            </FieldBlock>
+
+            {hostId && (
+              <div className="rounded border border-success-200 bg-success-50 px-3 py-2 dark:border-success-800 dark:bg-success-950/25">
+                <div className="text-xs font-semibold text-success-700 dark:text-success-400">
+                  Paired host
+                </div>
+                <div className="mt-0.5 font-mono text-xs text-success-700/80 dark:text-success-400/85">
+                  {hostId.slice(0, 8)}...
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {status && (
+        <div
+          className={`rounded border px-3 py-2 ${
+            isSuccess
+              ? 'border-success-200 bg-success-50 text-success-700 dark:border-success-800 dark:bg-success-950/25 dark:text-success-400'
+              : 'border-danger-200 bg-danger-50 text-danger-700 dark:border-danger-800 dark:bg-danger-950/25 dark:text-danger-400'
+          }`}
+        >
+          <div className="text-sm font-medium">
+            {isSuccess ? 'Connection Status' : 'Action Required'}
+          </div>
+          <div className="mt-0.5 text-sm">{status}</div>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-700 dark:bg-surface-800/50">
+        <div className="text-sm font-semibold text-surface-900 dark:text-white">
+          Environment
+        </div>
+        <div className="mt-3 space-y-2">
+          <InfoRow label="Application" value="Baton" />
+          <InfoRow label="Version" value="0.1.0" />
+          <InfoRow label="Transport" value="WebSocket + HTTP" />
+          <InfoRow label="Encryption" value="NaCl box" />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-surface-200 bg-surface-50 p-4 dark:border-surface-700 dark:bg-surface-900">
+        <div className="text-xs font-medium uppercase tracking-wider text-surface-500">
+          Current Mode
+        </div>
+        <div className="mt-1 text-lg font-medium text-surface-900 dark:text-white">
+          {mode === 'local' ? 'Local Network' : 'Remote Relay'}
+        </div>
+        <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+          {mode === 'local'
+            ? 'Direct HTTP and WebSocket connectivity for the lowest latency setup.'
+            : 'Relay and pairing flow for secure access outside the local environment.'}
+        </p>
+      </div>
     </div>
   );
 }
@@ -285,23 +260,21 @@ function FieldBlock({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-400 dark:text-surface-500">
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-surface-600 dark:text-surface-400">
         {label}
       </label>
       {children}
-      <p className="text-xs leading-6 text-surface-500 dark:text-surface-400">{hint}</p>
+      <p className="text-xs text-surface-400 dark:text-surface-500">{hint}</p>
     </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[22px] border border-surface-200/80 bg-white/70 px-4 py-4 dark:border-surface-800 dark:bg-surface-900/60">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">
-        {label}
-      </div>
-      <div className="mt-2 font-mono text-sm text-surface-700 dark:text-surface-200">{value}</div>
+    <div className="flex items-center justify-between border-b border-surface-100 py-1.5 last:border-0 dark:border-surface-700">
+      <span className="text-sm text-surface-500 dark:text-surface-400">{label}</span>
+      <span className="font-mono text-sm text-surface-700 dark:text-surface-300">{value}</span>
     </div>
   );
 }

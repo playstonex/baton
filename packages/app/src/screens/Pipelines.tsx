@@ -227,7 +227,7 @@ export function PipelinesScreen() {
         {pipelines.length === 0 ? (
           <Card className="border border-dashed border-surface-300 bg-surface-50/50 dark:border-surface-600 dark:bg-surface-900/50">
             <CardContent className="flex flex-col items-center py-20 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-100 dark:bg-surface-800">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-surface-100 dark:bg-surface-800">
                 <span className="text-3xl">🔗</span>
               </div>
               <h4 className="text-sm font-semibold text-surface-700 dark:text-surface-300">No pipelines yet</h4>

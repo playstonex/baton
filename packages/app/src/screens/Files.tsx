@@ -180,7 +180,7 @@ export function FilesScreen() {
         )}
       </div>
 
-      <Card className="hidden w-[55%] overflow-hidden rounded-xl border border-surface-200 shadow-sm dark:border-surface-700 sm:flex flex-col">
+      <Card className="hidden w-[55%] overflow-hidden rounded-lg border border-surface-200 dark:border-surface-700 sm:flex flex-col">
         {selectedFile ? (
           <>
             <CardHeader className="shrink-0 items-center justify-between border-b border-surface-200 px-4 py-3 dark:border-surface-700">
@@ -206,7 +206,7 @@ export function FilesScreen() {
           </>
         ) : (
           <CardContent className="flex flex-1 flex-col items-center justify-center text-center">
-            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-100 dark:bg-surface-800">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-surface-100 dark:bg-surface-800">
               <svg className="h-6 w-6 text-surface-300 dark:text-surface-600" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h4.172a1 1 0 0 1 .707.293l1.328 1.328a1 1 0 0 0 .707.293H12.5A1.5 1.5 0 0 1 14 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9Z" />
               </svg>

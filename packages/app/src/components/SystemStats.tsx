@@ -149,7 +149,7 @@ function StatBar({ label, value, pct, color, icon }: { label: string; value: str
         </div>
         <span className="font-mono text-[11px] tabular-nums text-surface-400">{value}</span>
       </div>
-      <ProgressBar value={Math.min(100, Math.max(0, pct))} color={color} size="sm" />
+      <ProgressBar value={Math.min(100, Math.max(0, pct))} color={color} size="sm" aria-label={label} />
     </div>
   );
 }
