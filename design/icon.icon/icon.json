@@ -1,59 +1,63 @@
 {
   "fill" : {
-    "solid" : "srgb:0.08164,0.08969,0.08799,1.00000"
+    "linear-gradient" : [
+      "srgb:0.42771,0.62331,0.91352,1.00000",
+      "srgb:0.45544,0.34723,0.98438,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 1
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.3
+      }
+    }
   },
   "groups" : [
     {
+      "blend-mode-specializations" : [
+        {
+          "value" : "overlay"
+        },
+        {
+          "appearance" : "tinted",
+          "value" : "soft-light"
+        }
+      ],
+      "blur-material" : 0.5,
       "hidden" : false,
       "layers" : [
         {
-          "blend-mode" : "darken",
           "fill" : {
-            "solid" : "srgb:0.34824,1.00000,0.49570,1.00000"
+            "solid" : "srgb:0.94529,0.96564,1.00000,1.00000"
           },
-          "glass" : true,
           "hidden" : false,
-          "image-name" : "Code 2.png",
-          "name" : "Code 2",
+          "image-name" : "Artboard.png",
+          "name" : "Artboard",
           "position" : {
-            "scale" : 1.55,
+            "scale" : 1.77,
             "translation-in-points" : [
               0,
               0
             ]
           }
-        },
-        {
-          "blend-mode" : "normal",
-          "fill" : {
-            "solid" : "srgb:0.96291,0.97183,1.00000,1.00000"
-          },
-          "glass" : true,
-          "hidden" : true,
-          "image-name" : "connect.png",
-          "name" : "connect",
-          "opacity" : 1,
-          "position" : {
-            "scale" : 1.2,
-            "translation-in-points" : [
-              -14.700520833333314,
-              19.843749999999943
-            ]
-          }
         }
       ],
-      "name" : "Group",
+      "lighting" : "individual",
       "position" : {
-        "scale" : 1.2,
+        "scale" : 1.07,
         "translation-in-points" : [
-          17.640625,
-          -23.8125
+          0,
+          0
         ]
       },
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
+        "opacity" : 0.48
       },
+      "specular" : false,
       "translucency" : {
         "enabled" : true,
         "value" : 0.5
@@ -64,6 +68,9 @@
     "circles" : [
       "watchOS"
     ],
-    "squares" : "shared"
+    "squares" : [
+      "iOS",
+      "macOS"
+    ]
   }
 }
