@@ -128,8 +128,10 @@ export default function AgentDetailScreen() {
       </View>
       <FlatList
         data={allEvents}
-        keyExtractor={(_, i) => String(i)}
+        keyExtractor={(item, i) => `${item.type}-${item.timestamp}-${i}`}
         contentContainerStyle={styles.timelineList}
+        maxToRenderPerBatch={15}
+        windowSize={5}
         ListEmptyComponent={
           <View style={[styles.emptyState, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
             <Text style={styles.emptyIcon}>{'\u{23F3}'}</Text>

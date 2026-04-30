@@ -26,8 +26,11 @@ export class WebSocketService {
   private _connected = false;
   private config: ConnectionConfig = { mode: 'remote' };
   private reconnectDelay = 1000;
+  private reconnectAttempts = 0;
   private activeSessionId: string | null = null;
   private appStateSub: { remove: () => void } | null = null;
+
+  private static readonly MAX_RECONNECT_ATTEMPTS = 20;
 
   get connected(): boolean {
     return this._connected;
@@ -40,6 +43,7 @@ export class WebSocketService {
   connect(): void {
     this.disconnect();
     this.reconnectDelay = 1000;
+    this.reconnectAttempts = 0;
 
     this.appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (nextState === 'active' && !this._connected && !this.reconnectTimer) {
@@ -62,6 +66,7 @@ export class WebSocketService {
     this.ws.onopen = () => {
       this._connected = true;
       this.reconnectDelay = 1000;
+      this.reconnectAttempts = 0;
       this.startHeartbeat();
       this.notifyStateChange();
 
@@ -200,7 +205,9 @@ export class WebSocketService {
   }
 
   private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= WebSocketService.MAX_RECONNECT_ATTEMPTS) return;
     if (this.reconnectTimer) return;
+    this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();

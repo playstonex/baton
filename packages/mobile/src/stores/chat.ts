@@ -25,7 +25,16 @@ export interface ChatMessage {
   itemId?: string;
 }
 
-interface ChatState {
+interface InternalState {
+  _counter: number;
+  _turnCounter: number;
+  _streamBuffer: string;
+  _streamTimer: ReturnType<typeof setTimeout> | null;
+  _itemIdToMsgId: Map<string, string>;
+  _streamingMsgIdByType: Map<string, string>;
+}
+
+interface ChatState extends InternalState {
   messages: ChatMessage[];
   agentStatus: string;
   waitingApproval: boolean;
@@ -36,12 +45,6 @@ interface ChatState {
   clear: () => void;
 }
 
-let counter = 0;
-let turnCounter = 0;
-let streamBuffer = '';
-let streamTimer: ReturnType<typeof setTimeout> | null = null;
-let itemIdToMsgId = new Map<string, string>();
-let streamingMsgIdByType = new Map<string, string>();
 const STREAM_THROTTLE_MS = 80;
 
 function isBareShellPrompt(text: string): boolean {
@@ -52,12 +55,13 @@ function isBareShellPrompt(text: string): boolean {
   return false;
 }
 
-function nextId(): string {
-  return `m-${++counter}`;
+function nextId(s: ChatState): string {
+  const next = s._counter + 1;
+  return `m-${next}`;
 }
 
-function currentTurnId(): string {
-  return `t-${turnCounter}`;
+function currentTurnId(s: ChatState): string {
+  return `t-${s._turnCounter}`;
 }
 
 function pruneDuplicateMessages(messages: ChatMessage[]): ChatMessage[] {
@@ -76,30 +80,32 @@ function pruneDuplicateMessages(messages: ChatMessage[]): ChatMessage[] {
 
 function flushStream(
   set: (fn: (s: ChatState) => Partial<ChatState>) => void,
-  _get: () => ChatState,
+  get: () => ChatState,
 ) {
-  if (!streamBuffer) return;
-  const content = streamBuffer;
-  streamBuffer = '';
-  if (streamTimer) {
-    clearTimeout(streamTimer);
-    streamTimer = null;
+  const current = get();
+  if (!current._streamBuffer) return;
+  const content = current._streamBuffer;
+  const timer = current._streamTimer;
+  if (timer) {
+    clearTimeout(timer);
   }
+
   set((s) => {
     const msgs = [...s.messages];
-    const streamingId = streamingMsgIdByType.get('raw_output');
+    const streamingId = s._streamingMsgIdByType.get('raw_output');
     if (streamingId) {
       const idx = msgs.findIndex((m) => m.id === streamingId);
       if (idx >= 0 && msgs[idx].isStreaming) {
         msgs[idx] = { ...msgs[idx], content: msgs[idx].content + content };
-        return { messages: msgs };
+        return { messages: msgs, _streamBuffer: '', _streamTimer: null };
       }
     }
-    const id = nextId();
-    streamingMsgIdByType.set('raw_output', id);
+    const id = nextId(s);
+    const updatedStreaming = new Map(s._streamingMsgIdByType);
+    updatedStreaming.set('raw_output', id);
     msgs.push({
       id,
-      turnId: currentTurnId(),
+      turnId: currentTurnId(s),
       role: 'assistant',
       kind: 'chat',
       content,
@@ -107,7 +113,13 @@ function flushStream(
       eventType: 'raw_output',
       isStreaming: true,
     });
-    return { messages: msgs };
+    return {
+      messages: msgs,
+      _streamBuffer: '',
+      _streamTimer: null,
+      _streamingMsgIdByType: updatedStreaming,
+      _counter: s._counter + 1,
+    };
   });
 }
 
@@ -115,13 +127,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   messages: [],
   agentStatus: 'unknown',
   waitingApproval: false,
+  _counter: 0,
+  _turnCounter: 0,
+  _streamBuffer: '',
+  _streamTimer: null,
+  _itemIdToMsgId: new Map<string, string>(),
+  _streamingMsgIdByType: new Map<string, string>(),
 
   addEvent: (event) => {
     if (event.type === 'raw_output') {
       if (!event.content?.trim()) return;
 
       if (event.itemId) {
-        const existingMsgId = itemIdToMsgId.get(event.itemId);
+        const existingMsgId = get()._itemIdToMsgId.get(event.itemId);
         if (existingMsgId) {
           set((s) => {
             const msgs = [...s.messages];
@@ -135,31 +153,36 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
       }
 
-      streamBuffer += event.content;
-      if (!streamTimer) {
-        streamTimer = setTimeout(() => flushStream(set, get), STREAM_THROTTLE_MS);
-      }
+      set((s) => ({
+        _streamBuffer: s._streamBuffer + event.content,
+        _streamTimer: s._streamTimer ?? setTimeout(() => flushStream(set, get), STREAM_THROTTLE_MS),
+      }));
       return;
     }
 
-    if (streamBuffer) {
+    if (get()._streamBuffer) {
       flushStream(set, get);
     }
 
     set((state) => {
       const ts = event.timestamp;
-      const tid = currentTurnId();
+      const tid = currentTurnId(state);
       const itemId = 'itemId' in event ? (event as { itemId?: string }).itemId : undefined;
 
       if (event.type === 'status_change') {
         if (event.status === 'idle' || event.status === 'stopped') {
-          streamingMsgIdByType.clear();
           const msgs = pruneDuplicateMessages(
-            state.messages.map((m) =>
-              m.isStreaming ? { ...m, isStreaming: false } : m,
-            ),
+            state.messages.map((m) => {
+              if (!m.isStreaming) return m;
+              const meta = m.meta ? { ...m.meta, isStreaming: false } : m.meta;
+              return { ...m, isStreaming: false, meta };
+            }),
           );
-          return { agentStatus: event.status, messages: msgs };
+          return {
+            agentStatus: event.status,
+            messages: msgs,
+            _streamingMsgIdByType: new Map<string, string>(),
+          };
         }
         return { agentStatus: event.status };
       }
@@ -174,10 +197,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           if (last?.role === 'user' && last?.content === event.content) {
             return state;
           }
-          turnCounter++;
-          const newTid = currentTurnId();
-          const id = nextId();
+          const newTurn = state._turnCounter + 1;
+          const newTid = `t-${newTurn}`;
+          const newCounter = state._counter + 1;
+          const id = `m-${newCounter}`;
           return {
+            _turnCounter: newTurn,
+            _counter: newCounter,
             messages: [
               ...state.messages,
               {
@@ -193,8 +219,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             ],
           };
         }
-        const id = nextId();
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
         return {
+          _counter: newCounter,
           messages: [
             ...state.messages,
             {
@@ -212,8 +240,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       if (event.type === 'thinking') {
-        if (itemId && itemIdToMsgId.has(itemId)) {
-          const existingId = itemIdToMsgId.get(itemId)!;
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
+          const existingId = state._itemIdToMsgId.get(itemId)!;
           const msgs = [...state.messages];
           const idx = msgs.findIndex((m) => m.id === existingId);
           if (idx >= 0) {
@@ -225,7 +253,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             return { messages: msgs };
           }
         }
-        const streamingId = streamingMsgIdByType.get('thinking');
+        const streamingId = state._streamingMsgIdByType.get('thinking');
         if (streamingId) {
           const msgs = [...state.messages];
           const idx = msgs.findIndex((m) => m.id === streamingId && m.isStreaming);
@@ -234,10 +262,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             return { messages: msgs };
           }
         }
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
-        streamingMsgIdByType.set('thinking', id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
+        const updatedStreaming = new Map(state._streamingMsgIdByType);
+        updatedStreaming.set('thinking', id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
+          _streamingMsgIdByType: updatedStreaming,
           messages: [
             ...state.messages,
             {
@@ -258,12 +292,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (event.type === 'tool_use') {
         const hint = event.args?.filePath ? ` \u2192 ${event.args.filePath}` : '';
         const content = `${event.tool}${hint}`;
-        if (itemId && itemIdToMsgId.has(itemId)) {
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
           return state;
         }
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
           messages: [
             ...state.messages,
             {
@@ -282,7 +320,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       if (event.type === 'file_change') {
-        if (itemId && itemIdToMsgId.has(itemId)) {
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
           return state;
         }
         const icons: Record<string, string> = { create: '+', modify: '~', delete: '-' };
@@ -290,9 +328,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           (m) => m.kind === 'fileChange' && m.meta?.path === event.path && m.eventType === 'file_change',
         );
         if (existingIdx >= 0) return state;
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
           messages: [
             ...state.messages,
             {
@@ -318,8 +360,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         if (!command && isBareShellPrompt(output)) return state;
         if (command && isBareShellPrompt(command) && !output) return state;
 
-        if (itemId && itemIdToMsgId.has(itemId)) {
-          const existingId = itemIdToMsgId.get(itemId)!;
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
+          const existingId = state._itemIdToMsgId.get(itemId)!;
           const idx = messages.findIndex((m) => m.id === existingId);
           if (idx >= 0) {
             const existing = messages[idx];
@@ -327,6 +369,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             if (event.exitCode !== undefined) meta.exitCode = event.exitCode;
             if (output) meta.output = ((meta.output as string) ?? '') + output;
             if (command && !meta.command) meta.command = command;
+            meta.isStreaming = event.isStreaming ?? true;
             const mergedCommand = (meta.command as string) ?? command ?? '';
             const mergedOutput = (meta.output as string) ?? '';
             messages[idx] = {
@@ -341,7 +384,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
         if (!command && !output) return state;
 
-        const streamingId = streamingMsgIdByType.get('command_exec');
+        const streamingId = state._streamingMsgIdByType.get('command_exec');
         if (streamingId && !itemId) {
           const idx = messages.findIndex((m) => m.id === streamingId && m.isStreaming);
           if (idx >= 0) {
@@ -350,6 +393,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             if (event.exitCode !== undefined) meta.exitCode = event.exitCode;
             if (output) meta.output = ((meta.output as string) ?? '') + output;
             if (command && !meta.command) meta.command = command;
+            meta.isStreaming = event.isStreaming ?? true;
             const mergedCommand = (meta.command as string) ?? command ?? '';
             const mergedOutput = (meta.output as string) ?? '';
             messages[idx] = {
@@ -362,10 +406,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }
         }
 
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
-        streamingMsgIdByType.set('command_exec', id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
+        const updatedStreaming = new Map(state._streamingMsgIdByType);
+        updatedStreaming.set('command_exec', id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
+          _streamingMsgIdByType: updatedStreaming,
           messages: [
             ...state.messages,
             {
@@ -385,8 +435,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       if (event.type === 'plan') {
-        if (itemId && itemIdToMsgId.has(itemId)) {
-          const existingId = itemIdToMsgId.get(itemId)!;
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
+          const existingId = state._itemIdToMsgId.get(itemId)!;
           const msgs = [...state.messages];
           const idx = msgs.findIndex((m) => m.id === existingId);
           if (idx >= 0) {
@@ -398,9 +448,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             return { messages: msgs };
           }
         }
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
           messages: [
             ...state.messages,
             {
@@ -434,12 +488,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             return { messages };
           }
         }
-        if (itemId && itemIdToMsgId.has(itemId)) {
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
           return state;
         }
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
           messages: [
             ...state.messages,
             {
@@ -459,8 +517,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       if (event.type === 'user_input_prompt') {
         const questionText = event.questions.map((q) => q.question).join('\n');
-        const id = nextId();
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
         return {
+          _counter: newCounter,
           messages: [
             ...state.messages,
             {
@@ -483,8 +543,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       if (event.type === 'subagent') {
-        if (itemId && itemIdToMsgId.has(itemId)) {
-          const existingId = itemIdToMsgId.get(itemId)!;
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
+          const existingId = state._itemIdToMsgId.get(itemId)!;
           const msgs = [...state.messages];
           const idx = msgs.findIndex((m) => m.id === existingId);
           if (idx >= 0) {
@@ -502,9 +562,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             return { messages: msgs };
           }
         }
-        const id = nextId();
-        if (itemId) itemIdToMsgId.set(itemId, id);
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
         return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
           messages: [
             ...state.messages,
             {
@@ -528,8 +592,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       if (event.type === 'error') {
-        const id = nextId();
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
         return {
+          _counter: newCounter,
           messages: [
             ...state.messages,
             {
@@ -550,22 +616,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   addUserMessage: (content) => {
-    turnCounter++;
-    const tid = currentTurnId();
-    set((state) => ({
-      messages: [
-        ...state.messages,
-        {
-          id: nextId(),
-          turnId: tid,
-          role: 'user' as const,
-          kind: 'chat' as const,
-          content,
-          timestamp: Date.now(),
-          eventType: 'chat_message',
-        },
-      ],
-    }));
+    set((state) => {
+      const newTurn = state._turnCounter + 1;
+      const tid = `t-${newTurn}`;
+      const newCounter = state._counter + 1;
+      const id = `m-${newCounter}`;
+      return {
+        _turnCounter: newTurn,
+        _counter: newCounter,
+        messages: [
+          ...state.messages,
+          {
+            id,
+            turnId: tid,
+            role: 'user' as const,
+            kind: 'chat' as const,
+            content,
+            timestamp: Date.now(),
+            eventType: 'chat_message',
+          },
+        ],
+      };
+    });
   },
 
   setStatus: (status) => set({ agentStatus: status }),
@@ -573,15 +645,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   setWaitingApproval: (waiting) => set({ waitingApproval: waiting }),
 
   clear: () => {
-    counter = 0;
-    turnCounter = 0;
-    streamBuffer = '';
-    itemIdToMsgId.clear();
-    streamingMsgIdByType.clear();
-    if (streamTimer) {
-      clearTimeout(streamTimer);
-      streamTimer = null;
+    const s = get();
+    if (s._streamTimer) {
+      clearTimeout(s._streamTimer);
     }
-    set({ messages: [], agentStatus: 'unknown', waitingApproval: false });
+    set({
+      messages: [],
+      agentStatus: 'unknown',
+      waitingApproval: false,
+      _counter: 0,
+      _turnCounter: 0,
+      _streamBuffer: '',
+      _streamTimer: null,
+      _itemIdToMsgId: new Map<string, string>(),
+      _streamingMsgIdByType: new Map<string, string>(),
+    });
   },
 }));

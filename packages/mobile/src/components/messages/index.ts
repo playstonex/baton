@@ -8,4 +8,6 @@ export { DiffRenderer } from './DiffRenderer';
 export { PlanCard } from './PlanCard';
 export { ToolBurstGroup } from './ToolBurstGroup';
 export { SubagentActionCard } from './SubagentActionCard';
+export { PopoverMenu } from './PopoverMenu';
 export type { ThemeColors } from './TypingIndicator';
+export type { MenuOption } from './PopoverMenu';

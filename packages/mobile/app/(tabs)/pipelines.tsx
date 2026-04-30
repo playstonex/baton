@@ -124,6 +124,8 @@ export default function PipelinesScreen() {
         data={pipelines}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        maxToRenderPerBatch={10}
+        windowSize={5}
         ListHeaderComponent={
           <View style={styles.form}>
             <Text style={[styles.formTitle, { color: c.textPrimary }]}>Pipelines</Text>

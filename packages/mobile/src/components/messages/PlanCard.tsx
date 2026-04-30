@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from './TypingIndicator';
@@ -15,7 +16,7 @@ interface Props {
   colors: ThemeColors;
 }
 
-export function PlanCard({ explanation, steps, colors }: Props) {
+export const PlanCard = React.memo(function PlanCard({ explanation, steps, colors }: Props) {
   return (
     <View style={[styles.container, { backgroundColor: colors.subtle }]}>
       <View style={styles.header}>
@@ -57,7 +58,7 @@ export function PlanCard({ explanation, steps, colors }: Props) {
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

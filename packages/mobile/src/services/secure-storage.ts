@@ -31,13 +31,21 @@ export async function loadCredentials(): Promise<SavedConnection | null> {
   const mode = await SecureStore.getItemAsync(KEYS.MODE);
   if (!mode) return null;
 
+  const [relayUrl, hostId, token, localHttpUrl, localWsUrl] = await Promise.all([
+    SecureStore.getItemAsync(KEYS.RELAY_URL),
+    SecureStore.getItemAsync(KEYS.HOST_ID),
+    SecureStore.getItemAsync(KEYS.TOKEN),
+    SecureStore.getItemAsync(KEYS.LOCAL_HTTP),
+    SecureStore.getItemAsync(KEYS.LOCAL_WS),
+  ]);
+
   return {
     mode: mode as 'local' | 'remote',
-    relayUrl: (await SecureStore.getItemAsync(KEYS.RELAY_URL)) ?? undefined,
-    hostId: (await SecureStore.getItemAsync(KEYS.HOST_ID)) ?? undefined,
-    token: (await SecureStore.getItemAsync(KEYS.TOKEN)) ?? undefined,
-    localHttpUrl: (await SecureStore.getItemAsync(KEYS.LOCAL_HTTP)) ?? undefined,
-    localWsUrl: (await SecureStore.getItemAsync(KEYS.LOCAL_WS)) ?? undefined,
+    relayUrl: relayUrl ?? undefined,
+    hostId: hostId ?? undefined,
+    token: token ?? undefined,
+    localHttpUrl: localHttpUrl ?? undefined,
+    localWsUrl: localWsUrl ?? undefined,
   };
 }
 

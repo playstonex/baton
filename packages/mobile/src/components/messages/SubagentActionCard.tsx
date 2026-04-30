@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from './TypingIndicator';
@@ -38,7 +38,7 @@ interface Props {
   colors: ThemeColors;
 }
 
-export function SubagentActionCard({
+export const SubagentActionCard = React.memo(function SubagentActionCard({
   name,
   model,
   action,
@@ -90,7 +90,7 @@ export function SubagentActionCard({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

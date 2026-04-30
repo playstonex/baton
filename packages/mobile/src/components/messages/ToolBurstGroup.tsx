@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from './TypingIndicator';
@@ -11,7 +12,7 @@ interface Props {
   onToggle: () => void;
 }
 
-export function ToolBurstGroup({
+export const ToolBurstGroup = React.memo(function ToolBurstGroup({
   visibleCount: _visibleCount = 5,
   colors,
   children,
@@ -40,7 +41,7 @@ export function ToolBurstGroup({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   expandRow: {

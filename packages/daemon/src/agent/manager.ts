@@ -623,6 +623,8 @@ export class AgentManager {
   async listModels(id: string): Promise<string[]> {
     const adapter = this.getAdapterWithModels(id);
     if (!adapter) return [];
+    const managed = this.agents.get(id);
+    if (managed?.state?.status === 'stopped' || managed?.state?.status === 'error') return [];
     if ('listModels' in adapter && typeof adapter.listModels === 'function') {
       return adapter.listModels();
     }

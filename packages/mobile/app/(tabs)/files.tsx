@@ -111,6 +111,8 @@ export default function FilesScreen() {
           data={items}
           keyExtractor={(item) => item.path}
           contentContainerStyle={s.list}
+          maxToRenderPerBatch={15}
+          windowSize={5}
           ListEmptyComponent={
             <View style={[s.empty, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
               <Text style={s.emptyIcon}>{'\u{1F4C2}'}</Text>

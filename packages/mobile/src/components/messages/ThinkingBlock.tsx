@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from './TypingIndicator';
@@ -10,7 +10,7 @@ interface Props {
   isStreaming?: boolean;
 }
 
-export function ThinkingBlock({ content, colors, isStreaming }: Props) {
+export const ThinkingBlock = React.memo(function ThinkingBlock({ content, colors, isStreaming }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => {
@@ -39,7 +39,7 @@ export function ThinkingBlock({ content, colors, isStreaming }: Props) {
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

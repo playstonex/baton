@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from './TypingIndicator';
@@ -10,7 +10,7 @@ interface Props {
   colors: ThemeColors;
 }
 
-export function ToolCallCard({ toolName, args, output, colors }: Props) {
+export const ToolCallCard = React.memo(function ToolCallCard({ toolName, args, output, colors }: Props) {
   const [showOutput, setShowOutput] = useState(false);
   const filePath = (args?.filePath ?? args?.path ?? '') as string;
 
@@ -52,7 +52,7 @@ export function ToolCallCard({ toolName, args, output, colors }: Props) {
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

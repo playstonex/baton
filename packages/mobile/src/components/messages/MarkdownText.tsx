@@ -21,7 +21,7 @@ interface TokenNode {
   [key: string]: unknown;
 }
 
-export function MarkdownText({ content, colors }: Props) {
+export const MarkdownText = React.memo(function MarkdownText({ content, colors }: Props) {
   const tokens = useMemo(() => {
     try {
       const MarkdownIt = require('markdown-it');
@@ -124,7 +124,7 @@ export function MarkdownText({ content, colors }: Props) {
   );
 
   return <View>{renderTokens(tokens)}</View>;
-}
+});
 
 function renderInline(children: TokenNode[], colors: ThemeColors, baseKey: number): React.ReactNode[] {
   return children.map((child, idx) => {

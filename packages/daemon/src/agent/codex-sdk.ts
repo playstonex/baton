@@ -51,7 +51,15 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   private agentTextBuffer = '';
   private pendingApprovalEventId: string | null = null;
   private resolvedApprovalIds = new Set<number>();
-  private lastRawOutput = '';
+  /** Throttle raw_output emission — buffer deltas and flush on a timer. */
+  private rawOutputBuffer = '';
+  private rawOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private rawOutputItemId: string | undefined = undefined;
+  /** Track active commandExecution items by itemId so started/delta/completed
+   *  all reference the same logical command instead of creating duplicates. */
+  private activeCommandsByItemId = new Map<string, { command: string; output: string; isStreaming: boolean }>();
+  /** Deduplicate turn/diff/updated by caching the last emitted diff content per turnId. */
+  private lastEmittedDiffByTurnId = new Map<string, string>();
   selectedModel: string | null = null;
   selectedReasoningEffort: ReasoningEffort | null = null;
   selectedAccessMode: AccessMode = 'on-request';
@@ -81,6 +89,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     this.turnId = null;
     this.buffer = '';
     this.agentTextBuffer = '';
+    this.activeCommandsByItemId.clear();
+    this.lastEmittedDiffByTurnId.clear();
+    if (this.rawOutputFlushTimer) { clearTimeout(this.rawOutputFlushTimer); this.rawOutputFlushTimer = null; }
+    this.rawOutputBuffer = '';
     this.pendingResolves.clear();
 
     this.projectPath = config.projectPath ?? process.cwd();
@@ -214,6 +226,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async listModels(): Promise<string[]> {
+    if (!this.process?.stdin?.writable) return [];
     try {
       const result = await this.sendRequest('model/list', {}) as Record<string, unknown>;
       const items = (result?.data ?? result?.models) as Array<Record<string, unknown>> ?? [];
@@ -518,13 +531,16 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const turnId = (turn?.id ?? params.turnId) as string | undefined;
     if (turnId) this.turnId = turnId;
     this.flushAgentText();
-    this.lastRawOutput = '';
+    if (this.rawOutputFlushTimer) { clearTimeout(this.rawOutputFlushTimer); this.rawOutputFlushTimer = null; }
+    this.rawOutputBuffer = '';
     this.onEvent?.({ type: 'status_change', status: 'running', timestamp: Date.now() });
     console.log(`[baton] codex-sdk: turn/started, turnId=${turnId}`);
   }
 
   private handleTurnCompleted(params: Record<string, unknown>): void {
     this.flushAgentText();
+    this.activeCommandsByItemId.clear();
+    this.lastEmittedDiffByTurnId.delete(this.turnId ?? '');
     this.pendingServerRequests.clear();
     this.pendingApprovalEventId = null;
     this.resolvedApprovalIds.clear();
@@ -537,6 +553,8 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
 
   private handleTurnFailed(params: Record<string, unknown>): void {
     this.flushAgentText();
+    this.activeCommandsByItemId.clear();
+    this.lastEmittedDiffByTurnId.delete(this.turnId ?? '');
     this.pendingServerRequests.clear();
     this.pendingApprovalEventId = null;
     this.resolvedApprovalIds.clear();
@@ -552,9 +570,22 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const delta = (params.delta ?? params.text ?? params.content ?? '') as string;
     const itemId = this.extractItemId(params);
     if (delta) this.agentTextBuffer += delta;
-    if (delta && delta !== this.lastRawOutput) {
-      this.lastRawOutput = delta;
-      this.onEvent?.({ type: 'raw_output', content: delta, timestamp: Date.now(), itemId: itemId || undefined });
+    if (!delta) return;
+
+    this.rawOutputBuffer += delta;
+    this.rawOutputItemId = itemId || undefined;
+
+    if (!this.rawOutputFlushTimer) {
+      this.rawOutputFlushTimer = setTimeout(() => {
+        this.rawOutputFlushTimer = null;
+        const content = this.rawOutputBuffer;
+        const id = this.rawOutputItemId;
+        this.rawOutputBuffer = '';
+        this.rawOutputItemId = undefined;
+        if (content) {
+          this.onEvent?.({ type: 'raw_output', content, timestamp: Date.now(), itemId: id });
+        }
+      }, 60);
     }
   }
 
@@ -586,16 +617,32 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const command = (params.command ?? '') as string;
     const itemId = this.extractItemId(params);
     if (this.isBareShellPrompt(output) && !command) return;
-    if (output || command) {
+    if (!output && !command) return;
+
+    if (itemId && this.activeCommandsByItemId.has(itemId)) {
+      const tracked = this.activeCommandsByItemId.get(itemId)!;
+      if (output) tracked.output += output;
+      if (command) tracked.command = command;
+      tracked.isStreaming = true;
       this.onEvent?.({
         type: 'command_exec',
-        command,
-        output,
+        command: tracked.command,
+        output: tracked.output,
         isStreaming: true,
         timestamp: Date.now(),
-        itemId: itemId || undefined,
+        itemId,
       });
+      return;
     }
+
+    this.onEvent?.({
+      type: 'command_exec',
+      command,
+      output,
+      isStreaming: true,
+      timestamp: Date.now(),
+      itemId: itemId || undefined,
+    });
   }
 
   private handleFileChangeDelta(params: Record<string, unknown>): void {
@@ -610,9 +657,16 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
 
   private handleItemStarted(params: Record<string, unknown>): void {
     const item = params.item as Record<string, unknown> | undefined;
-    if (item?.type === 'fileChange') {
-      this.pendingApprovalEventId = item.id as string | null;
+    if (!item) return;
+    const itemType = item.type as string | undefined;
+    const itemId = (item.id ?? '') as string;
+    if (itemType === 'fileChange') {
+      this.pendingApprovalEventId = itemId || null;
       console.log(`[baton] codex-sdk: tracking fileChange for approval, eventId=${this.pendingApprovalEventId}`);
+    }
+    if (itemType === 'commandExecution' && itemId) {
+      const command = (item.command ?? '') as string;
+      this.activeCommandsByItemId.set(itemId, { command, output: '', isStreaming: true });
     }
   }
 
@@ -621,20 +675,36 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     if (!item) return;
     const itemType = item.type as string | undefined;
     const itemId = (item.id ?? '') as string;
+
     if (itemType === 'agentMessage') {
       this.flushAgentText();
     } else if (itemType === 'commandExecution') {
       const command = (item.command ?? '') as string;
       const exitCode = item.exitCode as number | undefined;
-      if (command) {
-        this.onEvent?.({
-          type: 'command_exec',
-          command,
-          exitCode,
-          isStreaming: false,
-          timestamp: Date.now(),
-          itemId: itemId || undefined,
-        });
+      const tracked = itemId ? this.activeCommandsByItemId.get(itemId) : undefined;
+      const resolvedCommand = command || tracked?.command || '';
+      const resolvedOutput = tracked?.output ?? '';
+      this.onEvent?.({
+        type: 'command_exec',
+        command: resolvedCommand,
+        output: resolvedOutput,
+        exitCode,
+        isStreaming: false,
+        timestamp: Date.now(),
+        itemId: itemId || undefined,
+      });
+      if (itemId) this.activeCommandsByItemId.delete(itemId);
+    } else if (itemType === 'fileChange') {
+      const changes = item.changes as Array<Record<string, unknown>> | undefined;
+      if (changes && changes.length > 0) {
+        for (const change of changes) {
+          const path = (change.path ?? change.filePath ?? '') as string;
+          const raw = (change.changeType ?? change.type ?? 'modify') as string;
+          const changeType = raw === 'create' ? 'create' : raw === 'delete' ? 'delete' : 'modify';
+          if (path) {
+            this.onEvent?.({ type: 'file_change', path, changeType, timestamp: Date.now(), itemId: itemId || undefined });
+          }
+        }
       }
     }
   }
@@ -686,37 +756,55 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const diff = (params.diff ?? '') as string;
     const path = (params.path ?? '') as string | undefined;
     const itemId = this.extractItemId(params);
-    if (diff) {
-      this.onEvent?.({ type: 'diff', diff, path: path || undefined, timestamp: Date.now(), itemId: itemId || undefined });
+    if (!diff) return;
+
+    const dedupeKey = this.turnId ?? itemId ?? '';
+    if (dedupeKey) {
+      const lastDiff = this.lastEmittedDiffByTurnId.get(dedupeKey);
+      if (lastDiff === diff) return;
+      this.lastEmittedDiffByTurnId.set(dedupeKey, diff);
     }
+
+    this.onEvent?.({ type: 'diff', diff, path: path || undefined, timestamp: Date.now(), itemId: itemId || undefined });
   }
 
   private handleCommandTerminalInteraction(params: Record<string, unknown>): void {
     const command = (params.command ?? '') as string;
     const itemId = this.extractItemId(params);
-    if (command && !this.isBareShellPrompt(command)) {
-      this.onEvent?.({
-        type: 'command_exec',
-        command,
-        isStreaming: true,
-        timestamp: Date.now(),
-        itemId: itemId || undefined,
-      });
+    if (!command || this.isBareShellPrompt(command)) return;
+
+    if (itemId && !this.activeCommandsByItemId.has(itemId)) {
+      this.activeCommandsByItemId.set(itemId, { command, output: '', isStreaming: true });
+    } else if (itemId) {
+      this.activeCommandsByItemId.get(itemId)!.command = command;
     }
+
+    this.onEvent?.({
+      type: 'command_exec',
+      command,
+      isStreaming: true,
+      timestamp: Date.now(),
+      itemId: itemId || undefined,
+    });
   }
 
   private handleLegacyCommandBegin(params: Record<string, unknown>): void {
     const command = (params.command ?? '') as string;
     const itemId = this.extractItemId(params);
-    if (command && !this.isBareShellPrompt(command)) {
-      this.onEvent?.({
-        type: 'command_exec',
-        command,
-        isStreaming: true,
-        timestamp: Date.now(),
-        itemId: itemId || undefined,
-      });
+    if (!command || this.isBareShellPrompt(command)) return;
+
+    if (itemId) {
+      if (this.activeCommandsByItemId.has(itemId)) return;
+      this.activeCommandsByItemId.set(itemId, { command, output: '', isStreaming: true });
     }
+
+    this.onEvent?.({
+      type: 'command_exec',
+      command,
+      isStreaming: true,
+      timestamp: Date.now(),
+      itemId: itemId || undefined,
+    });
   }
 
   private handleLegacyCommandOutputDelta(params: Record<string, unknown>): void {
@@ -724,32 +812,54 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const command = (params.command ?? '') as string;
     const itemId = this.extractItemId(params);
     if (this.isBareShellPrompt(output) && !command) return;
-    if (output || command) {
+    if (!output && !command) return;
+
+    if (itemId && this.activeCommandsByItemId.has(itemId)) {
+      const tracked = this.activeCommandsByItemId.get(itemId)!;
+      if (output) tracked.output += output;
+      if (command) tracked.command = command;
+      tracked.isStreaming = true;
       this.onEvent?.({
         type: 'command_exec',
-        command,
-        output,
+        command: tracked.command,
+        output: tracked.output,
         isStreaming: true,
         timestamp: Date.now(),
-        itemId: itemId || undefined,
+        itemId,
       });
+      return;
     }
+
+    this.onEvent?.({
+      type: 'command_exec',
+      command,
+      output,
+      isStreaming: true,
+      timestamp: Date.now(),
+      itemId: itemId || undefined,
+    });
   }
 
   private handleLegacyCommandEnd(params: Record<string, unknown>): void {
     const command = (params.command ?? '') as string;
     const exitCode = params.exitCode as number | undefined;
     const itemId = this.extractItemId(params);
-    if (command && !this.isBareShellPrompt(command)) {
-      this.onEvent?.({
-        type: 'command_exec',
-        command,
-        exitCode,
-        isStreaming: false,
-        timestamp: Date.now(),
-        itemId: itemId || undefined,
-      });
-    }
+    if (!command || this.isBareShellPrompt(command)) return;
+
+    const tracked = itemId ? this.activeCommandsByItemId.get(itemId) : undefined;
+    const resolvedCommand = command || tracked?.command || '';
+
+    this.onEvent?.({
+      type: 'command_exec',
+      command: resolvedCommand,
+      output: tracked?.output ?? '',
+      exitCode,
+      isStreaming: false,
+      timestamp: Date.now(),
+      itemId: itemId || undefined,
+    });
+
+    if (itemId) this.activeCommandsByItemId.delete(itemId);
   }
 
   private handleStructuredUserInput(params: Record<string, unknown>): void {
@@ -792,10 +902,21 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
    *  duplicate the entire response. */
   private flushAgentText(): void {
     this.agentTextBuffer = '';
-    this.lastRawOutput = '';
+  }
+
+  private isGitRepo(): boolean {
+    try {
+      execSync('git rev-parse --is-inside-work-tree', {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 3000, stdio: 'pipe',
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async listGitBranches(): Promise<{ branches: string[]; currentBranch: string }> {
+    if (!this.isGitRepo()) return { branches: [], currentBranch: '' };
     try {
       const raw = execSync('git branch --list --format="%(refname:short)"', {
         cwd: this.projectPath,
@@ -818,6 +939,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitStatus(): Promise<string> {
+    if (!this.isGitRepo()) return '';
     try {
       return execSync('git status --short', {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
@@ -826,6 +948,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitDiff(): Promise<string> {
+    if (!this.isGitRepo()) return '';
     try {
       return execSync('git diff --stat', {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
@@ -834,6 +957,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitLog(count: number = 10): Promise<string> {
+    if (!this.isGitRepo()) return '';
     try {
       return execSync(`git log --oneline -${count}`, {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,

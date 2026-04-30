@@ -16,11 +16,14 @@ export const useEventsStore = create<EventsState>()((set) => ({
   addEvent: (event) =>
     set((state) => {
       const events = [...state.events, event].slice(-2000);
-      return {
-        events,
-        fileChanges: events.filter((e) => e.type === 'file_change'),
-        toolUses: events.filter((e) => e.type === 'tool_use'),
-      };
+      const extra: Partial<EventsState> = {};
+      if (event.type === 'file_change') {
+        extra.fileChanges = [...state.fileChanges, event].slice(-500);
+      }
+      if (event.type === 'tool_use') {
+        extra.toolUses = [...state.toolUses, event].slice(-500);
+      }
+      return { events, ...extra };
     }),
   clearEvents: () => set({ events: [], fileChanges: [], toolUses: [] }),
 }));

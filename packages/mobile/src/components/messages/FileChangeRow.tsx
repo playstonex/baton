@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
 
@@ -31,7 +32,7 @@ function parseDiffCounts(diff: string): { added: number; removed: number } | nul
   return { added, removed };
 }
 
-export function FileChangeRow({ path, changeType, diff, colors: _colors }: Props) {
+export const FileChangeRow = React.memo(function FileChangeRow({ path, changeType, diff, colors: _colors }: Props) {
   const color = CHANGE_COLORS[changeType] ?? '#FF9500';
   const label = CHANGE_LABELS[changeType] ?? changeType;
   const counts = diff ? parseDiffCounts(diff) : null;
@@ -52,7 +53,7 @@ export function FileChangeRow({ path, changeType, diff, colors: _colors }: Props
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

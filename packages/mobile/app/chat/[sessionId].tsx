@@ -36,7 +36,9 @@ import {
   PlanCard,
   ToolBurstGroup,
   SubagentActionCard,
+  PopoverMenu,
   type ThemeColors,
+  type MenuOption,
 } from '../../src/components/messages';
 
 type ReasoningEffort = 'low' | 'medium' | 'high';
@@ -162,12 +164,18 @@ function shortModelName(model: string | null): string {
 export default function ChatScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
-  const { messages, agentStatus, waitingApproval, addEvent, addUserMessage, setStatus, setWaitingApproval, clear } = useChatStore();
+  const messages = useChatStore((s) => s.messages);
+  const agentStatus = useChatStore((s) => s.agentStatus);
+  const waitingApproval = useChatStore((s) => s.waitingApproval);
+  const addEvent = useChatStore((s) => s.addEvent);
+  const addUserMessage = useChatStore((s) => s.addUserMessage);
+  const setStatus = useChatStore((s) => s.setStatus);
+  const setWaitingApproval = useChatStore((s) => s.setWaitingApproval);
+  const clear = useChatStore((s) => s.clear);
   const [input, setInput] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
   const [serviceTier, setServiceTier] = useState<ServiceTier>('default');
   const [accessMode, setAccessMode] = useState<AccessMode>('on-request');
@@ -184,9 +192,28 @@ export default function ChatScreen() {
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedBursts, setExpandedBursts] = useState<Set<string>>(new Set());
+  const [promptModal, setPromptModal] = useState<{ visible: boolean; title: string; placeholder: string; onSubmit: (text: string) => void } | null>(null);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ title?: string; options: MenuOption[]; onSelect: (i: number) => void; anchor?: { x: number; y: number; width: number; height: number } } | null>(null);
   const flatRef = useRef<FlatList>(null);
+  const attachBtnRef = useRef<Pressable>(null);
+  const reasoningBtnRef = useRef<Pressable>(null);
+  const runtimeBtnRef = useRef<Pressable>(null);
+  const accessBtnRef = useRef<Pressable>(null);
+  const branchBtnRef = useRef<Pressable>(null);
+  const gitActionsBtnRef = useRef<Pressable>(null);
+  const modelBtnRef = useRef<Pressable>(null);
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
+
+  const measureAnchor = (
+    ref: React.RefObject<Pressable>,
+  ): Promise<{ x: number; y: number; width: number; height: number }> =>
+    new Promise((resolve) => {
+      ref.current?.measureInWindow((x, y, width, height) => {
+        resolve({ x, y, width, height });
+      });
+    });
 
   const attachSession = useCallback(() => {
     if (!sessionId) return;
@@ -254,7 +281,7 @@ export default function ChatScreen() {
           wsService.send({ type: 'git_status_request', sessionId });
           wsService.send({ type: 'git_branch_list_request', sessionId });
         } else {
-          Alert.alert('Git Error', msg.error ?? 'Operation failed');
+          setErrorToast(msg.error ?? 'Operation failed');
         }
       }
     });
@@ -276,6 +303,19 @@ export default function ChatScreen() {
       unsubGitResult();
     };
   }, [sessionId, addEvent, setStatus, clear, attachSession]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      requestAnimationFrame(() => flatRef.current?.scrollToEnd({ animated: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (errorToast) {
+      const t = setTimeout(() => setErrorToast(null), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [errorToast]);
 
   useEffect(() => {
     if (messages.length > 0 && isNearBottom) {
@@ -420,63 +460,77 @@ export default function ChatScreen() {
     setApprovalDetail(null);
   }
 
-  function openAttachmentMenu() {
-    showActionSheet(
-      'Attach',
-      [
-        planMode ? '\u2713 Plan Mode' : 'Plan Mode',
-        'Photo Library',
-        'Take Photo',
-        'Cancel',
+  async function openAttachmentMenu() {
+    const anchor = await measureAnchor(attachBtnRef);
+    setMenu({
+      title: 'Attach',
+      anchor,
+      options: [
+        { label: planMode ? '\u2713 Plan Mode' : 'Plan Mode', selected: planMode },
+        { label: 'Photo Library', disabled: true },
+        { label: 'Take Photo', disabled: true },
       ],
-      3,
-      (index) => {
+      onSelect: (index) => {
         if (index === 0) setPlanMode(!planMode);
-        if (index === 1 || index === 2) {
-          Alert.alert('Coming Soon', 'Image attachments will be available soon.');
+      },
+    });
+  }
+
+  async function openReasoningMenu() {
+    const anchor = await measureAnchor(reasoningBtnRef);
+    setMenu({
+      title: 'Reasoning & Speed',
+      anchor,
+      options: [
+        { label: 'Low', selected: reasoningEffort === 'low' },
+        { label: 'Medium', selected: reasoningEffort === 'medium' },
+        { label: 'High', selected: reasoningEffort === 'high' },
+        { separator: true },
+        { label: 'Normal Speed', selected: serviceTier === 'default' },
+        { label: 'Fast Speed', selected: serviceTier === 'fast' },
+      ],
+      onSelect: (index) => {
+        if (index === 0) { setReasoningEffort('low'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'low' }); }
+        if (index === 1) { setReasoningEffort('medium'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'medium' }); }
+        if (index === 2) { setReasoningEffort('high'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'high' }); }
+        if (index === 3) { setReasoningEffort(null); }
+        if (index === 4) { setServiceTier('default'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' }); }
+        if (index === 5) { setServiceTier('fast'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' }); }
+      },
+    });
+  }
+
+  async function openRuntimePicker() {
+    const anchor = await measureAnchor(runtimeBtnRef);
+    setMenu({
+      title: 'Continue in',
+      anchor,
+      options: [
+        { label: 'Cloud', selected: runtimeMode === 'cloud' },
+        { label: 'Local', selected: runtimeMode === 'local' },
+      ],
+      onSelect: (index) => {
+        if (index === 0) {
+          setRuntimeMode('cloud');
+          Linking.openURL('https://chatgpt.com/codex').catch(() => {});
+        }
+        if (index === 1) {
+          setRuntimeMode('local');
         }
       },
-    );
-  }
-
-  function openReasoningMenu() {
-    const options = [
-      'Low',
-      'Medium',
-      'High',
-      '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500',
-      'Normal Speed',
-      'Fast Speed',
-      'Cancel',
-    ];
-    showActionSheet('Reasoning & Speed', options, options.length - 1, (index) => {
-      if (index === 0) { setReasoningEffort('low'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'low' }); }
-      if (index === 1) { setReasoningEffort('medium'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'medium' }); }
-      if (index === 2) { setReasoningEffort('high'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'high' }); }
-      if (index === 3) { setReasoningEffort(null); }
-      if (index === 4) { setServiceTier('default'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' }); }
-      if (index === 5) { setServiceTier('fast'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' }); }
     });
   }
 
-  function openRuntimePicker() {
-    showActionSheet('Continue in', ['Cloud', 'Local', 'Cancel'], 2, (index) => {
-      if (index === 0) {
-        setRuntimeMode('cloud');
-        Linking.openURL('https://chatgpt.com/codex').catch(() => {});
-      }
-      if (index === 1) {
-        setRuntimeMode('local');
-      }
-    });
-  }
-
-  function openAccessModeMenu() {
-    showActionSheet(
-      'Access Mode',
-      ['Ask (On-Request)', 'Full Access', 'Cancel'],
-      2,
-      (index) => {
+  async function openAccessModeMenu() {
+    const anchor = await measureAnchor(accessBtnRef);
+    setMenu({
+      title: 'Access Mode',
+      anchor,
+      options: [
+        { label: 'Ask (On-Request)', selected: accessMode === 'on-request' },
+        { label: 'Full Access', selected: accessMode === 'full-access' },
+      ],
+      onSelect: (index) => {
         if (index === 0) {
           setAccessMode('on-request');
           wsService.send({ type: 'access_mode_select', sessionId, mode: 'on-request' });
@@ -486,49 +540,68 @@ export default function ChatScreen() {
           wsService.send({ type: 'access_mode_select', sessionId, mode: 'full-access' });
         }
       },
-      undefined,
-      'Controls whether the agent asks permission before executing commands.',
-    );
-  }
-
-  function openGitBranchMenu() {
-    const displayBranches = gitBranches.slice(0, 7);
-    const options = [...displayBranches, 'Create Branch...', 'Cancel'];
-    showActionSheet('Git Branch', options, options.length - 1, (index) => {
-      if (index === displayBranches.length) {
-        Alert.prompt('Create Branch', 'Enter branch name', (name) => {
-          if (name.trim()) {
-            wsService.send({ type: 'git_create_branch', sessionId, name: name.trim() });
-          }
-        });
-        return;
-      }
-      if (index < displayBranches.length && displayBranches[index] !== currentBranch) {
-        setCurrentBranch(displayBranches[index]);
-        wsService.send({ type: 'git_branch_select', sessionId, branch: displayBranches[index] });
-      }
     });
   }
 
-  function openGitActionsMenu() {
-    const options = ['Status', 'Commit...', 'Push', 'Pull', 'Cancel'];
-    showActionSheet('Git Actions', options, options.length - 1, (index) => {
-      if (index === 0) {
-        wsService.send({ type: 'git_status_request', sessionId });
-      }
-      if (index === 1) {
-        Alert.prompt('Commit', 'Enter commit message', (message) => {
-          if (message.trim()) {
-            wsService.send({ type: 'git_commit', sessionId, message: message.trim() });
-          }
-        });
-      }
-      if (index === 2) {
-        wsService.send({ type: 'git_push', sessionId });
-      }
-      if (index === 3) {
-        wsService.send({ type: 'git_pull', sessionId });
-      }
+  async function openGitBranchMenu() {
+    const anchor = await measureAnchor(branchBtnRef);
+    const displayBranches = gitBranches.slice(0, 7);
+    const options: MenuOption[] = displayBranches.map((b) => ({
+      label: b,
+      selected: b === currentBranch,
+    }));
+    options.push({ separator: true });
+    options.push({ label: 'Create Branch...' });
+    setMenu({
+      title: 'Git Branch',
+      anchor,
+      options,
+      onSelect: (index) => {
+        if (index === displayBranches.length + 1) {
+          setPromptModal({ visible: true, title: 'Create Branch', placeholder: 'Branch name', onSubmit: (name) => {
+            if (name.trim()) {
+              wsService.send({ type: 'git_create_branch', sessionId, name: name.trim() });
+            }
+          }});
+          return;
+        }
+        if (index < displayBranches.length && displayBranches[index] !== currentBranch) {
+          setCurrentBranch(displayBranches[index]);
+          wsService.send({ type: 'git_branch_select', sessionId, branch: displayBranches[index] });
+        }
+      },
+    });
+  }
+
+  async function openGitActionsMenu() {
+    const anchor = await measureAnchor(gitActionsBtnRef);
+    setMenu({
+      title: 'Git Actions',
+      anchor,
+      options: [
+        { label: 'Status' },
+        { label: 'Commit...' },
+        { label: 'Push' },
+        { label: 'Pull' },
+      ],
+      onSelect: (index) => {
+        if (index === 0) {
+          wsService.send({ type: 'git_status_request', sessionId });
+        }
+        if (index === 1) {
+          setPromptModal({ visible: true, title: 'Commit', placeholder: 'Commit message', onSubmit: (message) => {
+            if (message.trim()) {
+              wsService.send({ type: 'git_commit', sessionId, message: message.trim() });
+            }
+          }});
+        }
+        if (index === 2) {
+          wsService.send({ type: 'git_push', sessionId });
+        }
+        if (index === 3) {
+          wsService.send({ type: 'git_pull', sessionId });
+        }
+      },
     });
   }
 
@@ -556,12 +629,13 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={[styles.headerOverlay, { paddingTop: insets.top }]}>
+      <View style={styles.headerOverlay}>
         <BlurView
           tint={c.isDark ? 'dark' : 'light'}
           intensity={60}
           style={styles.headerBlur}
         >
+          <View style={{ height: insets.top }} />
           <View style={styles.headerContent}>
             <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
               {running && (
@@ -579,6 +653,7 @@ export default function ChatScreen() {
             </View>
             <View style={styles.spacer} />
             <Pressable
+              ref={gitActionsBtnRef}
               onPress={openGitActionsMenu}
               style={styles.headerAction}
               hitSlop={4}
@@ -626,6 +701,9 @@ export default function ChatScreen() {
             renderItem={renderGroupedItem}
             onScroll={handleScroll}
             scrollEventThrottle={64}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            removeClippedSubviews={true}
             ListHeaderComponent={
               hasMore ? (
                 <Pressable style={styles.loadEarlierBtn} onPress={loadEarlier}>
@@ -729,6 +807,7 @@ export default function ChatScreen() {
 
           <View style={styles.bottomBar}>
             <Pressable
+              ref={attachBtnRef}
               style={styles.metaButton}
               hitSlop={4}
               accessibilityLabel="Attach"
@@ -738,12 +817,25 @@ export default function ChatScreen() {
             </Pressable>
 
             <Pressable
+              ref={modelBtnRef}
               style={styles.modelButton}
               hitSlop={4}
               accessibilityLabel="Select model"
-              onPress={() => {
-                setModelPickerVisible(true);
+              onPress={async () => {
                 wsService.send({ type: 'model_list_request', sessionId });
+                const anchor = await measureAnchor(modelBtnRef);
+                setMenu({
+                  title: 'Model',
+                  anchor,
+                  options: models.map((m) => ({
+                    label: shortModelName(m),
+                    selected: m === selectedModel,
+                  })),
+                  onSelect: (index) => {
+                    setSelectedModel(models[index]);
+                    wsService.send({ type: 'model_select', sessionId, model: models[index] });
+                  },
+                });
               }}
             >
               {serviceTier === 'fast' && (
@@ -756,6 +848,7 @@ export default function ChatScreen() {
             </Pressable>
 
             <Pressable
+              ref={reasoningBtnRef}
               style={styles.metaButton}
               hitSlop={4}
               accessibilityLabel="Reasoning effort"
@@ -777,7 +870,7 @@ export default function ChatScreen() {
               style={styles.metaButton}
               hitSlop={4}
               accessibilityLabel="Voice input"
-              onPress={() => Alert.alert('Voice Input', 'Voice input coming soon.')}
+              onPress={() => {}}
             >
               <Ionicons name="mic-outline" size={18} color={c.textTertiary} />
             </Pressable>
@@ -816,9 +909,8 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {!inputFocused && (
-          <View style={styles.secondaryBar}>
-            <Pressable style={styles.secondaryPill} hitSlop={4} onPress={openRuntimePicker}>
+        <View style={styles.secondaryBar}>
+            <Pressable ref={runtimeBtnRef} style={styles.secondaryPill} hitSlop={4} onPress={openRuntimePicker}>
               <Ionicons name={runtimeMode === 'cloud' ? 'cloud-outline' : 'laptop-outline'} size={13} color={c.textTertiary} />
               <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>
                 {runtimeMode === 'cloud' ? 'Cloud' : 'Local'}
@@ -826,7 +918,7 @@ export default function ChatScreen() {
               <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
             </Pressable>
 
-            <Pressable style={styles.secondaryPill} hitSlop={4} onPress={openAccessModeMenu}>
+            <Pressable ref={accessBtnRef} style={styles.secondaryPill} hitSlop={4} onPress={openAccessModeMenu}>
               <Ionicons
                 name={accessMode === 'full-access' ? 'shield-outline' : 'shield-checkmark-outline'}
                 size={13}
@@ -837,7 +929,7 @@ export default function ChatScreen() {
 
             <View style={styles.spacer} />
 
-            <Pressable style={styles.secondaryPill} hitSlop={4} onPress={openGitBranchMenu}>
+            <Pressable ref={branchBtnRef} style={styles.secondaryPill} hitSlop={4} onPress={openGitBranchMenu}>
               <Ionicons name="git-branch-outline" size={13} color={c.textTertiary} />
               <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>
                 {currentBranch}
@@ -849,52 +941,63 @@ export default function ChatScreen() {
               <ContextProgressRing fraction={contextFraction} color={c.textTertiary} />
             )}
           </View>
-        )}
       </View>
 
-      <Modal
-        visible={modelPickerVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModelPickerVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setModelPickerVisible(false)}
-        >
-          <View style={[styles.modalSheet, { backgroundColor: c.bg }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: c.textPrimary }]}>Select Model</Text>
-              <Pressable onPress={() => setModelPickerVisible(false)} hitSlop={8}>
-                <Ionicons name="close" size={22} color={c.textTertiary} />
-              </Pressable>
-            </View>
-            <FlatList
-              data={models}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => {
-                const isSelected = item === selectedModel;
-                return (
-                  <Pressable
-                    style={[styles.modelItem, isSelected && { backgroundColor: c.subtle }]}
-                    onPress={() => {
-                      setSelectedModel(item);
-                      wsService.send({ type: 'model_select', sessionId, model: item });
-                      setModelPickerVisible(false);
-                    }}
-                  >
-                    <Text style={[styles.modelItemText, { color: isSelected ? c.textPrimary : c.textSecondary }]}>
-                      {shortModelName(item)}
-                    </Text>
-                    {isSelected && <Ionicons name="checkmark" size={18} color={c.textPrimary} />}
-                  </Pressable>
-                );
-              }}
-              contentContainerStyle={styles.modelList}
-            />
-          </View>
-        </Pressable>
-      </Modal>
+      {promptModal?.visible && (
+        <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
+          <Pressable style={styles.modalOverlay} onPress={() => setPromptModal(null)}>
+            <Pressable style={[styles.promptSheet, { backgroundColor: c.bg }]} onPress={() => {}}>
+              <Text style={[styles.promptTitle, { color: c.textPrimary }]}>{promptModal.title}</Text>
+              <TextInput
+                autoFocus
+                style={[styles.promptInput, { color: c.textPrimary, borderColor: c.subtle }]}
+                placeholder={promptModal.placeholder}
+                placeholderTextColor={c.textTertiary}
+                onSubmitEditing={(e) => {
+                  const text = e.nativeEvent.text;
+                  if (text.trim()) {
+                    promptModal.onSubmit(text.trim());
+                    setPromptModal(null);
+                  }
+                }}
+                returnKeyType="done"
+              />
+              <View style={styles.promptActions}>
+                <Pressable onPress={() => setPromptModal(null)} style={styles.promptCancelBtn}>
+                  <Text style={{ color: c.textTertiary, fontSize: 14 }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPromptModal(null);
+                  }}
+                  style={[styles.promptDoneBtn, { backgroundColor: c.isDark ? '#e8e8e8' : '#1c1917' }]}
+                >
+                  <Text style={[styles.promptDoneText, { color: c.isDark ? '#1c1917' : '#fff' }]}>Done</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {errorToast && (
+        <View style={[styles.errorToast, { backgroundColor: '#F04545' }]}>
+          <Text style={styles.errorToastText}>{errorToast}</Text>
+        </View>
+      )}
+
+      <PopoverMenu
+        visible={!!menu}
+        title={menu?.title}
+        options={menu?.options ?? []}
+        anchor={menu?.anchor}
+        colors={c}
+        onSelect={(i) => {
+          menu?.onSelect(i);
+          setMenu(null);
+        }}
+        onClose={() => setMenu(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1087,15 +1190,13 @@ function MessageBubble({
   if (msg.kind === 'commandExecution') {
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
-        <View style={styles.systemRow}>
-          <CommandExecCard
-            command={(msg.meta?.command as string) ?? ''}
-            output={(msg.meta?.output as string) ?? undefined}
-            exitCode={msg.meta?.exitCode as number | undefined}
-            isStreaming={msg.meta?.isStreaming as boolean | undefined}
-            colors={c}
-          />
-        </View>
+        <CommandExecCard
+          command={(msg.meta?.command as string) ?? ''}
+          output={(msg.meta?.output as string) ?? undefined}
+          exitCode={msg.meta?.exitCode as number | undefined}
+          isStreaming={msg.meta?.isStreaming as boolean | undefined}
+          colors={c}
+        />
       </Pressable>
     );
   }
@@ -1131,7 +1232,7 @@ function MessageBubble({
 
 const burstStyles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
 });
 
@@ -1165,6 +1266,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    pointerEvents: 'box-none',
   },
   headerBlur: {
     overflow: 'hidden',
@@ -1444,33 +1546,43 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  modalSheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '60%',
-    paddingBottom: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128,128,128,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
   },
-  modalTitle: { fontSize: 16, fontWeight: '600' },
-  modelList: { paddingHorizontal: 8 },
-  modelItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  promptSheet: {
+    width: '85%',
+    maxWidth: 340,
+    borderRadius: 14,
+    padding: 20,
+    gap: 16,
+  },
+  promptTitle: { fontSize: 17, fontWeight: '600', textAlign: 'center' },
+  promptInput: {
+    fontSize: 15,
+    borderWidth: 1,
     borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  modelItemText: { fontSize: 15, fontWeight: '400' },
+  promptActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  promptCancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  promptDoneBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 8 },
+  promptDoneText: { fontSize: 14, fontWeight: '600' },
+  errorToast: {
+    position: 'absolute',
+    bottom: 120,
+    left: 16,
+    right: 16,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  errorToastText: { color: '#fff', fontSize: 13, fontWeight: '500' },
 });

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -22,7 +22,7 @@ export interface ThemeColors {
   textTertiary: string;
 }
 
-export function TypingIndicator({ colors }: { colors: ThemeColors }) {
+export const TypingIndicator = React.memo(function TypingIndicator({ colors }: { colors: ThemeColors }) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export function TypingIndicator({ colors }: { colors: ThemeColors }) {
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   track: {

@@ -107,6 +107,8 @@ export default function DashboardScreen() {
       keyExtractor={(item) => item.id}
       style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={styles.listContent}
+      maxToRenderPerBatch={10}
+      windowSize={5}
       ListHeaderComponent={
         <View style={styles.headerContent}>
           <View style={[styles.headerCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>

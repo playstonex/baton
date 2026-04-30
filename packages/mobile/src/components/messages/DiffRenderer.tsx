@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
 
@@ -34,7 +35,7 @@ interface Props {
   maxLines?: number;
 }
 
-export function DiffRenderer({ diff, colors, maxLines }: Props) {
+export const DiffRenderer = React.memo(function DiffRenderer({ diff, colors, maxLines }: Props) {
   const lines = parseDiff(diff);
   const visibleLines = maxLines ? lines.filter((l) => l.kind !== 'meta').slice(0, maxLines) : lines.filter((l) => l.kind !== 'meta');
   const hiddenCount = maxLines ? lines.filter((l) => l.kind !== 'meta').length - maxLines : 0;
@@ -65,7 +66,7 @@ export function DiffRenderer({ diff, colors, maxLines }: Props) {
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
