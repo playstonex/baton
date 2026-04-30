@@ -196,21 +196,21 @@ export default function ChatScreen() {
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ title?: string; options: MenuOption[]; onSelect: (i: number) => void; anchor?: { x: number; y: number; width: number; height: number } } | null>(null);
   const flatRef = useRef<FlatList>(null);
-  const attachBtnRef = useRef<Pressable>(null);
-  const reasoningBtnRef = useRef<Pressable>(null);
-  const runtimeBtnRef = useRef<Pressable>(null);
-  const accessBtnRef = useRef<Pressable>(null);
-  const branchBtnRef = useRef<Pressable>(null);
-  const gitActionsBtnRef = useRef<Pressable>(null);
-  const modelBtnRef = useRef<Pressable>(null);
+  const attachBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const reasoningBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const runtimeBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const accessBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const branchBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const gitActionsBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const modelBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
 
   const measureAnchor = (
-    ref: React.RefObject<Pressable>,
+    ref: React.RefObject<React.ElementRef<typeof Pressable> | null>,
   ): Promise<{ x: number; y: number; width: number; height: number }> =>
     new Promise((resolve) => {
-      ref.current?.measureInWindow((x, y, width, height) => {
+      ref.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
         resolve({ x, y, width, height });
       });
     });

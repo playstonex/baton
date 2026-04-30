@@ -1,4 +1,4 @@
-import type { AgentConfig, ParsedEvent, SdkAgentAdapter } from '@baton/shared';
+import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
 import { execSync } from 'node:child_process';
 
 type SdkMessage = {
@@ -12,8 +12,15 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   readonly name = 'Claude Code (SDK)';
   readonly agentType = 'claude-code-sdk' as const;
 
+  selectedModel: string | null = null;
+  selectedReasoningEffort: ReasoningEffort | null = null;
+  selectedAccessMode: AccessMode = 'on-request';
+  selectedServiceTier: ServiceTier = 'default';
+
   private controller: AbortController | null = null;
   private sdkAvailable: boolean | null = null;
+  private projectPath = '';
+  private resolveApproval: ((approved: boolean) => void) | null = null;
 
   isSdkAvailable(): boolean {
     if (this.sdkAvailable !== null) return this.sdkAvailable;
@@ -36,13 +43,14 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   }
 
   async startSession(
-    _config: AgentConfig,
+    config: AgentConfig,
     onEvent: (event: ParsedEvent) => void,
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }> {
-    console.log('[baton] SDK: importing @anthropic-ai/claude-agent-sdk...');
+    this.projectPath = config.projectPath;
+    console.log('[baton] claude-sdk: importing @anthropic-ai/claude-agent-sdk...');
     const mod: Record<string, unknown> = await import('@anthropic-ai/claude-agent-sdk');
     const queryMod = mod.query ?? mod.default;
-    console.log('[baton] SDK: imported, query fn:', typeof queryMod);
+    console.log('[baton] claude-sdk: imported, query fn:', typeof queryMod);
     this.controller = new AbortController();
 
     const messageQueue: string[] = [];
@@ -52,19 +60,17 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
       while (true) {
         if (messageQueue.length > 0) {
           const msg = messageQueue.shift()!;
-          console.log('[baton] SDK: generator yielding:', msg.slice(0, 60));
           yield { role: 'user' as const, content: msg };
         }
-        console.log('[baton] SDK: generator waiting for input...');
         await new Promise<void>((resolve) => {
           resolvePrompt = resolve;
         });
-        console.log('[baton] SDK: generator resumed');
       }
     }
 
     const write = (input: string) => {
-      console.log('[baton] SDK: write() called, input:', input.slice(0, 60));
+      console.log('[baton] claude-sdk: write() called, input:', input.slice(0, 60));
+      onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
       messageQueue.push(input);
       if (resolvePrompt) {
         resolvePrompt();
@@ -73,21 +79,24 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
     };
 
     const stop = async () => {
-      console.log('[baton] SDK: stop() called');
+      console.log('[baton] claude-sdk: stop() called');
       this.controller?.abort();
     };
 
-    console.log('[baton] SDK: calling query()...');
+    const options: Record<string, unknown> = {
+      maxTurns: 50,
+    };
+    if (this.selectedModel) options.model = this.selectedModel;
+    else options.model = 'claude-sonnet-7-20251119';
+    if (this.selectedReasoningEffort) options.effort = this.selectedReasoningEffort;
+    else options.effort = 'medium';
+
+    console.log('[baton] claude-sdk: calling query() with model:', options.model);
     const queryFn = queryMod as (args: Record<string, unknown>) => AsyncIterable<unknown>;
     const asyncIterable = queryFn({
       prompt: promptGen(),
-      options: {
-        model: 'claude-sonnet-7-20251119',
-        maxTurns: 50,
-        effort: 'medium',
-      },
+      options,
     });
-    console.log('[baton] SDK: query() returned:', typeof asyncIterable, asyncIterable ? 'truthy' : 'falsy');
 
     (async () => {
       try {
@@ -95,29 +104,30 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
         for await (const raw of asyncIterable) {
           msgCount++;
           const msg = raw as SdkMessage;
-          console.log(`[baton] SDK: stream msg #${msgCount} type="${msg.type}" subtype="${msg.subtype ?? ''}"`);
+          console.log(`[baton] claude-sdk: stream msg #${msgCount} type="${msg.type}" subtype="${msg.subtype ?? ''}"`);
 
           if (msg.type === 'system') {
             if (msg.subtype === 'init') {
-              console.log('[baton] SDK: session initialized');
+              console.log('[baton] claude-sdk: session initialized');
               onEvent({ type: 'status_change', status: 'running', timestamp: Date.now() });
             }
           } else if (msg.type === 'assistant') {
-            console.log('[baton] SDK: assistant message received');
+            onEvent({ type: 'status_change', status: 'thinking', timestamp: Date.now() });
             this.processAssistantMessage(msg, onEvent);
           } else if (msg.type === 'result') {
-            console.log('[baton] SDK: result msg, subtype:', msg.subtype);
+            console.log('[baton] claude-sdk: result msg, subtype:', msg.subtype);
+            onEvent({ type: 'status_change', status: 'idle', timestamp: Date.now() });
             if (msg.subtype === 'success') {
               onEvent({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
             }
           } else {
-            console.log('[baton] SDK: unhandled message type:', msg.type);
+            console.log('[baton] claude-sdk: unhandled message type:', msg.type);
           }
         }
-        console.log(`[baton] SDK: stream ended after ${msgCount} messages`);
+        console.log(`[baton] claude-sdk: stream ended after ${msgCount} messages`);
       } catch (err) {
         const error = err as Error;
-        console.error('[baton] SDK: stream error:', error.name, error.message);
+        console.error('[baton] claude-sdk: stream error:', error.name, error.message);
         if (error.name !== 'AbortError') {
           onEvent({ type: 'error', message: error.message, timestamp: Date.now() });
         }
@@ -131,12 +141,43 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
     const content = msg.message?.content ?? [];
     for (const block of content) {
       if (block.type === 'tool_use') {
-        onEvent({
-          type: 'tool_use',
-          tool: (block.name as string) ?? 'unknown',
-          args: (block.input as Record<string, unknown>) ?? {},
-          timestamp: Date.now(),
-        });
+        const toolName = (block.name as string) ?? 'unknown';
+        const toolInput = (block.input as Record<string, unknown>) ?? {};
+
+        if (toolName === 'Bash' || toolName === 'bash') {
+          const command = (toolInput.command as string) ?? (toolInput.description as string) ?? '';
+          onEvent({
+            type: 'command_exec',
+            command,
+            output: '',
+            isStreaming: true,
+            timestamp: Date.now(),
+          });
+        } else if (toolName === 'Write' || toolName === 'write' || toolName === 'Edit' || toolName === 'edit' || toolName === 'MultiEdit') {
+          const filePath = (toolInput.file_path as string) ?? (toolInput.path as string) ?? '';
+          if (filePath) {
+            const changeType = toolName === 'Write' || toolName === 'write' ? 'create' : 'modify';
+            onEvent({
+              type: 'file_change',
+              path: filePath,
+              changeType,
+              timestamp: Date.now(),
+            });
+          }
+          onEvent({
+            type: 'tool_use',
+            tool: toolName,
+            args: toolInput,
+            timestamp: Date.now(),
+          });
+        } else {
+          onEvent({
+            type: 'tool_use',
+            tool: toolName,
+            args: toolInput,
+            timestamp: Date.now(),
+          });
+        }
       } else if (block.type === 'text') {
         const text = (block.text as string) ?? '';
         onEvent({
@@ -158,6 +199,156 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
         });
       }
     }
+  }
+
+  async approve(_reason?: string): Promise<void> {
+    if (this.resolveApproval) {
+      this.resolveApproval(true);
+      this.resolveApproval = null;
+    }
+  }
+
+  async reject(_reason?: string): Promise<void> {
+    if (this.resolveApproval) {
+      this.resolveApproval(false);
+      this.resolveApproval = null;
+    }
+  }
+
+  async listModels(): Promise<string[]> {
+    try {
+      const raw = execSync('claude models 2>/dev/null', {
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
+      const models = raw.split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !l.startsWith('#') && !l.startsWith('Model'));
+      return models.length > 0 ? models : [
+        'claude-sonnet-7-20251119',
+        'claude-opus-4-20250514',
+        'claude-haiku-4-20250506',
+      ];
+    } catch {
+      return [
+        'claude-sonnet-7-20251119',
+        'claude-opus-4-20250514',
+        'claude-haiku-4-20250506',
+      ];
+    }
+  }
+
+  private isGitRepo(): boolean {
+    try {
+      execSync('git rev-parse --is-inside-work-tree', {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 3000, stdio: 'pipe',
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listGitBranches(): Promise<{ branches: string[]; currentBranch: string }> {
+    if (!this.isGitRepo()) return { branches: [], currentBranch: '' };
+    try {
+      const raw = execSync('git branch --list --format="%(refname:short)"', {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+      });
+      const branches = raw.split('\n').map((b) => b.trim()).filter(Boolean);
+      let currentBranch = '';
+      try {
+        currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+          cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+        }).trim();
+      } catch { /* ignore */ }
+      return { branches, currentBranch };
+    } catch {
+      return { branches: [], currentBranch: '' };
+    }
+  }
+
+  async gitStatus(): Promise<string> {
+    if (!this.isGitRepo()) return '';
+    try {
+      return execSync('git status --short', {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+      }).trim();
+    } catch { return ''; }
+  }
+
+  async gitDiff(): Promise<string> {
+    if (!this.isGitRepo()) return '';
+    try {
+      return execSync('git diff --stat', {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+      }).trim();
+    } catch { return ''; }
+  }
+
+  async gitLog(count: number = 10): Promise<string> {
+    if (!this.isGitRepo()) return '';
+    try {
+      return execSync(`git log --oneline -${count}`, {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+      }).trim();
+    } catch { return ''; }
+  }
+
+  async gitCheckout(branch: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      execSync(`git checkout ${branch}`, {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+      });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Checkout failed' };
+    }
+  }
+
+  async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      execSync('git add -A', { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      execSync(`git commit -m ${JSON.stringify(message)}`, {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+      });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Commit failed' };
+    }
+  }
+
+  async gitPush(): Promise<{ success: boolean; error?: string }> {
+    try {
+      execSync('git push', { cwd: this.projectPath, encoding: 'utf-8', timeout: 30000 });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Push failed' };
+    }
+  }
+
+  async gitPull(): Promise<{ success: boolean; error?: string }> {
+    try {
+      execSync('git pull', { cwd: this.projectPath, encoding: 'utf-8', timeout: 30000 });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Pull failed' };
+    }
+  }
+
+  async gitCreateBranch(name: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      execSync(`git checkout -b ${name}`, {
+        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+      });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Branch creation failed' };
+    }
+  }
+
+  getProjectPath(): string {
+    return this.projectPath;
   }
 
   buildSpawnConfig(): never {
