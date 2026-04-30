@@ -83,13 +83,20 @@ export class Transport {
 
       case 'chat_input': {
         console.log(`[baton] transport: chat_input session=${msg.sessionId.slice(0,8)} content="${msg.content.slice(0, 60)}" model=${msg.model ?? 'default'}`);
+        const ackId = msg.messageId;
         try {
           if (msg.model) this.agentManager.setModel(msg.sessionId, msg.model);
           this.agentManager.chatWrite(msg.sessionId, msg.content);
           console.log('[baton] transport: chatWrite succeeded');
+          if (ackId) {
+            this.send(clientId, { type: 'ack', status: 'ok', messageId: ackId });
+          }
         } catch (err) {
           const msg_err = err instanceof Error ? err.message : `Session ${msg.sessionId} not found`;
           console.error('[baton] transport: chatWrite error:', msg_err);
+          if (ackId) {
+            this.send(clientId, { type: 'ack', status: 'error', messageId: ackId, error: msg_err });
+          }
           this.send(clientId, { type: 'error', message: msg_err });
         }
         break;
@@ -157,6 +164,15 @@ export class Transport {
           this.agentManager.setReasoningEffort(msg.sessionId, msg.effort);
         } catch (err) {
           this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to set reasoning effort' });
+        }
+        break;
+      }
+
+      case 'thinking_config_select': {
+        try {
+          this.agentManager.setThinkingConfig(msg.sessionId, msg.config);
+        } catch (err) {
+          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to set thinking config' });
         }
         break;
       }

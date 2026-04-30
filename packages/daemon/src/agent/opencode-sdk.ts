@@ -1,4 +1,4 @@
-import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
+import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
 import { execSync, spawn } from 'node:child_process';
 
 type OcPart = {
@@ -33,6 +33,10 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   selectedReasoningEffort: ReasoningEffort | null = null;
   selectedAccessMode: AccessMode = 'on-request';
   selectedServiceTier: ServiceTier = 'default';
+
+  setThinkingConfig(_config: ThinkingConfig): void {
+    // OpenCode SDK does not currently support thinking/reasoning configuration
+  }
 
   private projectPath = '';
   private serverProcess: ReturnType<typeof spawn> | null = null;

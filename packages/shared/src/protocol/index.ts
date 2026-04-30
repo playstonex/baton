@@ -5,6 +5,7 @@ import type {
   SessionStatus,
   HostStatus,
   AdapterMode,
+  ThinkingConfig,
   ReasoningEffort,
   AccessMode,
   ServiceTier,
@@ -21,6 +22,7 @@ export type ClientMessage =
   | ModelListRequestMessage
   | ModelSelectMessage
   | ReasoningEffortSelectMessage
+  | ThinkingConfigSelectMessage
   | AccessModeSelectMessage
   | ServiceTierSelectMessage
   | GitBranchListRequestMessage
@@ -44,6 +46,8 @@ export interface ChatInputMessage {
   sessionId: string;
   content: string;
   model?: string;
+  /** Optional message ID for request-response tracking */
+  messageId?: string;
 }
 
 /** Mid-turn steering — injects a follow-up while the agent is still running (SDK only). */
@@ -86,6 +90,12 @@ export interface ReasoningEffortSelectMessage {
   type: 'reasoning_effort_select';
   sessionId: string;
   effort: ReasoningEffort;
+}
+
+export interface ThinkingConfigSelectMessage {
+  type: 'thinking_config_select';
+  sessionId: string;
+  config: ThinkingConfig;
 }
 
 export interface AccessModeSelectMessage {
@@ -163,6 +173,7 @@ export type DaemonMessage =
   | GitBranchListMessage
   | GitStatusMessage
   | GitResultMessage
+  | AckMessage
   | ErrorMessage;
 
 export interface TerminalOutputMessage {
@@ -199,6 +210,15 @@ export interface ErrorMessage {
   type: 'error';
   message: string;
   code?: string;
+  /** Optional: echo back the messageId from the original request */
+  replyToMessageId?: string;
+}
+
+export interface AckMessage {
+  type: 'ack';
+  status: 'ok' | 'error';
+  messageId: string;
+  error?: string;
 }
 
 export interface GitBranchListMessage {

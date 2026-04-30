@@ -156,7 +156,73 @@ export interface SubagentEvent {
   itemId?: string;
 }
 
+// ── Thinking Configuration (unified, inspired by CliRelay) ──────────
+
+/** Thinking mode: how to specify thinking effort */
+export type ThinkingMode = 'budget' | 'level' | 'none' | 'auto';
+
+/** Thinking level for Mode=level */
+export type ThinkingLevel = 'none' | 'auto' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** Unified thinking configuration */
+export interface ThinkingConfig {
+  mode: ThinkingMode;
+  /** Token budget, effective when mode='budget'. Special values: 0=disabled, -1=auto */
+  budget?: number;
+  /** Discrete level, effective when mode='level' */
+  level?: ThinkingLevel;
+}
+
+/** Level → budget mapping */
+const LEVEL_TO_BUDGET: Record<string, number> = {
+  none: 0,
+  auto: -1,
+  minimal: 512,
+  low: 1024,
+  medium: 8192,
+  high: 24576,
+  xhigh: 32768,
+};
+
+/** Convert a thinking level to a numeric budget */
+export function levelToBudget(level: ThinkingLevel): number {
+  return LEVEL_TO_BUDGET[level] ?? -1;
+}
+
+/** Convert a numeric budget to the nearest thinking level */
+export function budgetToLevel(budget: number): ThinkingLevel {
+  if (budget < 0) return 'auto';
+  if (budget === 0) return 'none';
+  if (budget <= 512) return 'minimal';
+  if (budget <= 1024) return 'low';
+  if (budget <= 8192) return 'medium';
+  if (budget <= 24576) return 'high';
+  return 'xhigh';
+}
+
+/** Convert a ThinkingConfig to a provider-level effort string (for backward compat) */
+export function thinkingConfigToEffort(config?: ThinkingConfig | null): string | undefined {
+  if (!config) return undefined;
+  if (config.mode === 'none') return undefined;
+  if (config.mode === 'auto') return undefined;
+  if (config.mode === 'level' && config.level) {
+    const v = config.level;
+    if (v === 'low' || v === 'medium' || v === 'high') return v;
+    // Map extended levels to the closest standard
+    if (v === 'minimal') return 'low';
+    if (v === 'xhigh') return 'high';
+    if (v === 'none' || v === 'auto') return undefined;
+  }
+  if (config.mode === 'budget' && config.budget !== undefined) {
+    return budgetToLevel(config.budget);
+  }
+  return undefined;
+}
+
+// ── Deprecated — use ThinkingConfig instead ─────────────────────────
+/** @deprecated Use ThinkingConfig with mode='level' */
 export type ReasoningEffort = 'low' | 'medium' | 'high';
+
 export type AccessMode = 'on-request' | 'full-access';
 export type ServiceTier = 'default' | 'fast';
 
@@ -177,6 +243,8 @@ export interface SdkAgentAdapter extends AgentAdapter {
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }>;
   approve?(reason?: string): Promise<void>;
   reject?(reason?: string): Promise<void>;
+  selectedModel?: string | null;
+  setThinkingConfig?(config: ThinkingConfig): void;
 }
 
 export type AdapterMode = 'pty' | 'sdk' | 'auto';

@@ -41,7 +41,9 @@ import {
   type MenuOption,
 } from '../../src/components/messages';
 
-type ReasoningEffort = 'low' | 'medium' | 'high';
+type ThinkingMode = 'none' | 'auto' | 'level';
+type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
 type AccessMode = 'on-request' | 'full-access';
 type ServiceTier = 'default' | 'fast';
 type RuntimeMode = 'local' | 'cloud';
@@ -50,15 +52,17 @@ type GroupedItem =
   | { type: 'message'; msg: ChatMessage }
   | { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
 
-const REASONING_LABELS: Record<ReasoningEffort, string> = {
-  low: 'Low',
-  medium: 'Med',
-  high: 'High',
-};
-
 const PAGE_SIZE = 40;
 const TOOL_BURST_THRESHOLD = 3;
 const SCROLL_BOTTOM_THRESHOLD = 120;
+
+const THINKING_LEVEL_SHORT: Record<string, string> = {
+  minimal: 'Min',
+  low: 'Low',
+  medium: 'Med',
+  high: 'High',
+  xhigh: 'XHi',
+};
 
 const isRunning = (s: string) => s === 'running' || s === 'thinking' || s === 'executing';
 
@@ -176,7 +180,8 @@ export default function ChatScreen() {
   const [inputFocused, setInputFocused] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(null);
+  const [thinkingMode, setThinkingMode] = useState<ThinkingMode>('level');
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('medium');
   const [serviceTier, setServiceTier] = useState<ServiceTier>('default');
   const [accessMode, setAccessMode] = useState<AccessMode>('on-request');
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>('local');
@@ -424,13 +429,12 @@ export default function ChatScreen() {
   function sendChat() {
     if (!input.trim() || !sessionId) return;
     addUserMessage(input.trim());
-    if (reasoningEffort) {
-      wsService.send({ type: 'reasoning_effort_select', sessionId, effort: reasoningEffort });
-    }
+    sendThinkingConfig(thinkingMode, thinkingLevel);
     if (serviceTier !== 'default') {
       wsService.send({ type: 'service_tier_select', sessionId, tier: serviceTier });
     }
-    wsService.send({ type: 'chat_input', sessionId, content: input.trim(), model: selectedModel ?? undefined });
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    wsService.send({ type: 'chat_input', sessionId, content: input.trim(), model: selectedModel ?? undefined, messageId });
     setInput('');
   }
 
@@ -478,25 +482,46 @@ export default function ChatScreen() {
 
   async function openReasoningMenu() {
     const anchor = await measureAnchor(reasoningBtnRef);
+    const options: MenuOption[] = [
+      { label: `${thinkingMode === 'none' ? '\u2713 ' : ''}Off`, selected: thinkingMode === 'none' },
+      { label: `${thinkingMode === 'auto' ? '\u2713 ' : ''}Auto`, selected: thinkingMode === 'auto' },
+      { separator: true },
+      { label: `${thinkingMode === 'level' && thinkingLevel === 'minimal' ? '\u2713 ' : ''}Minimal`, selected: thinkingMode === 'level' && thinkingLevel === 'minimal' },
+      { label: `${thinkingMode === 'level' && thinkingLevel === 'low' ? '\u2713 ' : ''}Low`, selected: thinkingMode === 'level' && thinkingLevel === 'low' },
+      { label: `${thinkingMode === 'level' && thinkingLevel === 'medium' ? '\u2713 ' : ''}Medium`, selected: thinkingMode === 'level' && thinkingLevel === 'medium' },
+      { label: `${thinkingMode === 'level' && thinkingLevel === 'high' ? '\u2713 ' : ''}High`, selected: thinkingMode === 'level' && thinkingLevel === 'high' },
+      { label: `${thinkingMode === 'level' && thinkingLevel === 'xhigh' ? '\u2713 ' : ''}X-High`, selected: thinkingMode === 'level' && thinkingLevel === 'xhigh' },
+      { separator: true },
+      { label: 'Normal Speed', selected: serviceTier === 'default' },
+      { label: 'Fast Speed', selected: serviceTier === 'fast' },
+    ];
     setMenu({
-      title: 'Reasoning & Speed',
+      title: 'Thinking & Speed',
       anchor,
-      options: [
-        { label: 'Low', selected: reasoningEffort === 'low' },
-        { label: 'Medium', selected: reasoningEffort === 'medium' },
-        { label: 'High', selected: reasoningEffort === 'high' },
-        { separator: true },
-        { label: 'Normal Speed', selected: serviceTier === 'default' },
-        { label: 'Fast Speed', selected: serviceTier === 'fast' },
-      ],
+      options,
       onSelect: (index) => {
-        if (index === 0) { setReasoningEffort('low'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'low' }); }
-        if (index === 1) { setReasoningEffort('medium'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'medium' }); }
-        if (index === 2) { setReasoningEffort('high'); wsService.send({ type: 'reasoning_effort_select', sessionId, effort: 'high' }); }
-        if (index === 3) { setReasoningEffort(null); }
-        if (index === 4) { setServiceTier('default'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' }); }
-        if (index === 5) { setServiceTier('fast'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' }); }
+        if (index === 0) { setThinkingMode('none'); sendThinkingConfig('none'); }
+        else if (index === 1) { setThinkingMode('auto'); sendThinkingConfig('auto'); }
+        else if (index === 3) { setThinkingMode('level'); setThinkingLevel('minimal'); sendThinkingConfig('level', 'minimal'); }
+        else if (index === 4) { setThinkingMode('level'); setThinkingLevel('low'); sendThinkingConfig('level', 'low'); }
+        else if (index === 5) { setThinkingMode('level'); setThinkingLevel('medium'); sendThinkingConfig('level', 'medium'); }
+        else if (index === 6) { setThinkingMode('level'); setThinkingLevel('high'); sendThinkingConfig('level', 'high'); }
+        else if (index === 7) { setThinkingMode('level'); setThinkingLevel('xhigh'); sendThinkingConfig('level', 'xhigh'); }
+        else if (index === 8) { setThinkingMode('level'); setThinkingLevel('medium'); }
+        else if (index === 9) { setServiceTier('default'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' }); }
+        else if (index === 10) { setServiceTier('fast'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' }); }
       },
+    });
+  }
+
+  function sendThinkingConfig(mode: ThinkingMode, level?: ThinkingLevel) {
+    if (!sessionId) return;
+    wsService.send({
+      type: 'thinking_config_select',
+      sessionId,
+      config: mode === 'none' ? { mode: 'none' }
+        : mode === 'auto' ? { mode: 'auto' }
+        : { mode: 'level', level: level ?? 'medium' },
     });
   }
 
@@ -855,10 +880,10 @@ export default function ChatScreen() {
               onPress={openReasoningMenu}
             >
               <View style={styles.reasoningButtonInner}>
-                <Ionicons name="bulb-outline" size={16} color={reasoningEffort ? '#ff9500' : c.textTertiary} />
-                {reasoningEffort && (
+                <Ionicons name="bulb-outline" size={16} color={thinkingMode === 'level' ? '#ff9500' : c.textTertiary} />
+                {thinkingMode === 'level' && (
                   <Text style={[styles.reasoningBadge, { color: '#ff9500' }]}>
-                    {REASONING_LABELS[reasoningEffort]}
+                    {THINKING_LEVEL_SHORT[thinkingLevel]}
                   </Text>
                 )}
               </View>

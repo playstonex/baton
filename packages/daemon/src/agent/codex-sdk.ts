@@ -1,4 +1,4 @@
-import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
+import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
 import { execSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 
@@ -62,9 +62,31 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   private lastEmittedDiffByTurnId = new Map<string, string>();
   selectedModel: string | null = null;
   selectedReasoningEffort: ReasoningEffort | null = null;
+  selectedThinkingBudget: number | null = null;
   selectedAccessMode: AccessMode = 'on-request';
   selectedServiceTier: ServiceTier = 'default';
   private projectPath: string = process.cwd();
+
+  setThinkingConfig(config: ThinkingConfig): void {
+    this.selectedReasoningEffort = null;
+    this.selectedThinkingBudget = null;
+    if (config.mode === 'none' || config.mode === 'auto') return;
+    if (config.mode === 'level' && config.level) {
+      const level = config.level;
+      if (level === 'low' || level === 'medium' || level === 'high') {
+        this.selectedReasoningEffort = level;
+      } else if (level === 'minimal' || level === 'xhigh') {
+        this.selectedReasoningEffort = level === 'minimal' ? 'low' : 'high';
+      }
+    } else if (config.mode === 'budget' && config.budget !== undefined) {
+      // Budget maps to Codex effort levels
+      if (config.budget <= 0) return;
+      if (config.budget <= 1024) this.selectedReasoningEffort = 'low';
+      else if (config.budget <= 8192) this.selectedReasoningEffort = 'medium';
+      else this.selectedReasoningEffort = 'high';
+      this.selectedThinkingBudget = config.budget;
+    }
+  }
 
   isSdkAvailable(): boolean {
     return true;

@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentProcess, ParsedEvent, SdkAgentAdapter, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
+import type { AgentConfig, AgentProcess, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
 import { VALID_TRANSITIONS, generateId } from '@baton/shared';
 import type { AgentState, AgentSnapshot, TimelineItem } from '@baton/shared';
 import type { BaseAgentAdapter } from './adapter.js';
@@ -644,6 +644,23 @@ export class AgentManager {
   setReasoningEffort(id: string, effort: ReasoningEffort): void {
     const adapter = this.getAdapterWithModels(id);
     if (adapter && 'selectedReasoningEffort' in adapter) {
+      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort = effort;
+    }
+  }
+
+  setThinkingConfig(id: string, config: ThinkingConfig): void {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter && 'setThinkingConfig' in adapter) {
+      (adapter as unknown as { setThinkingConfig: (c: ThinkingConfig) => void }).setThinkingConfig(config);
+    } else if (adapter && 'selectedReasoningEffort' in adapter) {
+      // Fallback: map to legacy effort if adapter doesn't support ThinkingConfig
+      const effort = config.mode === 'level' && config.level === 'high' ? 'high'
+        : config.mode === 'level' && config.level === 'low' ? 'low'
+        : config.mode === 'level' && config.level === 'medium' ? 'medium'
+        : config.mode === 'budget' && config.budget && config.budget > 1024 ? 'high'
+        : config.mode === 'budget' && config.budget && config.budget > 512 ? 'medium'
+        : config.mode === 'budget' && config.budget ? 'low'
+        : 'medium';
       (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort = effort;
     }
   }

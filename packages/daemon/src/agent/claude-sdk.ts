@@ -1,4 +1,4 @@
-import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
+import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
 import { execSync } from 'node:child_process';
 
 type SdkMessage = {
@@ -20,6 +20,27 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
 
   selectedModel: string | null = null;
   selectedReasoningEffort: ReasoningEffort | null = null;
+  selectedThinkingBudget: number | null = null;
+
+  setThinkingConfig(config: ThinkingConfig): void {
+    this.selectedReasoningEffort = null;
+    this.selectedThinkingBudget = null;
+    if (config.mode === 'none') return;
+    if (config.mode === 'auto') return;
+    if (config.mode === 'level' && config.level) {
+      const level = config.level;
+      if (level === 'low' || level === 'medium' || level === 'high') {
+        this.selectedReasoningEffort = level;
+      } else if (level === 'minimal') {
+        this.selectedReasoningEffort = 'low';
+      } else if (level === 'xhigh') {
+        this.selectedReasoningEffort = 'high';
+      }
+    } else if (config.mode === 'budget' && config.budget !== undefined && config.budget > 0) {
+      this.selectedReasoningEffort = 'medium';
+      this.selectedThinkingBudget = config.budget;
+    }
+  }
   selectedAccessMode: AccessMode = 'on-request';
   selectedServiceTier: ServiceTier = 'default';
 
@@ -100,6 +121,9 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
     else options.model = 'claude-sonnet-7-20251119';
     if (this.selectedReasoningEffort) options.effort = this.selectedReasoningEffort;
     else options.effort = 'medium';
+    if (this.selectedThinkingBudget) {
+      options.thinking = { budget_tokens: this.selectedThinkingBudget };
+    }
 
     console.log('[baton] claude-sdk: calling query() with model:', options.model);
     const queryFn = queryMod as (args: Record<string, unknown>) => AsyncIterable<unknown>;
