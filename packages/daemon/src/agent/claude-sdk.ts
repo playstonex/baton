@@ -8,6 +8,12 @@ type SdkMessage = {
   result?: string;
 };
 
+type SdkUserInput = {
+  type: 'user';
+  message: { role: 'user'; content: string };
+  parent_tool_use_id: string | null;
+};
+
 export class ClaudeSdkAdapter implements SdkAgentAdapter {
   readonly name = 'Claude Code (SDK)';
   readonly agentType = 'claude-code-sdk' as const;
@@ -56,11 +62,15 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
     const messageQueue: string[] = [];
     let resolvePrompt: ((value: void) => void) | null = null;
 
-    async function* promptGen() {
+    async function* promptGen(): AsyncIterable<SdkUserInput> {
       while (true) {
         if (messageQueue.length > 0) {
           const msg = messageQueue.shift()!;
-          yield { role: 'user' as const, content: msg };
+          yield {
+            type: 'user' as const,
+            message: { role: 'user' as const, content: msg },
+            parent_tool_use_id: null,
+          };
         }
         await new Promise<void>((resolve) => {
           resolvePrompt = resolve;

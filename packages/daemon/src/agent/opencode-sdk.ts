@@ -1,22 +1,28 @@
 import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
 import { execSync, spawn } from 'node:child_process';
 
+type OcPart = {
+  id?: string;
+  type?: string;
+  text?: string;
+  tool?: string;
+  callID?: string;
+  snapshot?: string;
+  hash?: string;
+  files?: string[];
+  time?: { start?: number; end?: number };
+  state?: {
+    status?: string;
+    input?: Record<string, unknown>;
+    output?: string;
+    metadata?: Record<string, unknown>;
+  };
+};
+
 type OcMessage = {
   id: string;
   role: string;
-  parts?: Array<{
-    id?: string;
-    type?: string;
-    text?: string;
-    tool?: string;
-    callID?: string;
-    state?: {
-      status?: string;
-      input?: Record<string, unknown>;
-      output?: string;
-      metadata?: Record<string, unknown>;
-    };
-  }>;
+  parts?: OcPart[];
 };
 
 export class OpenCodeSdkAdapter implements SdkAgentAdapter {
@@ -57,14 +63,14 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
     const session = await this.httpPost('/session', { title: `baton-${Date.now()}` });
     this.sessionId = session.id as string;
-    console.log(`[baton] opencode-sdk: session created: ${this.sessionId}`);
+
 
     this.pollEvents(onEvent);
 
     onEvent({ type: 'status_change', status: 'running', timestamp: Date.now() });
 
     const write = (input: string) => {
-      console.log('[baton] opencode-sdk: write() called, input:', input.slice(0, 60));
+
       onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
       this.httpPost(`/session/${this.sessionId}/prompt_async`, {
         parts: [{ type: 'text', text: input }],
@@ -75,7 +81,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     };
 
     const stop = async () => {
-      console.log('[baton] opencode-sdk: stop() called');
+
       try {
         await this.httpPost(`/session/${this.sessionId}/abort`, {});
       } catch { /* ignore */ }
@@ -177,10 +183,13 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       if (!this.sessionId || !this.baseUrl) return;
 
       try {
-        const result = await this.httpGet(`/session/${this.sessionId}/message`) as { messages?: OcMessage[] } | null;
-        if (!result?.messages) return;
+        const result = await this.httpGet(`/session/${this.sessionId}/message`);
+        if (!result) return;
 
-        const messages = result.messages;
+        const messages = Array.isArray(result)
+          ? result as OcMessage[]
+          : (result as { messages?: OcMessage[] }).messages;
+        if (!messages) return;
         if (messages.length <= lastMessageCount) return;
 
         const newMessages = messages.slice(lastMessageCount);
@@ -205,7 +214,11 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
     const parts = msg.parts ?? [];
     for (const part of parts) {
-      if (part.type === 'text' && part.text) {
+      const ptype = part.type ?? '';
+
+
+      if (ptype === 'text' && part.text) {
+
         onEvent({
           type: 'chat_message',
           role: 'assistant',
@@ -217,11 +230,21 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
           content: part.text,
           timestamp: Date.now(),
         });
-      } else if (part.tool && part.state) {
+      } else if (ptype === 'reasoning' && part.text) {
+        onEvent({
+          type: 'thinking',
+          content: part.text,
+          timestamp: Date.now(),
+        });
+      } else if (ptype === 'step-start') {
+        onEvent({ type: 'status_change', status: 'running', timestamp: Date.now() });
+      } else if (ptype === 'step-finish') {
+      } else if (ptype === 'tool' && part.tool && part.state) {
         const toolName = part.tool;
         const state = part.state;
         const input = state.input ?? {};
         const output = state.output ?? '';
+
 
         if (toolName === 'bash' || toolName === 'Bash') {
           onEvent({
@@ -233,7 +256,10 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
             timestamp: Date.now(),
           });
         } else if (['read', 'write', 'edit', 'glob', 'grep'].includes(toolName)) {
-          const filePath = (input.file_path as string) ?? (input.path as string) ?? '';
+          const filePath =
+            (input.filePath as string) ??
+            (input.file_path as string) ??
+            (input.path as string) ?? '';
           if (filePath && (toolName === 'write' || toolName === 'edit')) {
             onEvent({
               type: 'file_change',
@@ -253,6 +279,15 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
             type: 'tool_use',
             tool: toolName,
             args: input,
+            timestamp: Date.now(),
+          });
+        }
+      } else if (ptype === 'patch') {
+        const files = part.files;
+        if (Array.isArray(files) && files.length > 0) {
+          onEvent({
+            type: 'raw_output',
+            content: `[patch] ${files.length} file(s) changed: ${(files as string[]).map((f) => f.split('/').pop()).join(', ')}`,
             timestamp: Date.now(),
           });
         }

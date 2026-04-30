@@ -3,7 +3,7 @@ import { Text } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Button, Input, Spinner } from 'heroui-native';
-import type { AgentProcess, AgentType } from '@baton/shared';
+import type { AgentProcess, AgentType, AdapterMode } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { wsService } from '../../src/services/websocket';
 import { useAgentStore } from '../../src/stores/agents';
@@ -11,9 +11,18 @@ import { useConnectionStore } from '../../src/stores/connection';
 import { STATUS_COLORS } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 
-const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
-  { type: 'codex', label: 'Codex', desc: 'Remote AI coding agent' },
-  { type: 'claude-code', label: 'Claude Code (PTY)', desc: 'Terminal-based' },
+interface AgentOption {
+  type: AgentType;
+  mode?: AdapterMode;
+  label: string;
+  desc: string;
+}
+
+const AGENT_OPTIONS: AgentOption[] = [
+  { type: 'codex', label: 'Codex', desc: 'Remote AI coding agent (SDK)' },
+  { type: 'claude-code', mode: 'sdk', label: 'Claude Code', desc: 'Anthropic AI coding assistant (SDK)' },
+  { type: 'claude-code', label: 'Claude Code (PTY)', desc: 'Terminal-based interactive mode' },
+  { type: 'opencode', label: 'OpenCode', desc: 'Open-source AI coding agent (SDK)' },
 ];
 
 export default function DashboardScreen() {
@@ -26,6 +35,7 @@ export default function DashboardScreen() {
   const connected = useConnectionStore((s) => s.connected);
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('codex');
+  const [agentMode, setAgentMode] = useState<AdapterMode | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const c = useThemeColors();
 
@@ -71,7 +81,7 @@ export default function DashboardScreen() {
     try {
       const data = await apiFetch<{ sessionId: string }>('/api/agents/start', {
         method: 'POST',
-        body: JSON.stringify({ agentType, projectPath: projectPath.trim() }),
+        body: JSON.stringify({ agentType, mode: agentMode, projectPath: projectPath.trim() }),
       });
       addAgent({
         id: data.sessionId,
@@ -99,7 +109,7 @@ export default function DashboardScreen() {
 
   const running = agents.filter((agent) => agent.status !== 'stopped').length;
   const selectedAgent =
-    AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
+    AGENT_OPTIONS.find((option) => option.type === agentType && option.mode === agentMode) ?? AGENT_OPTIONS[0];
 
   return (
     <FlatList
@@ -161,12 +171,13 @@ export default function DashboardScreen() {
             <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Launch Session</Text>
 
             <View style={styles.agentOptions}>
-              {AGENT_OPTIONS.map((option) => {
-                const active = option.type === agentType;
-                return (
-                  <Pressable
-                    key={option.type}
-                    onPress={() => setAgentType(option.type)}
+                {AGENT_OPTIONS.map((option) => {
+                 const optionKey = option.mode ? `${option.type}-${option.mode}` : option.type;
+                 const active = option.type === agentType && option.mode === agentMode;
+                 return (
+                   <Pressable
+                     key={optionKey}
+                    onPress={() => { setAgentType(option.type); setAgentMode(option.mode); }}
                     style={[
                       styles.agentOption,
                       {
@@ -363,10 +374,11 @@ const styles = StyleSheet.create({
   },
   agentOptions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   agentOption: {
-    flex: 1,
+    minWidth: '45%',
     borderRadius: 6,
     borderWidth: 1,
     padding: 10,
