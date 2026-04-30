@@ -135,6 +135,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   _streamingMsgIdByType: new Map<string, string>(),
 
   addEvent: (event) => {
+    if (__DEV__ && (event.type === 'chat_message' || event.type === 'status_change')) {
+      const contentLen = 'content' in event ? (event as { content?: string }).content?.length ?? 0 : 0;
+      console.log(`[chat] addEvent type=${event.type} role=${'role' in event ? (event as { role?: string }).role : ''} contentLen=${contentLen} status=${'status' in event ? (event as { status?: string }).status : ''}`);
+    }
     if (event.type === 'raw_output') {
       if (!event.content?.trim()) return;
 

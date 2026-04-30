@@ -218,13 +218,6 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
 
       if (ptype === 'text' && part.text) {
-
-        onEvent({
-          type: 'chat_message',
-          role: 'assistant',
-          content: part.text,
-          timestamp: Date.now(),
-        });
         onEvent({
           type: 'raw_output',
           content: part.text,

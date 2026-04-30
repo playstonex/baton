@@ -190,21 +190,20 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
         }
       } else if (block.type === 'text') {
         const text = (block.text as string) ?? '';
-        onEvent({
-          type: 'chat_message',
-          role: 'assistant',
-          content: text,
-          timestamp: Date.now(),
-        });
-        onEvent({
-          type: 'raw_output',
-          content: text,
-          timestamp: Date.now(),
-        });
+        if (text) {
+          console.log(`[baton] claude-sdk: text block length=${text.length} preview="${text.slice(0, 80)}"`);
+          onEvent({
+            type: 'raw_output',
+            content: text,
+            timestamp: Date.now(),
+          });
+        }
       } else if (block.type === 'thinking') {
+        const thought = (block.thinking as string) ?? '';
+        console.log(`[baton] claude-sdk: thinking block length=${thought.length}`);
         onEvent({
           type: 'thinking',
-          content: (block.thinking as string) ?? '',
+          content: thought,
           timestamp: Date.now(),
         });
       }

@@ -381,7 +381,8 @@ export class Transport {
         }
       }
       if (event.type === 'chat_message' || event.type === 'raw_output') {
-        console.log(`[baton] transport: broadcast event=${event.type} session=${sid.slice(0,8)} sent_to=${sent} clients`);
+        const contentLen = 'content' in event ? String((event as { content?: string }).content ?? '').length : 0;
+        console.log(`[baton] transport: broadcast event=${event.type} session=${sid.slice(0,8)} sent_to=${sent} clients contentLen=${contentLen}`);
       }
 
       if (event.type === 'status_change') {

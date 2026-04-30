@@ -110,6 +110,10 @@ export class WebSocketService {
   private handleTextMessage(data: string): void {
     const msg = JSON.parse(data);
     if (msg.type === 'welcome' || msg.type === 'connected' || msg.type === 'pong') return;
+    if (__DEV__ && (msg.type === 'parsed_event' || msg.type === 'status_update')) {
+      const eventLen = msg.event ? JSON.stringify(msg.event).length : 0;
+      console.log(`[ws] recv type=${msg.type} session=${(msg.sessionId ?? '').slice(0, 8)} eventLen=${eventLen}`);
+    }
     this.dispatch(msg as DaemonMessage);
   }
 
