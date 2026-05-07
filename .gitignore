@@ -18,9 +18,10 @@ extends/
 *.mobileprovision
 *.orig.*
 
-# Native builds
-ios/
-android/
+# Native builds (exclude generated dirs but keep committed project files)
+packages/mobile/android/
+**/build/
+**/DerivedData/
 
 # Expo EAS
 .eas/
