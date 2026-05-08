@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { View, Text, Platform, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Spacing } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';

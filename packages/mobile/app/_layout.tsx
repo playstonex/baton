@@ -50,7 +50,6 @@ export default function RootLayout() {
         <StatusBar style={c.isDark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
-            headerBackButtonDisplayMode: 'minimal',
             headerTintColor: c.textPrimary,
             headerStyle: {
               backgroundColor: c.bg,
@@ -61,10 +60,6 @@ export default function RootLayout() {
               color: c.textPrimary,
             },
             headerShadowVisible: false,
-            contentStyle: {
-              backgroundColor: c.bg,
-            },
-            animation: 'slide_from_right',
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
