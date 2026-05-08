@@ -50,12 +50,17 @@ NODE_VERSION=$(node --version)
 echo "Node.js version: $NODE_VERSION"
 
 # -------------------------------------------------------------------
-# 2. pnpm — required for monorepo workspace installs
+# 2. pnpm — required for monorepo workspace installs.
+#    Node 26 removed built-in corepack, so install via npm directly.
 # -------------------------------------------------------------------
 if ! command -v pnpm &>/dev/null; then
-  echo "Installing pnpm via corepack..."
-  corepack enable
-  corepack prepare pnpm@10.8.1 --activate
+  echo "Installing pnpm via npm..."
+  npm install -g pnpm@10.8.1
+fi
+
+if ! command -v pnpm &>/dev/null; then
+  echo "FATAL: pnpm not found after install" >&2
+  exit 1
 fi
 
 PNPM_VERSION=$(pnpm --version)

@@ -14,19 +14,35 @@ echo "=== Xcode Cloud CI: Post-Clone ==="
 # -------------------------------------------------------------------
 # Environment
 # -------------------------------------------------------------------
-# Xcode Cloud sets CI_PRIMARY_REPOSITORY_PATH to the clone root.
-# Our iOS project lives at packages/mobile/ios within the monorepo.
-REPO_ROOT="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 IOS_DIR="$REPO_ROOT/packages/mobile/ios"
 
 echo "Repository root: $REPO_ROOT"
 echo "iOS project dir: $IOS_DIR"
 
 # -------------------------------------------------------------------
-# 1. Node.js — Xcode Cloud includes Node 20+ but ensure availability
+# 1. Node.js — Xcode Cloud's default PATH may not include it.
+#    Homebrew installs to /opt/homebrew (Apple Silicon) or
+#    /usr/local (Intel). Also try nvm/fnm common locations.
 # -------------------------------------------------------------------
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.nvm/versions/node/*/bin:$HOME/.local/share/fnm/aliases/default/bin:$PATH"
+
 if ! command -v node &>/dev/null; then
-  echo "Error: node not found" >&2
+  echo "node not in PATH, installing via Homebrew..."
+  if command -v brew &>/dev/null; then
+    brew install node
+  else
+    echo "Installing Node.js via fnm..."
+    brew install fnm 2>/dev/null || curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+    export PATH="$HOME/.local/share/fnm:$PATH"
+    eval "$(fnm env)"
+    fnm install --lts
+    fnm use --lts
+  fi
+fi
+
+if ! command -v node &>/dev/null; then
+  echo "FATAL: node not found after install attempts" >&2
   exit 1
 fi
 
@@ -34,12 +50,17 @@ NODE_VERSION=$(node --version)
 echo "Node.js version: $NODE_VERSION"
 
 # -------------------------------------------------------------------
-# 2. pnpm — required for monorepo workspace installs
+# 2. pnpm — required for monorepo workspace installs.
+#    Node 26 removed built-in corepack, so install via npm directly.
 # -------------------------------------------------------------------
 if ! command -v pnpm &>/dev/null; then
-  echo "Installing pnpm via corepack..."
-  corepack enable
-  corepack prepare pnpm@10.8.1 --activate
+  echo "Installing pnpm via npm..."
+  npm install -g pnpm@10.8.1
+fi
+
+if ! command -v pnpm &>/dev/null; then
+  echo "FATAL: pnpm not found after install" >&2
+  exit 1
 fi
 
 PNPM_VERSION=$(pnpm --version)
