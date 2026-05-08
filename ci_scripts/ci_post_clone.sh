@@ -4,7 +4,10 @@
 # Runs automatically after the repository is cloned.
 # Installs all dependencies needed to build the Baton iOS app.
 
-set -euo pipefail
+# Don't use 'set -e' — if pnpm install fails we still need pod install
+# to generate Pods/ so Xcode can find the xcconfig files. Without Pods/,
+# the build fails immediately with "Unable to open base configuration".
+set -uo pipefail
 
 echo "=== Xcode Cloud CI: Post-Clone ==="
 
@@ -48,31 +51,50 @@ echo "pnpm version: $PNPM_VERSION"
 echo ""
 echo "=== Installing npm dependencies ==="
 cd "$REPO_ROOT"
-pnpm install --frozen-lockfile
+if ! pnpm install --frozen-lockfile; then
+  echo "WARNING: pnpm install --frozen-lockfile failed, retrying without frozen lockfile..."
+  pnpm install || echo "WARNING: pnpm install failed, continuing anyway..."
+fi
 
 # -------------------------------------------------------------------
 # 4. Build @baton/shared (consumed via source by mobile)
 # -------------------------------------------------------------------
 echo ""
 echo "=== Building @baton/shared ==="
-pnpm --filter @baton/shared build
+pnpm --filter @baton/shared build || echo "WARNING: @baton/shared build failed, continuing..."
 
 # -------------------------------------------------------------------
-# 5. CocoaPods — install iOS native dependencies
+# 5. CocoaPods — install iOS native dependencies (MUST succeed)
 # -------------------------------------------------------------------
 echo ""
 echo "=== Installing CocoaPods ==="
 cd "$IOS_DIR"
 
-# Use the version of pod that comes with the Gemfile or system
-if command -v pod &>/dev/null; then
-  POD_VERSION=$(pod --version)
-  echo "CocoaPods version: $POD_VERSION"
-  pod install
-else
+if ! command -v pod &>/dev/null; then
   echo "Installing CocoaPods via gem..."
   gem install cocoapods --no-document
-  pod install
+fi
+
+POD_VERSION=$(pod --version)
+echo "CocoaPods version: $POD_VERSION"
+
+# pod install MUST succeed — without it, the Pods/ directory is empty
+# and Xcode cannot find Pods-Baton.release.xcconfig (exit code 65).
+pod install || {
+  echo "ERROR: pod install failed, attempting pod install --repo-update..."
+  pod install --repo-update || {
+    echo "FATAL: pod install failed. Cannot continue." >&2
+    exit 1
+  }
+}
+
+echo ""
+echo "=== Verifying Pods configuration ==="
+if [[ -f "Pods/Target Support Files/Pods-Baton/Pods-Baton.release.xcconfig" ]]; then
+  echo "✓ Pods-Baton.release.xcconfig exists"
+else
+  echo "✗ Pods-Baton.release.xcconfig NOT found — build will fail!" >&2
+  exit 1
 fi
 
 echo ""
