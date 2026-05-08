@@ -2,7 +2,7 @@
   "expo": {
     "name": "Baton",
     "slug": "baton",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "orientation": "default",
     "scheme": "baton",
     "userInterfaceStyle": "automatic",

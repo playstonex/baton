@@ -1,6 +1,6 @@
 {
   "name": "@baton/cli",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Baton CLI — control AI agents from the terminal",
   "license": "Apache-2.0",
   "type": "module",
