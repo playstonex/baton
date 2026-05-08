@@ -207,6 +207,9 @@ importers:
       '@baton/shared':
         specifier: workspace:*
         version: link:../shared
+      '@expo/cli':
+        specifier: ~56.0.6
+        version: 56.0.6(@expo/dom-webview@56.0.4)(@expo/metro-runtime@56.0.4)(expo-constants@56.0.5)(expo-font@56.0.3)(expo-router@56.1.0)(expo@56.0.0-preview.6)(react-dom@19.2.5(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.85.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
       '@expo/dom-webview':
         specifier: ^56.0.4
         version: 56.0.4(expo@56.0.0-preview.6)(react-native@0.85.3(@babel/core@7.29.0)(@react-native/metro-config@0.85.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
@@ -7917,7 +7920,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 
