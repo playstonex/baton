@@ -5,7 +5,7 @@ import { access } from 'node:fs/promises';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import QRCode from 'qrcode';
-import { generateKeyPair, keyToFingerprint } from '@baton/shared';
+import { generateKeyPair, keyToFingerprint } from '@baton/shared/crypto';
 import { AgentManager } from './agent/manager.js';
 import { createAdapter, ProviderRegistry } from './agent/index.js';
 import { Transport } from './transport/index.js';
