@@ -1,4 +1,11 @@
-import { StyleSheet, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
+import {
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  TextInput,
+  InputAccessoryView,
+  Keyboard,
+} from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
@@ -6,6 +13,8 @@ import { wsService } from '../../src/services/websocket';
 import { STATUS_COLORS, Colors } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
+
+const INPUT_ACCESSORY_ID = 'terminal-shortcut-bar';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '↑', data: '\x1b[A' },
@@ -29,7 +38,19 @@ export default function TerminalScreen() {
   const [xtermStatus, setXtermStatus] = useState<string>('loading...');
   const [wsConnected, setWsConnected] = useState(wsService.connected);
   const [inputText, setInputText] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const c = useThemeColors();
+
+  // Track keyboard visibility for Android shortcut bar positioning
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleResize = useCallback(
     (cols: number, rows: number) => {
@@ -109,6 +130,16 @@ export default function TerminalScreen() {
     }
   }, [inputText, handleInput]);
 
+  const handleSubmitEditing = useCallback(
+    (e: { nativeEvent: { text: string } }) => {
+      const text = e.nativeEvent.text;
+      if (!text) return;
+      handleInput(text + '\n');
+      setInputText('');
+    },
+    [handleInput],
+  );
+
   const statusColor = STATUS_COLORS[status] ?? Colors.surface[400];
   const isActive = status === 'running' || status === 'thinking' || status === 'executing';
 
@@ -156,12 +187,13 @@ export default function TerminalScreen() {
           style={[styles.textInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.textPrimary }]}
           value={inputText}
           onChangeText={setInputText}
-          onSubmitEditing={handleTextInputSend}
+          onSubmitEditing={handleSubmitEditing}
           returnKeyType="send"
           placeholder="Type command..."
           placeholderTextColor={c.textTertiary}
           autoCapitalize="none"
           autoCorrect={false}
+          inputAccessoryViewID={INPUT_ACCESSORY_ID}
         />
         {inputText.length > 0 && (
           <>
@@ -181,25 +213,53 @@ export default function TerminalScreen() {
         )}
       </View>
 
-      <View style={[styles.shortcutBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcutScroll}>
-          {SHORTCUT_KEYS.map((key) => (
-            <Pressable
-              key={key.label}
-              onPress={() => handleInput(key.data)}
-              style={({ pressed }) => [
-                styles.shortcutKey,
-                {
-                  backgroundColor: pressed ? c.elevated : c.subtle,
-                  borderColor: c.cardBorder,
-                },
-              ]}
-            >
-              <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>{key.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+      {/* iOS: render shortcut bar as keyboard InputAccessoryView */}
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID={INPUT_ACCESSORY_ID} backgroundColor={c.card}>
+          <View style={[styles.shortcutBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcutScroll}>
+              {SHORTCUT_KEYS.map((key) => (
+                <Pressable
+                  key={key.label}
+                  onPress={() => handleInput(key.data)}
+                  style={({ pressed }) => [
+                    styles.shortcutKey,
+                    {
+                      backgroundColor: pressed ? c.elevated : c.subtle,
+                      borderColor: c.cardBorder,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>{key.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </InputAccessoryView>
+      )}
+
+      {/* Android: show shortcut bar only when keyboard is visible */}
+      {Platform.OS === 'android' && keyboardVisible && (
+        <View style={[styles.shortcutBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcutScroll}>
+            {SHORTCUT_KEYS.map((key) => (
+              <Pressable
+                key={key.label}
+                onPress={() => handleInput(key.data)}
+                style={({ pressed }) => [
+                  styles.shortcutKey,
+                  {
+                    backgroundColor: pressed ? c.elevated : c.subtle,
+                    borderColor: c.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>{key.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {!wsConnected && (
         <View style={styles.disconnectBanner}>
@@ -338,7 +398,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingVertical: 6,
     paddingHorizontal: 4,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 6,
   },
   shortcutScroll: {
     gap: 4,
