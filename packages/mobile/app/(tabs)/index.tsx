@@ -10,6 +10,7 @@ import { useAgentStore } from '../../src/stores/agents';
 import { useConnectionStore } from '../../src/stores/connection';
 import { STATUS_COLORS } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import { DirectoryPicker } from '../../src/components/DirectoryPicker';
 
 const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
   { type: 'claude-code', label: 'Claude Code', desc: 'Deep code work' },
@@ -28,6 +29,7 @@ export default function DashboardScreen() {
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [loading, setLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const c = useThemeColors();
 
   const fetchAgents = useCallback(async () => {
@@ -189,14 +191,41 @@ export default function DashboardScreen() {
 
             <View style={styles.inputWrapper}>
               <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Project Path</Text>
-              <Input
-                placeholder="/path/to/project"
-                value={projectPath}
-                onChangeText={setProjectPath}
-                onSubmitEditing={startAgent}
-                variant="secondary"
-              />
+              <View style={styles.inputRow}>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    placeholder="/path/to/project"
+                    value={projectPath}
+                    onChangeText={setProjectPath}
+                    onSubmitEditing={startAgent}
+                    variant="secondary"
+                  />
+                </View>
+                <Pressable
+                  onPress={() => setPickerOpen(true)}
+                  disabled={!connected}
+                  style={[
+                    styles.browseBtn,
+                    {
+                      backgroundColor: connected ? c.subtle : c.cardBorder,
+                      opacity: connected ? 1 : 0.5,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.browseText, { color: c.textPrimary }]}>Browse</Text>
+                </Pressable>
+              </View>
             </View>
+
+            <DirectoryPicker
+              visible={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              onSelect={(path) => {
+                setProjectPath(path);
+                setPickerOpen(false);
+              }}
+              initialPath={projectPath || '/'}
+            />
 
             <Text style={[styles.agentDesc, { color: c.textTertiary }]}>{selectedAgent.desc}</Text>
 
@@ -377,6 +406,20 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     gap: 6,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  browseBtn: {
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  browseText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   inputLabel: {
     fontSize: 12,

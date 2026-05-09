@@ -8,6 +8,7 @@ import { BlurView } from 'expo-blur';
 import { HeroUINativeProvider } from 'heroui-native';
 
 import { useConnectionStore } from '../src/stores/connection';
+import { useAgentStore } from '../src/stores/agents';
 import { wsService } from '../src/services/websocket';
 import { loadCredentials } from '../src/services/secure-storage';
 import { Typography } from '../src/constants/theme';
@@ -18,6 +19,7 @@ export default function RootLayout() {
   const setCredentials = useConnectionStore((s) => s.setCredentials);
   const setConnected = useConnectionStore((s) => s.setConnected);
   const loadTheme = useThemeStore((s) => s.loadTheme);
+  const loadAgents = useAgentStore((s) => s.loadAgents);
   const initialized = useRef(false);
 
   const c = useThemeColors();
@@ -27,6 +29,7 @@ export default function RootLayout() {
     initialized.current = true;
 
     loadTheme();
+    loadAgents();
 
     (async () => {
       const saved = await loadCredentials();
