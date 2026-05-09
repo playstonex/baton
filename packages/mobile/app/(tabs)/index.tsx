@@ -7,6 +7,8 @@ import type { AgentProcess, AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { wsService } from '../../src/services/websocket';
 import { useAgentStore } from '../../src/stores/agents';
+import { useRecentStore } from '../../src/stores/recent';
+import type { RecentSession } from '../../src/stores/recent';
 import { useConnectionStore } from '../../src/stores/connection';
 import { STATUS_COLORS } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
@@ -18,6 +20,14 @@ const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
   { type: 'opencode', label: 'OpenCode', desc: 'Open stack' },
 ];
 
+function formatTime(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return 'Just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
 export default function DashboardScreen() {
   const router = useRouter();
   const agents = useAgentStore((s) => s.agents);
@@ -26,6 +36,8 @@ export default function DashboardScreen() {
   const addAgent = useAgentStore((s) => s.addAgent);
   const removeAgent = useAgentStore((s) => s.removeAgent);
   const connected = useConnectionStore((s) => s.connected);
+  const recentSessions = useRecentStore((s) => s.sessions);
+  const addRecentSession = useRecentStore((s) => s.addSession);
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [loading, setLoading] = useState(false);
@@ -36,10 +48,18 @@ export default function DashboardScreen() {
     try {
       const list = await apiFetch<AgentProcess[]>('/api/agents');
       setAgents(list);
+      for (const agent of list) {
+        addRecentSession({
+          id: agent.id,
+          type: agent.type,
+          projectPath: agent.projectPath,
+          lastActivity: Date.now(),
+        });
+      }
     } catch {
       // offline
     }
-  }, [setAgents]);
+  }, [setAgents, addRecentSession]);
 
   useEffect(() => {
     fetchAgents();
@@ -83,6 +103,12 @@ export default function DashboardScreen() {
         status: 'running',
         startedAt: new Date().toISOString(),
       });
+      addRecentSession({
+        id: data.sessionId,
+        type: agentType,
+        projectPath: projectPath.trim(),
+        lastActivity: Date.now(),
+      });
       router.push(`/terminal/${data.sessionId}`);
     } catch (err) {
       Alert.alert('Error', `Failed: ${err}`);
@@ -101,6 +127,8 @@ export default function DashboardScreen() {
   }
 
   const running = agents.filter((agent) => agent.status !== 'stopped').length;
+  const activeSessionIds = new Set(agents.map((a) => a.id));
+  const inactiveRecent = recentSessions.filter((s) => !activeSessionIds.has(s.id));
   const selectedAgent =
     AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
 
@@ -243,6 +271,48 @@ export default function DashboardScreen() {
             <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Active Sessions</Text>
             <Text style={[styles.fleetCount, { color: c.textTertiary }]}>{agents.length}</Text>
           </View>
+
+          {inactiveRecent.length > 0 && (
+            <View style={{ gap: 8 }}>
+              <View style={styles.fleetHeader}>
+                <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Recent Sessions</Text>
+              </View>
+              {inactiveRecent.slice(0, 8).map((session) => (
+                <Pressable
+                  key={session.id}
+                  onPress={() => {
+                    addRecentSession({
+                      ...session,
+                      lastActivity: Date.now(),
+                    });
+                    router.push(`/terminal/${session.id}`);
+                  }}
+                  style={({ pressed }) => [
+                    styles.recentSessionRow,
+                    {
+                      backgroundColor: pressed ? c.subtle : c.card,
+                      borderColor: c.cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.recentSessionLeft}>
+                    <Text style={[styles.recentSessionType, { color: c.textSecondary }]}>
+                      {AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type}
+                    </Text>
+                    <Text
+                      style={[styles.recentSessionPath, { color: c.textTertiary }]}
+                      numberOfLines={1}
+                    >
+                      {session.projectPath}
+                    </Text>
+                  </View>
+                  <Text style={[styles.recentSessionTime, { color: c.textTertiary }]}>
+                    {formatTime(session.lastActivity)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       }
       ListEmptyComponent={
@@ -255,7 +325,17 @@ export default function DashboardScreen() {
       renderItem={({ item: agent }) => (
         <AgentRow
           agent={agent}
-          onOpen={() => agent.status !== 'stopped' && router.push(`/terminal/${agent.id}`)}
+          onOpen={() => {
+            if (agent.status !== 'stopped') {
+              addRecentSession({
+                id: agent.id,
+                type: agent.type,
+                projectPath: agent.projectPath,
+                lastActivity: Date.now(),
+              });
+              router.push(`/terminal/${agent.id}`);
+            }
+          }}
           onStop={() => stopAgent(agent.id)}
         />
       )}
@@ -496,5 +576,29 @@ const styles = StyleSheet.create({
   stopText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  recentSessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  recentSessionLeft: {
+    flex: 1,
+  },
+  recentSessionType: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recentSessionPath: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  recentSessionTime: {
+    fontSize: 11,
   },
 });

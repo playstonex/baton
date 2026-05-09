@@ -2,6 +2,7 @@ import { StyleSheet, KeyboardAvoidingView, Platform, View, Text, Pressable, Scro
 import { useState } from 'react';
 import { Button, Input, Spinner } from 'heroui-native';
 import { useConnectionStore } from '../../src/stores/connection';
+import { useRecentStore } from '../../src/stores/recent';
 import { wsService } from '../../src/services/websocket';
 import { saveCredentials, clearCredentials } from '../../src/services/secure-storage';
 import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
@@ -13,6 +14,14 @@ const THEME_OPTIONS: { key: ThemeMode; label: string; desc: string }[] = [
   { key: 'dark', label: 'Dark', desc: 'Always dark' },
 ];
 
+function formatTime(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return 'Just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
 export default function SettingsScreen() {
   const mode = useConnectionStore((s) => s.mode);
   const setMode = useConnectionStore((s) => s.setMode);
@@ -23,6 +32,10 @@ export default function SettingsScreen() {
   const connected = useConnectionStore((s) => s.connected);
   const setCredentials = useConnectionStore((s) => s.setCredentials);
   const setConnected = useConnectionStore((s) => s.setConnected);
+
+  const recentConnections = useRecentStore((s) => s.connections);
+  const addRecentConnection = useRecentStore((s) => s.addConnection);
+  const removeRecentConnection = useRecentStore((s) => s.removeConnection);
 
   const themeMode = useThemeStore((s) => s.theme);
   const setThemeMode = useThemeStore((s) => s.setTheme);
@@ -65,6 +78,7 @@ export default function SettingsScreen() {
       };
       setCredentials(config);
       await saveCredentials(config);
+      addRecentConnection(config);
       wsService.configure(config);
       wsService.connect();
       setInputPairingCode('');
@@ -88,6 +102,7 @@ export default function SettingsScreen() {
     };
     setCredentials(config);
     await saveCredentials(config);
+    addRecentConnection(config);
     wsService.configure(config);
     wsService.connect();
     setLoading(false);
@@ -171,6 +186,58 @@ export default function SettingsScreen() {
             })}
           </View>
         </View>
+
+        {recentConnections.length > 0 && (
+          <View style={[styles.section, { borderColor: c.cardBorder }]}>
+            <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Recent Connections</Text>
+            <View style={styles.recentList}>
+              {recentConnections.map((conn, i) => (
+                <View key={i} style={styles.recentRow}>
+                  <Pressable
+                    onPress={() => {
+                      if (conn.mode === 'local') {
+                        setMode('local');
+                        setInputLocalHttp(conn.localHttpUrl ?? '');
+                        setInputLocalWs(conn.localWsUrl ?? '');
+                      } else {
+                        setMode('remote');
+                        setInputRelayUrl(conn.relayUrl ?? '');
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.recentItem,
+                      {
+                        backgroundColor: pressed ? c.subtle : c.elevated,
+                        borderColor: c.cardBorder,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.recentMode}>
+                      {conn.mode === 'local' ? '🏠' : '🌐'}
+                    </Text>
+                    <View style={styles.recentInfo}>
+                      <Text
+                        style={[styles.recentLabel, { color: c.textPrimary }]}
+                        numberOfLines={1}
+                      >
+                        {conn.label}
+                      </Text>
+                      <Text style={[styles.recentTime, { color: c.textTertiary }]}>
+                        {formatTime(conn.lastUsed)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => removeRecentConnection(i)}
+                    style={[styles.recentRemove, { borderColor: c.cardBorder }]}
+                  >
+                    <Text style={[styles.recentRemoveText, { color: c.textTertiary }]}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {mode === 'remote' ? (
           <View style={[styles.section, { borderColor: c.cardBorder }]}>
@@ -356,5 +423,48 @@ const styles = StyleSheet.create({
   disconnectText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  recentList: {
+    gap: 6,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recentItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+  },
+  recentMode: {
+    fontSize: 18,
+  },
+  recentInfo: {
+    flex: 1,
+  },
+  recentLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  recentTime: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  recentRemove: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentRemoveText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

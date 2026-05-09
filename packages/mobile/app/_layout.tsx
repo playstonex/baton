@@ -9,6 +9,7 @@ import { HeroUINativeProvider } from 'heroui-native';
 
 import { useConnectionStore } from '../src/stores/connection';
 import { useAgentStore } from '../src/stores/agents';
+import { useRecentStore } from '../src/stores/recent';
 import { wsService } from '../src/services/websocket';
 import { loadCredentials } from '../src/services/secure-storage';
 import { Typography } from '../src/constants/theme';
@@ -20,6 +21,7 @@ export default function RootLayout() {
   const setConnected = useConnectionStore((s) => s.setConnected);
   const loadTheme = useThemeStore((s) => s.loadTheme);
   const loadAgents = useAgentStore((s) => s.loadAgents);
+  const loadRecent = useRecentStore((s) => s.loadRecent);
   const initialized = useRef(false);
 
   const c = useThemeColors();
@@ -30,6 +32,7 @@ export default function RootLayout() {
 
     loadTheme();
     loadAgents();
+    loadRecent();
 
     (async () => {
       const saved = await loadCredentials();
