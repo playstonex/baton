@@ -11,9 +11,17 @@ export interface ThemeColors {
   subtle: string;
   inputBg: string;
   inputBorder: string;
+  separator: string;
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
+  glassNav: string;
+  glassCard: string;
+  glassTabBar: string;
+  accentBg: string;
+  accentBorder: string;
+  successBg: string;
+  dangerBg: string;
 }
 
 export function useThemeColors(): ThemeColors {
@@ -22,20 +30,28 @@ export function useThemeColors(): ThemeColors {
 
   const isDark = theme === 'dark' || (theme === 'system' && systemScheme !== 'light');
 
-  const palette = isDark ? Colors.dark : Colors.light;
+  const p = isDark ? Colors.dark : Colors.light;
 
   return {
     isDark,
-    bg: palette.bg,
-    card: palette.card,
-    cardBorder: palette.cardBorder,
-    elevated: palette.elevated,
-    subtle: palette.subtle,
-    inputBg: palette.inputBg,
-    inputBorder: palette.inputBorder,
-    textPrimary: palette.text,
-    textSecondary: palette.textSecondary,
-    textTertiary: palette.textTertiary,
+    bg: p.bg,
+    card: p.card,
+    cardBorder: p.cardBorder,
+    elevated: p.elevated,
+    subtle: p.subtle,
+    inputBg: p.inputBg,
+    inputBorder: p.inputBorder,
+    separator: p.separator,
+    textPrimary: p.text,
+    textSecondary: p.textSecondary,
+    textTertiary: p.textTertiary,
+    glassNav: p.glassNav,
+    glassCard: p.glassCard,
+    glassTabBar: p.glassTabBar,
+    accentBg: p.accentBg,
+    accentBorder: p.accentBorder,
+    successBg: p.successBg,
+    dangerBg: p.dangerBg,
   };
 }
 

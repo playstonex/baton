@@ -3,7 +3,7 @@ import { View, Text, Platform, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Spacing } from '../../src/constants/theme';
+import { Typography, Spacing, Colors } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 
 const TAB_ITEMS = [
@@ -21,24 +21,25 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     <View
       style={{
         position: 'absolute',
-        bottom: insets.bottom + 8,
-        left: 20,
-        right: 20,
+        bottom: insets.bottom + Spacing.lg,
+        left: Spacing.xl,
+        right: Spacing.xl,
       }}
     >
       <BlurView
         tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
-        intensity={c.isDark ? 50 : 65}
+        intensity={c.isDark ? 60 : 75}
         style={{
           flexDirection: 'row',
           justifyContent: 'space-around',
           alignItems: 'center',
           borderRadius: 28,
-          paddingVertical: 10,
-          paddingHorizontal: 8,
+          paddingVertical: Spacing.sm + 2,
+          paddingHorizontal: Spacing.md,
           overflow: 'hidden',
+          backgroundColor: c.glassTabBar,
           borderWidth: 0.5,
-          borderColor: c.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.6)',
+          borderColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.55)',
         }}
       >
         {state.routes.map((route: any, index: number) => {
@@ -58,42 +59,38 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             <Pressable
               key={route.key}
               onPress={onPress}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               style={{
                 flex: 1,
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 2,
+                minHeight: 44,
+                gap: 3,
               }}
             >
               <View
                 style={{
-                  width: 40,
+                  width: 48,
                   height: 32,
                   borderRadius: 16,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isFocused
-                    ? c.isDark
-                      ? 'rgba(59,130,246,0.2)'
-                      : 'rgba(59,130,246,0.12)'
-                    : 'transparent',
+                  backgroundColor: isFocused ? c.accentBg : 'transparent',
+                  borderWidth: isFocused ? 1 : 0,
+                  borderColor: isFocused ? c.accentBorder : 'transparent',
                 }}
               >
                 <Ionicons
                   name={(isFocused ? iconName : `${iconName}-outline`) as any}
                   size={isFocused ? 24 : 22}
-                  color={isFocused ? '#3b82f6' : c.isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)'}
+                  color={isFocused ? Colors.primary[500] : c.textTertiary}
                 />
               </View>
               <Text
                 style={{
-                  fontSize: 9,
+                  ...Typography.caption2,
                   fontWeight: isFocused ? '600' : '500',
-                  color: isFocused
-                    ? '#3b82f6'
-                    : c.isDark
-                      ? 'rgba(255,255,255,0.4)'
-                      : 'rgba(0,0,0,0.3)',
+                  color: isFocused ? Colors.primary[500] : c.textTertiary,
                 }}
               >
                 {options.tabBarLabel ?? options.title ?? route.name}
@@ -113,16 +110,24 @@ export default function TabLayout() {
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        headerStyle: {
-          backgroundColor: c.bg,
-          shadowColor: 'transparent',
-          elevation: 0,
-        },
+        headerTransparent: true,
+        headerBackground: () => (
+          <BlurView
+            tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
+            intensity={c.isDark ? 60 : 75}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: c.glassNav,
+            }}
+          />
+        ),
         headerTitleStyle: {
-          ...Typography.lg,
-          fontWeight: '600',
+          ...Typography.headline,
           color: c.textPrimary,
-          letterSpacing: -0.02,
         },
         headerShadowVisible: false,
         headerTintColor: c.textPrimary,

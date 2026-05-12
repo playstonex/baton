@@ -1,8 +1,15 @@
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { Text } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Button, Input, Spinner } from 'heroui-native';
+import { Spinner } from 'heroui-native';
 import type { AgentProcess, AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { wsService } from '../../src/services/websocket';
@@ -10,7 +17,13 @@ import { useAgentStore } from '../../src/stores/agents';
 import { useRecentStore } from '../../src/stores/recent';
 import type { RecentSession } from '../../src/stores/recent';
 import { useConnectionStore } from '../../src/stores/connection';
-import { STATUS_COLORS } from '../../src/constants/theme';
+import {
+  Colors,
+  CornerRadius,
+  Spacing,
+  STATUS_COLORS,
+  Typography,
+} from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { DirectoryPicker } from '../../src/components/DirectoryPicker';
 
@@ -133,40 +146,34 @@ export default function DashboardScreen() {
     AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
 
   return (
-    <FlatList
-      data={agents}
-      keyExtractor={(item) => item.id}
-      style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={styles.listContent}
-      ListHeaderComponent={
-        <View style={styles.headerContent}>
-          <View style={[styles.headerCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            <View style={styles.headerTop}>
-              <View>
-                <Text style={[styles.title, { color: c.textPrimary }]}>Baton</Text>
-                <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-                  Agent orchestration
-                </Text>
-              </View>
+    <View style={[styles.root, { backgroundColor: c.bg }]}>
+      <FlatList
+        data={agents}
+        keyExtractor={(item) => item.id}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <View style={styles.headerContent}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.largeTitle, { color: c.textPrimary }]}>Baton</Text>
               <View
                 style={[
                   styles.connectionBadge,
                   {
-                    backgroundColor: connected ? '#f0fdf4' : '#fef2f2',
-                    borderColor: connected ? '#22c55e' : '#ef4444',
+                    backgroundColor: connected ? c.successBg : c.dangerBg,
                   },
                 ]}
               >
                 <View
                   style={[
                     styles.connectionDot,
-                    { backgroundColor: connected ? '#22c55e' : '#ef4444' },
+                    { backgroundColor: connected ? Colors.success[400] : Colors.danger[400] },
                   ]}
                 />
                 <Text
                   style={[
                     styles.connectionText,
-                    { color: connected ? '#16a34a' : '#dc2626' },
+                    { color: connected ? Colors.success[400] : Colors.danger[400] },
                   ]}
                 >
                   {connected ? 'Online' : 'Offline'}
@@ -175,60 +182,67 @@ export default function DashboardScreen() {
             </View>
 
             <View style={styles.statsRow}>
-              <View style={[styles.statItem, { backgroundColor: c.subtle }]}>
+              <View style={[styles.statCard, { backgroundColor: c.card }]}>
                 <Text style={[styles.statValue, { color: c.textPrimary }]}>{running}</Text>
                 <Text style={[styles.statLabel, { color: c.textTertiary }]}>Running</Text>
               </View>
-              <View style={[styles.statItem, { backgroundColor: c.subtle }]}>
+              <View style={[styles.statCard, { backgroundColor: c.card }]}>
                 <Text style={[styles.statValue, { color: c.textPrimary }]}>{agents.length}</Text>
                 <Text style={[styles.statLabel, { color: c.textTertiary }]}>Total</Text>
               </View>
             </View>
-          </View>
 
-          <View style={[styles.launchCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Launch Session</Text>
+            <View style={[styles.launchCard, { backgroundColor: c.card }]}>
+              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Launch Session</Text>
 
-            <View style={styles.agentOptions}>
-              {AGENT_OPTIONS.map((option) => {
-                const active = option.type === agentType;
-                return (
-                  <Pressable
-                    key={option.type}
-                    onPress={() => setAgentType(option.type)}
-                    style={[
-                      styles.agentOption,
-                      {
-                        backgroundColor: active ? '#eff6ff' : c.subtle,
-                        borderColor: active ? '#2383e2' : c.cardBorder,
-                      },
-                    ]}
-                  >
-                    <Text
+              <View style={styles.agentPills}>
+                {AGENT_OPTIONS.map((option) => {
+                  const active = option.type === agentType;
+                  return (
+                    <Pressable
+                      key={option.type}
+                      onPress={() => setAgentType(option.type)}
                       style={[
-                        styles.agentOptionLabel,
-                        { color: active ? '#1d4ed8' : c.textSecondary },
+                        styles.agentPill,
+                        {
+                          backgroundColor: active ? c.accentBg : c.subtle,
+                          borderColor: active ? c.accentBorder : 'transparent',
+                        },
                       ]}
                     >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                      <Text
+                        style={[
+                          styles.agentPillText,
+                          {
+                            color: active ? Colors.primary[500] : c.textSecondary,
+                          },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-            <View style={styles.inputWrapper}>
               <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Project Path</Text>
               <View style={styles.inputRow}>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    placeholder="/path/to/project"
-                    value={projectPath}
-                    onChangeText={setProjectPath}
-                    onSubmitEditing={startAgent}
-                    variant="secondary"
-                  />
-                </View>
+                <TextInput
+                  style={[
+                    styles.pathInput,
+                    {
+                      backgroundColor: c.inputBg,
+                      borderColor: c.inputBorder,
+                      color: c.textPrimary,
+                    },
+                  ]}
+                  placeholder="/path/to/project"
+                  placeholderTextColor={c.textTertiary}
+                  value={projectPath}
+                  onChangeText={setProjectPath}
+                  onSubmitEditing={startAgent}
+                  returnKeyType="go"
+                />
                 <Pressable
                   onPress={() => setPickerOpen(true)}
                   disabled={!connected}
@@ -243,103 +257,127 @@ export default function DashboardScreen() {
                   <Text style={[styles.browseText, { color: c.textPrimary }]}>Browse</Text>
                 </Pressable>
               </View>
-            </View>
 
-            <DirectoryPicker
-              visible={pickerOpen}
-              onClose={() => setPickerOpen(false)}
-              onSelect={(path) => {
-                setProjectPath(path);
-                setPickerOpen(false);
-              }}
-              initialPath={projectPath || '/'}
-            />
+              <DirectoryPicker
+                visible={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={(path) => {
+                  setProjectPath(path);
+                  setPickerOpen(false);
+                }}
+                initialPath={projectPath || '/'}
+              />
 
-            <Text style={[styles.agentDesc, { color: c.textTertiary }]}>{selectedAgent.desc}</Text>
+              <Text style={[styles.agentDesc, { color: c.textTertiary }]}>
+                {selectedAgent.desc}
+              </Text>
 
-            <Button
-              variant="primary"
-              size="md"
-              onPress={startAgent}
-              isDisabled={loading || !projectPath.trim() || !connected}
-            >
-              {loading ? <Spinner size="sm" color="#fff" /> : `Launch ${selectedAgent.label}`}
-            </Button>
-          </View>
-
-          <View style={styles.fleetHeader}>
-            <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Active Sessions</Text>
-            <Text style={[styles.fleetCount, { color: c.textTertiary }]}>{agents.length}</Text>
-          </View>
-
-          {inactiveRecent.length > 0 && (
-            <View style={{ gap: 8 }}>
-              <View style={styles.fleetHeader}>
-                <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Recent Sessions</Text>
-              </View>
-              {inactiveRecent.slice(0, 8).map((session) => (
-                <Pressable
-                  key={session.id}
-                  onPress={() => {
-                    addRecentSession({
-                      ...session,
-                      lastActivity: Date.now(),
-                    });
-                    router.push(`/terminal/${session.id}`);
-                  }}
-                  style={({ pressed }) => [
-                    styles.recentSessionRow,
-                    {
-                      backgroundColor: pressed ? c.subtle : c.card,
-                      borderColor: c.cardBorder,
-                    },
-                  ]}
-                >
-                  <View style={styles.recentSessionLeft}>
-                    <Text style={[styles.recentSessionType, { color: c.textSecondary }]}>
-                      {AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type}
-                    </Text>
-                    <Text
-                      style={[styles.recentSessionPath, { color: c.textTertiary }]}
-                      numberOfLines={1}
-                    >
-                      {session.projectPath}
-                    </Text>
-                  </View>
-                  <Text style={[styles.recentSessionTime, { color: c.textTertiary }]}>
-                    {formatTime(session.lastActivity)}
+              <Pressable
+                onPress={startAgent}
+                disabled={loading || !projectPath.trim() || !connected}
+                style={[
+                  styles.launchBtn,
+                  {
+                    backgroundColor:
+                      loading || !projectPath.trim() || !connected
+                        ? c.subtle
+                        : Colors.primary[500],
+                  },
+                ]}
+              >
+                {loading ? (
+                  <Spinner size="sm" color="#fff" />
+                ) : (
+                  <Text style={styles.launchBtnText}>
+                    Launch {selectedAgent.label}
                   </Text>
-                </Pressable>
-              ))}
+                )}
+              </Pressable>
             </View>
-          )}
-        </View>
-      }
-      ListEmptyComponent={
-        <View style={[styles.emptyCard, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-          <Text style={[styles.emptyText, { color: c.textSecondary }]}>
-            No active sessions
-          </Text>
-        </View>
-      }
-      renderItem={({ item: agent }) => (
-        <AgentRow
-          agent={agent}
-          onOpen={() => {
-            if (agent.status !== 'stopped') {
-              addRecentSession({
-                id: agent.id,
-                type: agent.type,
-                projectPath: agent.projectPath,
-                lastActivity: Date.now(),
-              });
-              router.push(`/terminal/${agent.id}`);
-            }
-          }}
-          onStop={() => stopAgent(agent.id)}
-        />
-      )}
-    />
+
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
+                Active Sessions
+              </Text>
+              <Text style={[styles.sectionCount, { color: c.textTertiary }]}>
+                {agents.length}
+              </Text>
+            </View>
+
+            {agents.length === 0 && (
+              <View style={[styles.emptyState, { backgroundColor: c.card }]}>
+                <Text style={[styles.emptyText, { color: c.textSecondary }]}>
+                  No active sessions
+                </Text>
+                <Text style={[styles.emptySubtext, { color: c.textTertiary }]}>
+                  Launch a new agent session to get started
+                </Text>
+              </View>
+            )}
+
+            {inactiveRecent.length > 0 && (
+              <View style={styles.recentSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>
+                    Recent Sessions
+                  </Text>
+                </View>
+                {inactiveRecent.slice(0, 8).map((session) => (
+                  <Pressable
+                    key={session.id}
+                    onPress={() => {
+                      addRecentSession({
+                        ...session,
+                        lastActivity: Date.now(),
+                      });
+                      router.push(`/terminal/${session.id}`);
+                    }}
+                    style={({ pressed }) => [
+                      styles.recentRow,
+                      {
+                        backgroundColor: pressed ? c.subtle : c.card,
+                      },
+                    ]}
+                  >
+                    <View style={styles.recentLeft}>
+                      <Text style={[styles.recentType, { color: c.textPrimary }]}>
+                        {AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type}
+                      </Text>
+                      <Text
+                        style={[styles.recentPath, { color: c.textTertiary }]}
+                        numberOfLines={1}
+                      >
+                        {session.projectPath}
+                      </Text>
+                    </View>
+                    <Text style={[styles.recentTime, { color: c.textTertiary }]}>
+                      {formatTime(session.lastActivity)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+        }
+        renderItem={({ item: agent }) => (
+          <AgentRow
+            agent={agent}
+            onOpen={() => {
+              if (agent.status !== 'stopped') {
+                addRecentSession({
+                  id: agent.id,
+                  type: agent.type,
+                  projectPath: agent.projectPath,
+                  lastActivity: Date.now(),
+                });
+                router.push(`/terminal/${agent.id}`);
+              }
+            }}
+            onStop={() => stopAgent(agent.id)}
+          />
+        )}
+      />
+    </View>
   );
 }
 
@@ -363,8 +401,7 @@ function AgentRow({
       style={({ pressed }) => [
         styles.agentRow,
         {
-          backgroundColor: c.card,
-          borderColor: c.cardBorder,
+          backgroundColor: pressed ? c.subtle : c.card,
           opacity: isStopped ? 0.5 : 1,
         },
       ]}
@@ -372,22 +409,23 @@ function AgentRow({
       <View style={styles.agentLeft}>
         <View style={[styles.agentDot, { backgroundColor: statusColor }]} />
         <View style={styles.agentInfo}>
-          <Text style={[styles.agentTitle, { color: c.textPrimary }]}>{label}</Text>
-          <Text style={[styles.agentPath, { color: c.textSecondary }]} numberOfLines={1}>
+          <Text style={[styles.agentLabel, { color: c.textPrimary }]}>{label}</Text>
+          <Text style={[styles.agentPath, { color: c.textTertiary }]} numberOfLines={1}>
             {agent.projectPath}
           </Text>
         </View>
       </View>
       <View style={styles.agentRight}>
-        <Text style={[styles.statusText, { color: statusColor }]}>
+        <Text style={[styles.agentStatus, { color: statusColor }]}>
           {agent.status.replace('_', ' ')}
         </Text>
         {!isStopped && (
           <Pressable
             onPress={onStop}
-            style={[styles.stopButton, { borderColor: '#fecaca' }]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.stopBtn}
           >
-            <Text style={[styles.stopText, { color: '#dc2626' }]}>Stop</Text>
+            <Text style={styles.stopBtnText}>Stop</Text>
           </Pressable>
         )}
       </View>
@@ -396,209 +434,264 @@ function AgentRow({
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  list: {
+    flex: 1,
+  },
   listContent: {
-    padding: 16,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
     paddingBottom: 100,
-    gap: 12,
+    gap: Spacing.lg,
   },
   headerContent: {
-    gap: 12,
+    gap: Spacing.lg,
   },
-  headerCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 16,
-    gap: 16,
-  },
-  headerTop: {
+  titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xs,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  subtitle: {
-    fontSize: 14,
-    marginTop: 2,
+  largeTitle: {
+    fontSize: Typography.largeTitle.fontSize,
+    lineHeight: Typography.largeTitle.lineHeight,
+    fontWeight: '700',
+    letterSpacing: 0.37,
   },
   connectionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: Spacing.sm,
+    borderRadius: CornerRadius.large,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minHeight: 32,
   },
   connectionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 99,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   connectionText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
+    fontWeight: '600',
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing.md,
   },
-  statItem: {
+  statCard: {
     flex: 1,
-    borderRadius: 6,
-    padding: 12,
+    borderRadius: CornerRadius.large,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     alignItems: 'center',
+    gap: Spacing.xs,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: Typography.title3.fontSize,
+    lineHeight: Typography.title3.lineHeight,
+    fontWeight: '700',
   },
   statLabel: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
   },
   launchCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
+    borderRadius: CornerRadius.large,
+    padding: Spacing.lg,
+    gap: Spacing.md,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: Typography.headline.fontSize,
+    lineHeight: Typography.headline.lineHeight,
     fontWeight: '600',
   },
-  agentOptions: {
+  agentPills: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing.sm,
   },
-  agentOption: {
+  agentPill: {
     flex: 1,
-    borderRadius: 6,
+    borderRadius: CornerRadius.large,
     borderWidth: 1,
-    padding: 10,
+    paddingVertical: Spacing.md,
     alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  agentOptionLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+  agentPillText: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
   },
-  inputWrapper: {
-    gap: 6,
+  inputLabel: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.sm,
+  },
+  pathInput: {
+    flex: 1,
+    borderRadius: CornerRadius.medium,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    fontSize: Typography.body.fontSize,
+    lineHeight: Typography.body.lineHeight,
+    minHeight: 44,
+    fontFamily: 'Menlo',
   },
   browseBtn: {
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: CornerRadius.medium,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   browseText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
   },
   agentDesc: {
-    fontSize: 13,
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
   },
-  fleetHeader: {
+  launchBtn: {
+    borderRadius: CornerRadius.medium,
+    paddingVertical: Spacing.md,
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  launchBtnText: {
+    fontSize: Typography.headline.fontSize,
+    lineHeight: Typography.headline.lineHeight,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    paddingHorizontal: Spacing.xs,
   },
-  fleetCount: {
-    fontSize: 14,
+  sectionCount: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
   },
-  emptyCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    padding: 24,
+  emptyState: {
+    borderRadius: CornerRadius.large,
+    paddingVertical: Spacing['3xl'],
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
+    gap: Spacing.sm,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
+  },
+  emptySubtext: {
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
+  },
+  recentSection: {
+    gap: Spacing.sm,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: CornerRadius.large,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    minHeight: 56,
+    gap: Spacing.md,
+  },
+  recentLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  recentType: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
+  },
+  recentPath: {
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
+    fontFamily: 'Menlo',
+  },
+  recentTime: {
+    fontSize: Typography.caption2.fontSize,
+    lineHeight: Typography.caption2.lineHeight,
   },
   agentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
+    borderRadius: CornerRadius.large,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    minHeight: 60,
   },
   agentLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.md,
     flex: 1,
   },
   agentDot: {
     width: 8,
     height: 8,
-    borderRadius: 99,
+    borderRadius: 4,
   },
   agentInfo: {
     flex: 1,
+    gap: 2,
   },
-  agentTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+  agentLabel: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
   },
   agentPath: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
+    fontFamily: 'Menlo',
   },
   agentRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.md,
   },
-  statusText: {
-    fontSize: 12,
+  agentStatus: {
+    fontSize: Typography.caption2.fontSize,
+    lineHeight: Typography.caption2.lineHeight,
     fontWeight: '500',
     textTransform: 'capitalize',
   },
-  stopButton: {
-    borderRadius: 4,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  stopText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  recentSessionRow: {
-    flexDirection: 'row',
+  stopBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
+    paddingHorizontal: Spacing.md,
   },
-  recentSessionLeft: {
-    flex: 1,
-  },
-  recentSessionType: {
-    fontSize: 13,
+  stopBtnText: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
     fontWeight: '600',
-  },
-  recentSessionPath: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    marginTop: 2,
-  },
-  recentSessionTime: {
-    fontSize: 11,
+    color: Colors.danger[400],
   },
 });

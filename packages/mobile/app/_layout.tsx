@@ -1,7 +1,7 @@
 import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 import { useEffect, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
@@ -57,12 +57,23 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerTintColor: c.textPrimary,
-            headerStyle: {
-              backgroundColor: c.bg,
-            },
+            headerTransparent: true,
+            headerBackground: () => (
+              <BlurView
+                tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
+                intensity={c.isDark ? 60 : 75}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: c.glassNav,
+                }}
+              />
+            ),
             headerTitleStyle: {
-              ...Typography.lg,
-              fontWeight: '600',
+              ...Typography.headline,
               color: c.textPrimary,
             },
             headerShadowVisible: false,

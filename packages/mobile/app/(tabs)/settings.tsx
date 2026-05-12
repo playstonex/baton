@@ -7,11 +7,17 @@ import { wsService } from '../../src/services/websocket';
 import { saveCredentials, clearCredentials } from '../../src/services/secure-storage';
 import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import {
+  Typography,
+  Spacing,
+  CornerRadius,
+  Colors,
+} from '../../src/constants/theme';
 
-const THEME_OPTIONS: { key: ThemeMode; label: string; desc: string }[] = [
-  { key: 'system', label: 'System', desc: 'Follow device' },
-  { key: 'light', label: 'Light', desc: 'Always light' },
-  { key: 'dark', label: 'Dark', desc: 'Always dark' },
+const THEME_OPTIONS: { key: ThemeMode; label: string }[] = [
+  { key: 'system', label: 'System' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
 ];
 
 function formatTime(ts: number): string {
@@ -121,33 +127,52 @@ export default function SettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 12 }}
+        contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="text-2xl font-semibold mb-2" style={{ color: c.textPrimary }}>
+        <Text style={[Typography.largeTitle, { color: c.textPrimary, marginBottom: Spacing.lg }]}>
           Settings
         </Text>
 
-        <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
-          <Text className="text-xs font-medium mb-1" style={{ color: c.textTertiary }}>
-            Appearance
-          </Text>
-          <View className="flex-row gap-2">
+        <Text
+          style={[
+            Typography.caption1,
+            { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
+          ]}
+        >
+          Appearance
+        </Text>
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: CornerRadius.large,
+            padding: Spacing.lg,
+            gap: Spacing.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
             {THEME_OPTIONS.map((opt) => {
               const active = themeMode === opt.key;
               return (
                 <Pressable
                   key={opt.key}
                   onPress={() => setThemeMode(opt.key)}
-                  className="flex-1 rounded-md border p-2.5 items-center"
                   style={{
-                    backgroundColor: active ? '#eff6ff' : c.subtle,
-                    borderColor: active ? '#2383e2' : c.cardBorder,
+                    flex: 1,
+                    minHeight: 44,
+                    borderRadius: CornerRadius.medium,
+                    borderWidth: 1,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: active ? c.accentBg : c.elevated,
+                    borderColor: active ? c.accentBorder : c.cardBorder,
                   }}
                 >
                   <Text
-                    className="text-[13px] font-medium"
-                    style={{ color: active ? '#1d4ed8' : c.textSecondary }}
+                    style={[
+                      Typography.subhead,
+                      { color: active ? Colors.primary[500] : c.textSecondary },
+                    ]}
                   >
                     {opt.label}
                   </Text>
@@ -157,26 +182,45 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
-          <Text className="text-xs font-medium mb-1" style={{ color: c.textTertiary }}>
-            Connection
-          </Text>
-          <View className="flex-row gap-2">
+        <Text
+          style={[
+            Typography.caption1,
+            { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
+          ]}
+        >
+          Connection
+        </Text>
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: CornerRadius.large,
+            padding: Spacing.lg,
+            gap: Spacing.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
             {(['local', 'remote'] as const).map((m) => {
               const active = mode === m;
               return (
                 <Pressable
                   key={m}
                   onPress={() => setMode(m)}
-                  className="flex-1 rounded-md border p-2.5 items-center"
                   style={{
-                    backgroundColor: active ? '#eff6ff' : c.subtle,
-                    borderColor: active ? '#2383e2' : c.cardBorder,
+                    flex: 1,
+                    minHeight: 44,
+                    borderRadius: CornerRadius.medium,
+                    borderWidth: 1,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: active ? c.accentBg : c.elevated,
+                    borderColor: active ? c.accentBorder : c.cardBorder,
                   }}
                 >
                   <Text
-                    className="text-[13px] font-medium"
-                    style={{ color: active ? '#1d4ed8' : c.textSecondary }}
+                    style={[
+                      Typography.subhead,
+                      { color: active ? Colors.primary[500] : c.textSecondary },
+                    ]}
                   >
                     {m === 'remote' ? 'Remote' : 'Local'}
                   </Text>
@@ -187,13 +231,24 @@ export default function SettingsScreen() {
         </View>
 
         {recentConnections.length > 0 && (
-          <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
-            <Text className="text-xs font-medium mb-1" style={{ color: c.textTertiary }}>
+          <>
+            <Text
+              style={[
+                Typography.caption1,
+                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
+              ]}
+            >
               Recent Connections
             </Text>
-            <View className="gap-1.5">
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: CornerRadius.large,
+                overflow: 'hidden',
+              }}
+            >
               {recentConnections.map((conn, i) => (
-                <View key={i} className="flex-row items-center gap-1.5">
+                <View key={i}>
                   <Pressable
                     onPress={() => {
                       if (conn.mode === 'local') {
@@ -205,125 +260,244 @@ export default function SettingsScreen() {
                         setInputRelayUrl(conn.relayUrl ?? '');
                       }
                     }}
-                    className="flex-1 flex-row items-center gap-2.5 rounded-lg border p-2.5"
                     style={({ pressed }) => ({
-                      backgroundColor: pressed ? c.subtle : c.elevated,
-                      borderColor: c.cardBorder,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      paddingHorizontal: Spacing.lg,
+                      gap: Spacing.sm,
+                      backgroundColor: pressed ? c.subtle : c.card,
                     })}
                   >
-                    <Text className="text-lg">
+                    <Text style={{ fontSize: 18 }}>
                       {conn.mode === 'local' ? '🏠' : '🌐'}
                     </Text>
-                    <View className="flex-1">
+                    <View style={{ flex: 1 }}>
                       <Text
-                        className="text-[13px] font-medium"
-                        style={{ color: c.textPrimary }}
+                        style={[Typography.subhead, { color: c.textPrimary }]}
                         numberOfLines={1}
                       >
                         {conn.label}
                       </Text>
-                      <Text className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>
+                      <Text style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}>
                         {formatTime(conn.lastUsed)}
                       </Text>
                     </View>
+                    <Pressable
+                      onPress={() => removeRecentConnection(i)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: CornerRadius.medium,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={[Typography.footnote, { color: c.textTertiary }]}>✕</Text>
+                    </Pressable>
                   </Pressable>
-                  <Pressable
-                    onPress={() => removeRecentConnection(i)}
-                    className="w-8 h-8 rounded-lg border items-center justify-center"
-                    style={{ borderColor: c.cardBorder }}
-                  >
-                    <Text className="text-xs font-semibold" style={{ color: c.textTertiary }}>✕</Text>
-                  </Pressable>
+                  {i < recentConnections.length - 1 && (
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: c.separator,
+                        marginLeft: Spacing.lg + 28 + Spacing.sm,
+                      }}
+                    />
+                  )}
                 </View>
               ))}
             </View>
-          </View>
+          </>
         )}
 
         {mode === 'remote' ? (
-          <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
-            <View className="gap-1.5">
-              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>Relay URL</Text>
-              <Input
-                placeholder="ws://host:3230"
-                value={inputRelayUrl}
-                onChangeText={setInputRelayUrl}
-                autoCapitalize="none"
-                autoCorrect={false}
-                variant="secondary"
-              />
-            </View>
-            <View className="gap-1.5">
-              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>
-                Pairing Code ({inputPairingCode.length}/6)
-              </Text>
-              <Input
-                placeholder="000000"
-                value={inputPairingCode}
-                onChangeText={setInputPairingCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                variant="secondary"
-              />
-            </View>
-            <Button
-              variant="primary"
-              size="md"
-              onPress={pairAndConnect}
-              isDisabled={loading || !inputRelayUrl.trim() || inputPairingCode.length < 6}
+          <>
+            <Text
+              style={[
+                Typography.caption1,
+                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
+              ]}
             >
-              {loading ? <Spinner size="sm" color="#fff" /> : 'Pair & Connect'}
-            </Button>
-          </View>
+              Remote Setup
+            </Text>
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: CornerRadius.large,
+                padding: Spacing.lg,
+                gap: Spacing.md,
+              }}
+            >
+              <View style={{ gap: 6 }}>
+                <Text style={[Typography.footnote, { color: c.textSecondary }]}>Relay URL</Text>
+                <Input
+                  placeholder="ws://host:3230"
+                  value={inputRelayUrl}
+                  onChangeText={setInputRelayUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  variant="secondary"
+                />
+              </View>
+              <View style={{ gap: 6 }}>
+                <Text style={[Typography.footnote, { color: c.textSecondary }]}>
+                  Pairing Code ({inputPairingCode.length}/6)
+                </Text>
+                <Input
+                  placeholder="000000"
+                  value={inputPairingCode}
+                  onChangeText={setInputPairingCode}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  variant="secondary"
+                />
+              </View>
+              <Pressable
+                onPress={pairAndConnect}
+                disabled={loading || !inputRelayUrl.trim() || inputPairingCode.length < 6}
+                style={{
+                  minHeight: 44,
+                  borderRadius: CornerRadius.medium,
+                  backgroundColor:
+                    loading || !inputRelayUrl.trim() || inputPairingCode.length < 6
+                      ? Colors.primary[500] + '40'
+                      : Colors.primary[500],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {loading ? (
+                  <Spinner size="sm" color="#fff" />
+                ) : (
+                  <Text
+                    style={[
+                      Typography.subhead,
+                      { color: '#FFFFFF', fontWeight: '600' },
+                    ]}
+                  >
+                    Pair &amp; Connect
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </>
         ) : (
-          <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
-            <View className="gap-1.5">
-              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>HTTP URL</Text>
-              <Input
-                placeholder="http://localhost:3210"
-                value={inputLocalHttp}
-                onChangeText={setInputLocalHttp}
-                autoCapitalize="none"
-                autoCorrect={false}
-                variant="secondary"
-              />
-            </View>
-            <View className="gap-1.5">
-              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>
-                WebSocket URL (optional)
-              </Text>
-              <Input
-                placeholder="Auto-derived"
-                value={inputLocalWs}
-                onChangeText={setInputLocalWs}
-                autoCapitalize="none"
-                autoCorrect={false}
-                variant="secondary"
-              />
-            </View>
-            <Button
-              variant="primary"
-              size="md"
-              onPress={connectLocal}
-              isDisabled={loading || !inputLocalHttp.trim()}
+          <>
+            <Text
+              style={[
+                Typography.caption1,
+                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
+              ]}
             >
-              {loading ? <Spinner size="sm" color="#fff" /> : 'Connect'}
-            </Button>
-          </View>
+              Local Setup
+            </Text>
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: CornerRadius.large,
+                padding: Spacing.lg,
+                gap: Spacing.md,
+              }}
+            >
+              <View style={{ gap: 6 }}>
+                <Text style={[Typography.footnote, { color: c.textSecondary }]}>HTTP URL</Text>
+                <Input
+                  placeholder="http://localhost:3210"
+                  value={inputLocalHttp}
+                  onChangeText={setInputLocalHttp}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  variant="secondary"
+                />
+              </View>
+              <View style={{ gap: 6 }}>
+                <Text style={[Typography.footnote, { color: c.textSecondary }]}>
+                  WebSocket URL (optional)
+                </Text>
+                <Input
+                  placeholder="Auto-derived"
+                  value={inputLocalWs}
+                  onChangeText={setInputLocalWs}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  variant="secondary"
+                />
+              </View>
+              <Pressable
+                onPress={connectLocal}
+                disabled={loading || !inputLocalHttp.trim()}
+                style={{
+                  minHeight: 44,
+                  borderRadius: CornerRadius.medium,
+                  backgroundColor:
+                    loading || !inputLocalHttp.trim()
+                      ? Colors.primary[500] + '40'
+                      : Colors.primary[500],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {loading ? (
+                  <Spinner size="sm" color="#fff" />
+                ) : (
+                  <Text
+                    style={[
+                      Typography.subhead,
+                      { color: '#FFFFFF', fontWeight: '600' },
+                    ]}
+                  >
+                    Connect
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </>
         )}
 
         {error ? (
-          <View className="rounded-md border border-red-200 p-3">
-            <Text className="text-[13px] text-red-600">{error}</Text>
+          <View
+            style={{
+              backgroundColor: c.dangerBg,
+              borderRadius: CornerRadius.medium,
+              padding: Spacing.md,
+            }}
+          >
+            <Text style={[Typography.footnote, { color: Colors.danger[400] }]}>{error}</Text>
           </View>
         ) : null}
 
         {connected && hostId ? (
-          <View className="flex-row items-center gap-2.5 rounded-md border border-green-200 p-3">
-            <View className="w-2 h-2 rounded-full bg-green-500" />
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.sm,
+              backgroundColor: c.successBg,
+              borderRadius: CornerRadius.medium,
+              paddingVertical: 10,
+              paddingHorizontal: Spacing.md,
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: Colors.success[400],
+              }}
+            />
             <View>
-              <Text className="text-sm font-medium text-green-600">Connected</Text>
-              <Text className="text-xs font-mono text-green-600">
+              <Text style={[Typography.subhead, { color: Colors.success[400], fontWeight: '600' }]}>
+                Connected
+              </Text>
+              <Text
+                style={[
+                  Typography.caption1,
+                  { color: Colors.success[400], fontFamily: 'Courier' },
+                ]}
+              >
                 {hostId.slice(0, 8)}...
               </Text>
             </View>
@@ -333,13 +507,21 @@ export default function SettingsScreen() {
         {connected && (
           <Pressable
             onPress={disconnect}
-            className="rounded-md border border-red-200 p-3 items-center"
+            style={{
+              minHeight: 44,
+              borderRadius: CornerRadius.medium,
+              backgroundColor: c.dangerBg,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <Text className="text-sm font-medium text-red-600">Disconnect</Text>
+            <Text style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '600' }]}>
+              Disconnect
+            </Text>
           </Pressable>
         )}
 
-        <View className="h-10" />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

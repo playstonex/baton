@@ -5,22 +5,29 @@ import {
   TextInput,
   InputAccessoryView,
   Keyboard,
+  Animated,
+  Easing,
 } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { wsService } from '../../src/services/websocket';
-import { STATUS_COLORS, Colors } from '../../src/constants/theme';
+import {
+  STATUS_COLORS,
+  Colors,
+  Typography,
+  CornerRadius,
+} from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 
 const INPUT_ACCESSORY_ID = 'terminal-shortcut-bar';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
-  { label: '↑', data: '\x1b[A' },
-  { label: '↓', data: '\x1b[B' },
-  { label: '←', data: '\x1b[D' },
-  { label: '→', data: '\x1b[C' },
+  { label: '\u2191', data: '\x1b[A' },
+  { label: '\u2193', data: '\x1b[B' },
+  { label: '\u2190', data: '\x1b[D' },
+  { label: '\u2192', data: '\x1b[C' },
   { label: 'Esc', data: '\x1b' },
   { label: 'Tab', data: '\t' },
   { label: 'Ctrl+C', data: '\x03' },
@@ -28,6 +35,62 @@ const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '/', data: '/' },
   { label: '~', data: '~' },
 ];
+
+function StatusDot({
+  color,
+  active,
+}: {
+  color: string;
+  active: boolean;
+}) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!active) {
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.6,
+          duration: 1200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [active, pulseAnim]);
+
+  return (
+    <View style={styles.statusDotOuter}>
+      {active && (
+        <Animated.View
+          style={[
+            styles.statusDotPulse,
+            {
+              backgroundColor: color,
+              transform: [{ scale: pulseAnim }],
+              opacity: pulseAnim.interpolate({
+                inputRange: [1, 1.6],
+                outputRange: [0.25, 0],
+              }),
+            },
+          ]}
+        />
+      )}
+      <View style={[styles.statusDotInner, { backgroundColor: color }]} />
+    </View>
+  );
+}
 
 export default function TerminalScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -41,11 +104,14 @@ export default function TerminalScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const c = useThemeColors();
 
-  // Track keyboard visibility for Android shortcut bar positioning
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const showSub = Keyboard.addListener('keyboardDidShow', () =>
+      setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardVisible(false),
+    );
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -75,7 +141,11 @@ export default function TerminalScreen() {
     });
 
     const unsubStatus = wsService.on('status_update', (msg) => {
-      if (msg.type === 'status_update' && msg.sessionId === sessionId && 'status' in msg) {
+      if (
+        msg.type === 'status_update' &&
+        msg.sessionId === sessionId &&
+        'status' in msg
+      ) {
         setStatus(msg.status as string);
       }
     });
@@ -86,7 +156,9 @@ export default function TerminalScreen() {
 
     const unsubError = wsService.on('error', (msg) => {
       if ('message' in msg) {
-        xtermRef.current?.write(`\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
+        xtermRef.current?.write(
+          `\x1b[31mError: ${msg.message}\x1b[0m\r\n`,
+        );
       }
     });
 
@@ -101,10 +173,18 @@ export default function TerminalScreen() {
   useEffect(() => {
     if (!sessionId || !wsConnected) return;
 
-    wsService.send({ type: 'control', action: 'attach_session', sessionId });
+    wsService.send({
+      type: 'control',
+      action: 'attach_session',
+      sessionId,
+    });
 
     return () => {
-      wsService.send({ type: 'control', action: 'detach_session', sessionId });
+      wsService.send({
+        type: 'control',
+        action: 'detach_session',
+        sessionId,
+      });
     };
   }, [sessionId, wsConnected]);
 
@@ -141,34 +221,82 @@ export default function TerminalScreen() {
   );
 
   const statusColor = STATUS_COLORS[status] ?? Colors.surface[400];
-  const isActive = status === 'running' || status === 'thinking' || status === 'executing';
+  const isActive =
+    status === 'running' || status === 'thinking' || status === 'executing';
+
+  const renderShortcutKeys = () =>
+    SHORTCUT_KEYS.map((key) => (
+      <Pressable
+        key={key.label}
+        onPress={() => handleInput(key.data)}
+        style={({ pressed }) => [
+          styles.shortcutKey,
+          {
+            backgroundColor: pressed ? c.elevated : c.subtle,
+            borderColor: c.cardBorder,
+          },
+        ]}
+      >
+        <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>
+          {key.label}
+        </Text>
+      </Pressable>
+    ));
 
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: c.bg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.toolbar, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}>
-        <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
-          {isActive && <View style={[styles.statusDotPulse, { backgroundColor: statusColor }]} />}
-          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+      <View
+        style={[
+          styles.toolbar,
+          {
+            backgroundColor: c.card,
+            borderBottomColor: c.separator,
+          },
+        ]}
+      >
+        <StatusDot color={statusColor} active={isActive} />
+
+        <Text
+          style={[styles.sessionId, { color: c.textSecondary }]}
+        >
+          {sessionId?.slice(0, 8)}
+        </Text>
+
+        <View
+          style={[
+            styles.statusChip,
+            { backgroundColor: statusColor + '18' },
+          ]}
+        >
+          <Text style={[styles.statusChipText, { color: statusColor }]}>
+            {status}
+          </Text>
         </View>
-        <Text style={[styles.sessionId, { color: c.textSecondary }]}>{sessionId?.slice(0, 8)}</Text>
-        <View style={[styles.statusChip, { backgroundColor: statusColor + '18' }]}>
-          <Text style={[styles.statusChipText, { color: statusColor }]}>{status}</Text>
-        </View>
+
         <View style={styles.spacer} />
+
         <Pressable
           onPress={() => router.push(`/agent/${sessionId}`)}
-          style={styles.toolbarButton}
+          style={styles.eventsButton}
         >
-          <Text style={[styles.toolbarButtonText, { color: c.textTertiary }]}>Events</Text>
+          <Text style={[styles.eventsButtonText]}>
+            Events
+          </Text>
         </Pressable>
+
         <Pressable
           onPress={() => router.back()}
-          style={[styles.doneButton, { backgroundColor: c.elevated, borderColor: c.cardBorder }]}
+          style={[
+            styles.doneButton,
+            { backgroundColor: c.elevated },
+          ]}
         >
-          <Text style={[styles.doneButtonText, { color: c.textPrimary }]}>Done</Text>
+          <Text style={[styles.doneButtonText, { color: c.textPrimary }]}>
+            Done
+          </Text>
         </Pressable>
       </View>
 
@@ -181,10 +309,25 @@ export default function TerminalScreen() {
         }}
       />
 
-      <View style={[styles.inputBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
+      <View
+        style={[
+          styles.inputBar,
+          {
+            backgroundColor: c.card,
+            borderTopColor: c.separator,
+          },
+        ]}
+      >
         <TextInput
           ref={textInputRef}
-          style={[styles.textInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.textPrimary }]}
+          style={[
+            styles.textInput,
+            {
+              backgroundColor: c.inputBg,
+              borderColor: c.inputBorder,
+              color: c.textPrimary,
+            },
+          ]}
           value={inputText}
           onChangeText={setInputText}
           onSubmitEditing={handleSubmitEditing}
@@ -199,83 +342,96 @@ export default function TerminalScreen() {
           <>
             <Pressable
               onPress={handleTextInput}
-              style={[styles.sendBtn, { backgroundColor: c.elevated, borderColor: c.cardBorder }]}
+              style={[
+                styles.sendBtn,
+                { backgroundColor: c.elevated },
+              ]}
             >
-              <Text style={[styles.sendBtnText, { color: c.textSecondary }]}>Send</Text>
+              <Text
+                style={[styles.sendBtnText, { color: c.textSecondary }]}
+              >
+                Send
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleTextInputSend}
-              style={[styles.sendBtn, { backgroundColor: '#3b82f6' }]}
+              style={[styles.enterBtn, { backgroundColor: Colors.primary[500] }]}
             >
-              <Text style={styles.sendBtnEnter}>↵</Text>
+              <Text style={styles.enterBtnText}>{'\u21B5'}</Text>
             </Pressable>
           </>
         )}
       </View>
 
-      {/* iOS: render shortcut bar as keyboard InputAccessoryView */}
       {Platform.OS === 'ios' && (
         <InputAccessoryView nativeID={INPUT_ACCESSORY_ID} backgroundColor={c.card}>
-          <View style={[styles.shortcutBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcutScroll}>
-              {SHORTCUT_KEYS.map((key) => (
-                <Pressable
-                  key={key.label}
-                  onPress={() => handleInput(key.data)}
-                  style={({ pressed }) => [
-                    styles.shortcutKey,
-                    {
-                      backgroundColor: pressed ? c.elevated : c.subtle,
-                      borderColor: c.cardBorder,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>{key.label}</Text>
-                </Pressable>
-              ))}
+          <View
+            style={[
+              styles.shortcutBar,
+              {
+                backgroundColor: c.card,
+                borderTopColor: c.separator,
+              },
+            ]}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.shortcutScroll}
+            >
+              {renderShortcutKeys()}
             </ScrollView>
           </View>
         </InputAccessoryView>
       )}
 
-      {/* Android: show shortcut bar only when keyboard is visible */}
       {Platform.OS === 'android' && keyboardVisible && (
-        <View style={[styles.shortcutBar, { backgroundColor: c.card, borderTopColor: c.cardBorder }]}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcutScroll}>
-            {SHORTCUT_KEYS.map((key) => (
-              <Pressable
-                key={key.label}
-                onPress={() => handleInput(key.data)}
-                style={({ pressed }) => [
-                  styles.shortcutKey,
-                  {
-                    backgroundColor: pressed ? c.elevated : c.subtle,
-                    borderColor: c.cardBorder,
-                  },
-                ]}
-              >
-                <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>{key.label}</Text>
-              </Pressable>
-            ))}
+        <View
+          style={[
+            styles.shortcutBar,
+            {
+              backgroundColor: c.card,
+              borderTopColor: c.separator,
+            },
+          ]}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.shortcutScroll}
+          >
+            {renderShortcutKeys()}
           </ScrollView>
         </View>
       )}
 
       {!wsConnected && (
-        <View style={styles.disconnectBanner}>
-          <View style={styles.disconnectBannerContent}>
-            <Text style={styles.disconnectIcon}>{'\u{26A0}'}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.disconnectTitle}>Not Connected</Text>
-              <Text style={styles.disconnectDesc}>
+        <View
+          style={[
+            styles.disconnectBanner,
+            {
+              backgroundColor: c.dangerBg,
+              borderColor: Colors.danger[400],
+            },
+          ]}
+        >
+          <View style={styles.disconnectContent}>
+            <Text style={styles.disconnectIcon}>{'\u26A0'}</Text>
+            <View style={styles.disconnectTextWrap}>
+              <Text style={[styles.disconnectTitle, { color: Colors.danger[400] }]}>
+                Not Connected
+              </Text>
+              <Text
+                style={[styles.disconnectDesc, { color: Colors.danger[400] }]}
+              >
                 Go to Settings and configure your daemon connection
               </Text>
             </View>
             <Pressable
               onPress={() => router.push('/(tabs)/settings')}
-              style={styles.disconnectButton}
+              style={styles.disconnectBtn}
             >
-              <Text style={styles.disconnectButtonText}>Settings</Text>
+              <Text style={styles.disconnectBtnText}>Settings</Text>
             </Pressable>
           </View>
         </View>
@@ -285,15 +441,17 @@ export default function TerminalScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    gap: 6,
-    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+    minHeight: 50,
   },
   statusDotOuter: {
     width: 18,
@@ -302,119 +460,124 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
   statusDotPulse: {
     position: 'absolute',
     width: 18,
     height: 18,
     borderRadius: 9,
-    opacity: 0.3,
   },
-  statusDot: {
+  statusDotInner: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
   },
   sessionId: {
-    fontSize: 12,
+    ...Typography.caption1,
     fontFamily: 'monospace',
     fontWeight: '500',
   },
   statusChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
   },
   statusChipText: {
-    fontSize: 10,
+    ...Typography.caption2,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  spacer: { flex: 1 },
-  toolbarButton: {
+  spacer: {
+    flex: 1,
+  },
+  eventsButton: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderCurve: 'continuous',
+    paddingVertical: 6,
     minHeight: 32,
     justifyContent: 'center',
   },
-  toolbarButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
+  eventsButtonText: {
+    ...Typography.caption1,
+    fontWeight: '600',
+    color: Colors.primary[500],
   },
   doneButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
-    borderWidth: 1,
     minHeight: 32,
     justifyContent: 'center',
   },
   doneButtonText: {
-    fontSize: 12,
+    ...Typography.caption1,
     fontWeight: '600',
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    gap: 6,
-    borderTopWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   textInput: {
     flex: 1,
     height: 40,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: CornerRadius.medium,
     borderCurve: 'continuous',
     borderWidth: 1,
-    fontSize: 15,
+    ...Typography.subhead,
     fontFamily: 'monospace',
   },
   sendBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
-    borderWidth: 1,
     minHeight: 36,
     justifyContent: 'center',
   },
   sendBtnText: {
-    fontSize: 12,
+    ...Typography.caption1,
     fontWeight: '600',
   },
-  sendBtnEnter: {
-    fontSize: 14,
+  enterBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: CornerRadius.small,
+    borderCurve: 'continuous',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  enterBtnText: {
+    ...Typography.subhead,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
   },
   shortcutBar: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
   shortcutScroll: {
-    gap: 4,
+    gap: 6,
     paddingRight: 8,
   },
   shortcutKey: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     minHeight: 34,
     justifyContent: 'center',
     alignItems: 'center',
   },
   shortcutKeyLabel: {
-    fontSize: 12,
+    ...Typography.caption1,
     fontWeight: '600',
   },
   disconnectBanner: {
@@ -422,45 +585,44 @@ const styles = StyleSheet.create({
     bottom: 16,
     left: 16,
     right: 16,
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderRadius: 14,
+    borderRadius: CornerRadius.large,
     borderCurve: 'continuous',
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.25)',
     overflow: 'hidden',
   },
-  disconnectBannerContent: {
+  disconnectContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     padding: 14,
   },
   disconnectIcon: {
-    fontSize: 18,
+    ...Typography.subhead,
+  },
+  disconnectTextWrap: {
+    flex: 1,
   },
   disconnectTitle: {
-    color: '#fca5a5',
-    fontSize: 13,
+    ...Typography.subhead,
     fontWeight: '700',
   },
   disconnectDesc: {
-    color: '#fca5a5',
-    fontSize: 11,
-    opacity: 0.7,
+    ...Typography.caption1,
+    opacity: 0.75,
     marginTop: 2,
   },
-  disconnectButton: {
-    paddingHorizontal: 10,
+  disconnectBtn: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
-    backgroundColor: 'rgba(239,68,68,0.2)',
+    backgroundColor: 'rgba(255,59,48,0.2)',
     minHeight: 32,
     justifyContent: 'center',
   },
-  disconnectButtonText: {
-    fontSize: 12,
+  disconnectBtnText: {
+    ...Typography.caption1,
     fontWeight: '600',
-    color: '#f87171',
+    color: Colors.danger[400],
   },
 });

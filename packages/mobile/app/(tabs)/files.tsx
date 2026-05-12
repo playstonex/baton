@@ -1,11 +1,12 @@
 import { StyleSheet } from 'react-native';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Chip, Spinner } from 'heroui-native';
+import { Spinner } from 'heroui-native';
 import { useAgentStore } from '../../src/stores/agents';
 import { apiFetch } from '../../src/services/api';
 import { FilePreview } from '../../src/components/FilePreview';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import { Colors, Typography, Spacing, CornerRadius, Radius } from '../../src/constants/theme';
 
 interface FileEntry {
   name: string;
@@ -32,15 +33,22 @@ export default function FilesScreen() {
     setLoading(true);
     try {
       const data = await apiFetch<{ path: string; items: FileEntry[] }>(`/api/files?path=${encodeURIComponent(path)}`);
-      setItems(data.items ?? []); setCurrentPath(path); setFileContent(null);
-    } catch { /* offline */ } finally { setLoading(false); }
+      setItems(data.items ?? []);
+      setCurrentPath(path);
+      setFileContent(null);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   async function openFile(path: string) {
     try {
       const data = await apiFetch<{ content: string; name: string }>(`/api/files/content?path=${encodeURIComponent(path)}`);
-      setFileContent(data.content); setFileName(data.name);
-    } catch { /* offline */ }
+      setFileContent(data.content);
+      setFileName(data.name);
+    } catch {
+    }
   }
 
   const pathParts = currentPath.split('/').filter(Boolean);
@@ -48,14 +56,18 @@ export default function FilesScreen() {
   if (fileContent !== null) {
     return (
       <View style={[s.container, { backgroundColor: c.bg }]}>
-        <View style={[s.fileHeader, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}>
-          <Pressable onPress={() => setFileContent(null)} style={[s.backButton, { backgroundColor: c.elevated }]}>
-            <Text style={[s.backButtonText, { color: c.textSecondary }]}>{'\u{2190}'} Back</Text>
+        <View style={[s.previewHeader, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
+          <Pressable onPress={() => setFileContent(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '500' }]}>
+              {'\u2190'} Back
+            </Text>
           </Pressable>
-          <View style={s.fileNameContainer}>
-            <Text style={[s.fileNameLabel, { color: c.textTertiary }]}>Preview</Text>
-            <Text style={[s.fileNameText, { color: c.textPrimary }]} numberOfLines={1}>{fileName}</Text>
-          </View>
+          <Text
+            style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: 'monospace' }]}
+            numberOfLines={1}
+          >
+            {fileName}
+          </Text>
         </View>
         <FilePreview fileName={fileName} content={fileContent} />
       </View>
@@ -64,18 +76,25 @@ export default function FilesScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: c.bg }]}>
-      <View style={[s.breadcrumb, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}>
-        <Pressable onPress={() => fetchDir('/')} style={s.bcButton}>
-          <Text style={[s.bcRoot, { color: c.textSecondary }]}>~</Text>
+      <View style={[s.breadcrumb, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
+        <Pressable onPress={() => fetchDir('/')} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+          <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '500' }]}>~</Text>
         </Pressable>
         {pathParts.map((part, i) => {
           const path = '/' + pathParts.slice(0, i + 1).join('/');
           const isLast = i === pathParts.length - 1;
           return (
             <View key={path} style={s.bcSegment}>
-              <Text style={[s.bcSeparator, { color: c.cardBorder }]}>/</Text>
-              <Pressable onPress={() => fetchDir(path)} style={s.bcButton}>
-                <Text style={[s.bcPart, !isLast && { color: c.textTertiary }, isLast && s.bcActive]}>{part}</Text>
+              <Text style={[Typography.footnote, { color: c.separator, marginHorizontal: Spacing.xs }]}>/</Text>
+              <Pressable onPress={() => fetchDir(path)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                <Text
+                  style={[
+                    Typography.footnote,
+                    { color: isLast ? Colors.primary[500] : c.textSecondary, fontWeight: isLast ? '500' : '400' },
+                  ]}
+                >
+                  {part}
+                </Text>
               </Pressable>
             </View>
           );
@@ -83,8 +102,7 @@ export default function FilesScreen() {
       </View>
 
       {activeAgents.length > 0 && (
-        <View style={[s.shortcuts, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}>
-          <Text style={[s.shortcutLabel, { color: c.textTertiary }]}>Projects</Text>
+        <View style={[s.shortcuts, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
           <View style={s.shortcutChips}>
             {activeAgents.map((a) => {
               const active = currentPath === a.projectPath;
@@ -92,9 +110,23 @@ export default function FilesScreen() {
                 <Pressable
                   key={a.id}
                   onPress={() => fetchDir(a.projectPath)}
-                  style={[s.shortcutChip, { backgroundColor: c.elevated, borderColor: c.cardBorder }, active && s.shortcutChipActive]}
+                  style={[
+                    s.chip,
+                    {
+                      backgroundColor: active ? c.accentBg : c.elevated,
+                      borderColor: active ? c.accentBorder : c.cardBorder,
+                    },
+                  ]}
                 >
-                  <Text style={[s.shortcutChipText, { color: c.textSecondary }, active && s.shortcutChipTextActive]}>
+                  <Text
+                    style={[
+                      Typography.caption1,
+                      {
+                        color: active ? Colors.primary[500] : c.textSecondary,
+                        fontWeight: active ? '600' : '500',
+                      },
+                    ]}
+                  >
                     {a.projectPath.split('/').pop()}
                   </Text>
                 </Pressable>
@@ -105,34 +137,73 @@ export default function FilesScreen() {
       )}
 
       {loading ? (
-        <View style={s.loading}><Spinner size="lg" /></View>
+        <View style={s.loading}>
+          <Spinner size="lg" />
+        </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.path}
-          contentContainerStyle={s.list}
+          contentContainerStyle={[s.list, (!items || items.length === 0) && s.listEmpty]}
           ListEmptyComponent={
-            <View style={[s.empty, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-              <Text style={s.emptyIcon}>{'\u{1F4C2}'}</Text>
-              <Text style={[s.emptyText, { color: c.textSecondary }]}>Empty directory</Text>
-              <Text style={[s.emptySubtext, { color: c.textTertiary }]}>No files or folders found</Text>
+            <View style={s.empty}>
+              <Text style={[Typography.subhead, { color: c.textSecondary }]}>No files</Text>
             </View>
           }
           renderItem={({ item }) => (
             <Pressable
               onPress={() => (item.isDir ? fetchDir(item.path) : openFile(item.path))}
-              style={({ pressed }) => [s.fileRow, { borderBottomColor: c.cardBorder }, pressed && { backgroundColor: c.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}
+              style={({ pressed }) => [
+                s.row,
+                {
+                  borderBottomColor: c.separator,
+                  backgroundColor: pressed
+                    ? c.isDark
+                      ? 'rgba(255,255,255,0.04)'
+                      : 'rgba(0,0,0,0.04)'
+                    : 'transparent',
+                },
+              ]}
             >
-              <View style={[s.fileIconContainer, { backgroundColor: item.isDir ? 'rgba(59,130,246,0.09)' : c.elevated }]}>
-                <Text style={[s.fileIcon, { color: item.isDir ? '#3b82f6' : c.textTertiary }]}>
-                  {item.isDir ? '\u{1F4C1}' : '\u{1F4C4}'}
+              <View
+                style={[
+                  s.iconBox,
+                  { backgroundColor: item.isDir ? c.accentBg : c.elevated },
+                ]}
+              >
+                <Text
+                  style={[
+                    Typography.caption1,
+                    {
+                      color: item.isDir ? Colors.primary[500] : c.textTertiary,
+                      fontWeight: '600',
+                    },
+                  ]}
+                >
+                  {item.isDir ? 'folder' : 'doc'}
                 </Text>
               </View>
-              <Text style={[s.fileMono, { color: c.textSecondary }, item.isDir && { color: c.textPrimary, fontWeight: '600' }]} numberOfLines={1}>
+              <Text
+                style={[
+                  Typography.subhead,
+                  {
+                    color: item.isDir ? c.textPrimary : c.textSecondary,
+                    fontWeight: item.isDir ? '600' : '400',
+                    flex: 1,
+                  },
+                ]}
+                numberOfLines={1}
+              >
                 {item.name}
               </Text>
-              {!item.isDir && <Text style={[s.fileSize, { color: c.textTertiary }]}>{fmt(item.size)}</Text>}
-              {item.isDir && <Text style={[s.fileChevron, { color: c.textTertiary }]}>{'\u{203A}'}</Text>}
+              {!item.isDir && (
+                <Text style={[Typography.caption2, { color: c.textTertiary }]}>{fmt(item.size)}</Text>
+              )}
+              {item.isDir && (
+                <Text style={[Typography.subhead, { color: c.textTertiary, fontWeight: '300' }]}>
+                  {'\u203A'}
+                </Text>
+              )}
             </Pressable>
           )}
         />
@@ -149,177 +220,76 @@ function fmt(b: number): string {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  fileHeader: {
+  previewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderBottomWidth: 1,
-    gap: 12,
-  },
-  backButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderCurve: 'continuous',
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  fileNameContainer: {
-    flex: 1,
-  },
-  fileNameLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  fileNameText: {
-    fontWeight: '600',
-    fontSize: 14,
-    fontFamily: 'monospace',
-    marginTop: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.md,
   },
   breadcrumb: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 14,
-    gap: 2,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-  },
-  bcButton: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    minHeight: 28,
-    justifyContent: 'center',
-  },
-  bcRoot: {
-    fontSize: 13,
-    fontFamily: 'monospace',
-    fontWeight: '600',
+    gap: Spacing.xs,
   },
   bcSegment: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  bcSeparator: {
-    fontSize: 14,
-    fontWeight: '400',
-    marginHorizontal: 2,
-  },
-  bcPart: {
-    fontSize: 13,
-    fontFamily: 'monospace',
-  },
-  bcActive: {
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
   shortcuts: {
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-  },
-  shortcutLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.8,
-    marginBottom: 6,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   shortcutChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: Spacing.sm,
   },
-  shortcutChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs + 2,
+    borderRadius: Radius.sm,
     borderCurve: 'continuous',
     borderWidth: 1,
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  shortcutChipActive: {
-    backgroundColor: 'rgba(59,130,246,0.09)',
-    borderColor: '#3b82f6',
-  },
-  shortcutChipText: {
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: 'monospace',
-  },
-  shortcutChipTextActive: {
-    color: '#3b82f6',
-    fontWeight: '600',
   },
   list: {
-    padding: 14,
-    paddingTop: 4,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing['3xl'],
+  },
+  listEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   loading: {
-    padding: 60,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   empty: {
-    padding: 48,
     alignItems: 'center',
-    borderRadius: 14,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    marginTop: 8,
+    paddingVertical: Spacing['4xl'],
   },
-  emptyIcon: {
-    fontSize: 36,
-    marginBottom: 10,
-  },
-  emptyText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  emptySubtext: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  fileRow: {
-    width: '100%',
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
   },
-  fileIconContainer: {
+  iconBox: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  fileIcon: {
-    fontSize: 14,
-  },
-  fileMono: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: 'monospace',
-    fontWeight: '400',
-  },
-  fileSize: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  fileChevron: {
-    fontSize: 18,
-    fontWeight: '300',
   },
 });
