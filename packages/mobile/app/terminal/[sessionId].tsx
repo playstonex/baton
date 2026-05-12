@@ -19,6 +19,7 @@ import {
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '\u2191', data: '\x1b[A' },
@@ -100,6 +101,7 @@ export default function TerminalScreen() {
   const [inputText, setInputText] = useState('');
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   const handleResize = useCallback(
     (cols: number, rows: number) => {
@@ -228,7 +230,7 @@ export default function TerminalScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight }]}
+      style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View
