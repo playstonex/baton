@@ -3,8 +3,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
-  InputAccessoryView,
-  Keyboard,
   Animated,
   Easing,
 } from 'react-native';
@@ -21,8 +19,6 @@ import {
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-
-const INPUT_ACCESSORY_ID = 'terminal-shortcut-bar';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '\u2191', data: '\x1b[A' },
@@ -102,23 +98,8 @@ export default function TerminalScreen() {
   const [xtermStatus, setXtermStatus] = useState<string>('loading...');
   const [wsConnected, setWsConnected] = useState(wsService.connected);
   const [inputText, setInputText] = useState('');
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
-
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const showSub = Keyboard.addListener('keyboardDidShow', () =>
-      setKeyboardVisible(true),
-    );
-    const hideSub = Keyboard.addListener('keyboardDidHide', () =>
-      setKeyboardVisible(false),
-    );
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const handleResize = useCallback(
     (cols: number, rows: number) => {
@@ -338,7 +319,6 @@ export default function TerminalScreen() {
           placeholderTextColor={c.textTertiary}
           autoCapitalize="none"
           autoCorrect={false}
-          inputAccessoryViewID={INPUT_ACCESSORY_ID}
         />
         {inputText.length > 0 && (
           <>
@@ -365,47 +345,23 @@ export default function TerminalScreen() {
         )}
       </View>
 
-      {Platform.OS === 'ios' && (
-        <InputAccessoryView nativeID={INPUT_ACCESSORY_ID} backgroundColor={c.card}>
-          <View
-            style={[
-              styles.shortcutBar,
-              {
-                backgroundColor: c.card,
-                borderTopColor: c.separator,
-              },
-            ]}
-          >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.shortcutScroll}
-            >
-              {renderShortcutKeys()}
-            </ScrollView>
-          </View>
-        </InputAccessoryView>
-      )}
-
-      {Platform.OS === 'android' && keyboardVisible && (
-        <View
-          style={[
-            styles.shortcutBar,
-            {
-              backgroundColor: c.card,
-              borderTopColor: c.separator,
-            },
-          ]}
+      <View
+        style={[
+          styles.shortcutBar,
+          {
+            backgroundColor: c.card,
+            borderTopColor: c.separator,
+          },
+        ]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.shortcutScroll}
         >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.shortcutScroll}
-          >
-            {renderShortcutKeys()}
-          </ScrollView>
-        </View>
-      )}
+          {renderShortcutKeys()}
+        </ScrollView>
+      </View>
 
       {!wsConnected && (
         <View
