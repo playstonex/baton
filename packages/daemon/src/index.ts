@@ -12,6 +12,9 @@ import { Transport } from './transport/index.js';
 import { RelayConnection } from './transport/relay.js';
 import { FileWatcher } from './watcher/index.js';
 import { Orchestrator } from './orchestrator/index.js';
+import { AnalyticsService } from './system/analytics.js';
+import { PushNotificationService } from './system/push.js';
+import { ContextCompressor } from './parser/compressor.js';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
   StartAgentRequest,
@@ -37,9 +40,20 @@ function getLocalIp(): string | null {
 
 export function createDaemon(port = DEFAULT_PORT) {
   const app = new Hono();
+  const batonHome = process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
   const agentManager = new AgentManager();
   const orchestrator = new Orchestrator(agentManager);
-  const transport = new Transport(agentManager, port);
+  const analytics = new AnalyticsService(join(batonHome, 'analytics.db'));
+  const pushService = new PushNotificationService();
+  const compressor = new ContextCompressor();
+  const transport = new Transport(agentManager, port, {
+    onPushTokenRegister: (clientId, token, platform) => {
+      pushService.register(clientId, token, platform as 'ios' | 'android' | 'web');
+    },
+    onPushTokenUnregister: (clientId) => {
+      pushService.unregister(clientId);
+    },
+  });
   const watchers = new Map<string, FileWatcher>();
   let relayConnection: RelayConnection | null = null;
 
@@ -87,6 +101,41 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json(await collectSystemStats());
   });
 
+  app.get('/api/analytics/health', (c) => {
+    return c.json(analytics.getHealthScore());
+  });
+
+  app.get('/api/analytics/hourly', (c) => {
+    const hours = parseInt(c.req.query('hours') ?? '24', 10);
+    return c.json(analytics.getHourlyStats(hours));
+  });
+
+  app.get('/api/analytics/session/:id', (c) => {
+    const stats = analytics.getSessionStats(c.req.param('id'));
+    return c.json(stats);
+  });
+
+  app.get('/api/analytics/recent', (c) => {
+    const limit = parseInt(c.req.query('limit') ?? '100', 10);
+    return c.json(analytics.getRecentEvents(limit));
+  });
+
+  app.post('/api/push/register', async (c) => {
+    const body = await c.req.json<{ clientId: string; token: string; platform: 'ios' | 'android' | 'web' }>();
+    pushService.register(body.clientId, body.token, body.platform);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/push/unregister', async (c) => {
+    const body = await c.req.json<{ clientId: string }>();
+    pushService.unregister(body.clientId);
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/push/subscriptions', (c) => {
+    return c.json(pushService.listSubscriptions());
+  });
+
   app.post('/api/agents/start', async (c) => {
     const body = await c.req.json<StartAgentRequest>();
     const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
@@ -109,6 +158,30 @@ export function createDaemon(port = DEFAULT_PORT) {
     );
 
     transport.registerSessionEvents(sessionId);
+
+    agentManager.onEvent(sessionId, (event: ParsedEvent) => {
+      analytics.logEvent(sessionId, event);
+      compressor.addEvent(sessionId, event);
+
+      if (pushService.shouldNotify(event.type)) {
+        pushService.broadcast({
+          title: `Agent ${event.type.replace(/_/g, ' ')}`,
+          body: event.type === 'permission_request'
+            ? `Permission needed for ${(event as Extract<ParsedEvent, { type: 'permission_request' }>).tool}`
+            : event.type === 'error'
+              ? (event as Extract<ParsedEvent, { type: 'error' }>).message
+              : `Status: ${(event as Extract<ParsedEvent, { type: 'status_change' }>).status}`,
+          data: { sessionId, eventType: event.type },
+        });
+      }
+
+      if (compressor.needsCompaction(sessionId)) {
+        const result = compressor.compact(sessionId);
+        if (result) {
+          console.log(`Context compacted for ${sessionId}: ${result.originalEventCount} → ${result.compactedEventCount} events`);
+        }
+      }
+    });
 
     if (!watchers.has(body.projectPath)) {
       const watcher = new FileWatcher({ projectPath: body.projectPath });

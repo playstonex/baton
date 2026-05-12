@@ -65,6 +65,8 @@ export function TerminalScreen() {
   const fitRef = useRef<FitAddon | null>(null);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<string>('unknown');
+  const [sessionOwner, setSessionOwner] = useState<'local' | 'remote' | null>(null);
+  const [isClaimed, setIsClaimed] = useState(false);
 
   const attachSession = useCallback(() => {
     if (!sessionId) return;
@@ -146,6 +148,13 @@ export function TerminalScreen() {
       }
     });
 
+    const unsubOwnership = wsService.on('session_ownership', (msg) => {
+      if (msg.type === 'session_ownership' && msg.sessionId === sessionId) {
+        setSessionOwner(msg.owner);
+        setIsClaimed(msg.owner === 'local');
+      }
+    });
+
     const unsubState = wsService.on('_state', () => {
       setConnected(wsService.connected);
       if (wsService.connected) attachSession();
@@ -170,6 +179,7 @@ export function TerminalScreen() {
       unsubOutput();
       unsubStatus();
       unsubEvents();
+      unsubOwnership();
       unsubState();
       mql.removeEventListener('change', handleThemeChange);
       term.dispose();
@@ -183,6 +193,16 @@ export function TerminalScreen() {
     navigate('/');
   }
 
+  function claimSession() {
+    if (!sessionId) return;
+    wsService.send({ type: 'control', action: 'claim_session', sessionId });
+  }
+
+  function releaseSession() {
+    if (!sessionId) return;
+    wsService.send({ type: 'control', action: 'release_session', sessionId });
+  }
+
   const statusDotColor = status === 'running' ? 'bg-success-500' : status === 'thinking' ? 'bg-primary-500' : status === 'stopped' ? 'bg-danger-500' : 'bg-surface-300';
 
   return (
@@ -194,6 +214,25 @@ export function TerminalScreen() {
           <span className="font-mono text-xs text-surface-400">{sessionId?.slice(0, 8)}</span>
         </div>
         <div className="flex items-center gap-2">
+          {sessionOwner && (
+            <Chip
+              size="sm"
+              variant="soft"
+              color={sessionOwner === 'local' ? 'success' : 'warning'}
+            >
+              {sessionOwner === 'local' ? 'You control' : 'Remote control'}
+            </Chip>
+          )}
+          {sessionOwner === 'remote' && (
+            <Button size="sm" variant="primary" onPress={claimSession}>
+              Take Control
+            </Button>
+          )}
+          {isClaimed && sessionOwner === 'local' && (
+            <Button size="sm" variant="ghost" onPress={releaseSession}>
+              Release
+            </Button>
+          )}
           <Chip size="sm" variant="soft" color={connected ? 'success' : 'danger'}>
             {connected ? 'Connected' : 'Disconnected'}
           </Chip>

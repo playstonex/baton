@@ -1,4 +1,4 @@
-import { StyleSheet, KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView } from 'react-native';
 import { useState } from 'react';
 import { Button, Input, Spinner } from 'heroui-native';
 import { useConnectionStore } from '../../src/stores/connection';
@@ -116,37 +116,38 @@ export default function SettingsScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: c.bg }]}
+      className="flex-1"
+      style={{ backgroundColor: c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ padding: 16, gap: 12 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.pageTitle, { color: c.textPrimary }]}>Settings</Text>
+        <Text className="text-2xl font-semibold mb-2" style={{ color: c.textPrimary }}>
+          Settings
+        </Text>
 
-        <View style={[styles.section, { borderColor: c.cardBorder }]}>
-          <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Appearance</Text>
-          <View style={styles.optionRow}>
+        <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
+          <Text className="text-xs font-medium mb-1" style={{ color: c.textTertiary }}>
+            Appearance
+          </Text>
+          <View className="flex-row gap-2">
             {THEME_OPTIONS.map((opt) => {
               const active = themeMode === opt.key;
               return (
                 <Pressable
                   key={opt.key}
                   onPress={() => setThemeMode(opt.key)}
-                  style={[
-                    styles.optionButton,
-                    {
-                      backgroundColor: active ? '#eff6ff' : c.subtle,
-                      borderColor: active ? '#2383e2' : c.cardBorder,
-                    },
-                  ]}
+                  className="flex-1 rounded-md border p-2.5 items-center"
+                  style={{
+                    backgroundColor: active ? '#eff6ff' : c.subtle,
+                    borderColor: active ? '#2383e2' : c.cardBorder,
+                  }}
                 >
                   <Text
-                    style={[
-                      styles.optionText,
-                      { color: active ? '#1d4ed8' : c.textSecondary },
-                    ]}
+                    className="text-[13px] font-medium"
+                    style={{ color: active ? '#1d4ed8' : c.textSecondary }}
                   >
                     {opt.label}
                   </Text>
@@ -156,28 +157,26 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={[styles.section, { borderColor: c.cardBorder }]}>
-          <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Connection</Text>
-          <View style={styles.optionRow}>
+        <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
+          <Text className="text-xs font-medium mb-1" style={{ color: c.textTertiary }}>
+            Connection
+          </Text>
+          <View className="flex-row gap-2">
             {(['local', 'remote'] as const).map((m) => {
               const active = mode === m;
               return (
                 <Pressable
                   key={m}
                   onPress={() => setMode(m)}
-                  style={[
-                    styles.optionButton,
-                    {
-                      backgroundColor: active ? '#eff6ff' : c.subtle,
-                      borderColor: active ? '#2383e2' : c.cardBorder,
-                    },
-                  ]}
+                  className="flex-1 rounded-md border p-2.5 items-center"
+                  style={{
+                    backgroundColor: active ? '#eff6ff' : c.subtle,
+                    borderColor: active ? '#2383e2' : c.cardBorder,
+                  }}
                 >
                   <Text
-                    style={[
-                      styles.optionText,
-                      { color: active ? '#1d4ed8' : c.textSecondary },
-                    ]}
+                    className="text-[13px] font-medium"
+                    style={{ color: active ? '#1d4ed8' : c.textSecondary }}
                   >
                     {m === 'remote' ? 'Remote' : 'Local'}
                   </Text>
@@ -188,11 +187,13 @@ export default function SettingsScreen() {
         </View>
 
         {recentConnections.length > 0 && (
-          <View style={[styles.section, { borderColor: c.cardBorder }]}>
-            <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>Recent Connections</Text>
-            <View style={styles.recentList}>
+          <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
+            <Text className="text-xs font-medium mb-1" style={{ color: c.textTertiary }}>
+              Recent Connections
+            </Text>
+            <View className="gap-1.5">
               {recentConnections.map((conn, i) => (
-                <View key={i} style={styles.recentRow}>
+                <View key={i} className="flex-row items-center gap-1.5">
                   <Pressable
                     onPress={() => {
                       if (conn.mode === 'local') {
@@ -204,34 +205,34 @@ export default function SettingsScreen() {
                         setInputRelayUrl(conn.relayUrl ?? '');
                       }
                     }}
-                    style={({ pressed }) => [
-                      styles.recentItem,
-                      {
-                        backgroundColor: pressed ? c.subtle : c.elevated,
-                        borderColor: c.cardBorder,
-                      },
-                    ]}
+                    className="flex-1 flex-row items-center gap-2.5 rounded-lg border p-2.5"
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? c.subtle : c.elevated,
+                      borderColor: c.cardBorder,
+                    })}
                   >
-                    <Text style={styles.recentMode}>
+                    <Text className="text-lg">
                       {conn.mode === 'local' ? '🏠' : '🌐'}
                     </Text>
-                    <View style={styles.recentInfo}>
+                    <View className="flex-1">
                       <Text
-                        style={[styles.recentLabel, { color: c.textPrimary }]}
+                        className="text-[13px] font-medium"
+                        style={{ color: c.textPrimary }}
                         numberOfLines={1}
                       >
                         {conn.label}
                       </Text>
-                      <Text style={[styles.recentTime, { color: c.textTertiary }]}>
+                      <Text className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>
                         {formatTime(conn.lastUsed)}
                       </Text>
                     </View>
                   </Pressable>
                   <Pressable
                     onPress={() => removeRecentConnection(i)}
-                    style={[styles.recentRemove, { borderColor: c.cardBorder }]}
+                    className="w-8 h-8 rounded-lg border items-center justify-center"
+                    style={{ borderColor: c.cardBorder }}
                   >
-                    <Text style={[styles.recentRemoveText, { color: c.textTertiary }]}>✕</Text>
+                    <Text className="text-xs font-semibold" style={{ color: c.textTertiary }}>✕</Text>
                   </Pressable>
                 </View>
               ))}
@@ -240,9 +241,9 @@ export default function SettingsScreen() {
         )}
 
         {mode === 'remote' ? (
-          <View style={[styles.section, { borderColor: c.cardBorder }]}>
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Relay URL</Text>
+          <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
+            <View className="gap-1.5">
+              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>Relay URL</Text>
               <Input
                 placeholder="ws://host:3230"
                 value={inputRelayUrl}
@@ -252,8 +253,8 @@ export default function SettingsScreen() {
                 variant="secondary"
               />
             </View>
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>
+            <View className="gap-1.5">
+              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>
                 Pairing Code ({inputPairingCode.length}/6)
               </Text>
               <Input
@@ -275,9 +276,9 @@ export default function SettingsScreen() {
             </Button>
           </View>
         ) : (
-          <View style={[styles.section, { borderColor: c.cardBorder }]}>
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>HTTP URL</Text>
+          <View className="rounded-lg border p-4 gap-3" style={{ borderColor: c.cardBorder }}>
+            <View className="gap-1.5">
+              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>HTTP URL</Text>
               <Input
                 placeholder="http://localhost:3210"
                 value={inputLocalHttp}
@@ -287,8 +288,8 @@ export default function SettingsScreen() {
                 variant="secondary"
               />
             </View>
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>
+            <View className="gap-1.5">
+              <Text className="text-xs font-medium" style={{ color: c.textSecondary }}>
                 WebSocket URL (optional)
               </Text>
               <Input
@@ -312,17 +313,17 @@ export default function SettingsScreen() {
         )}
 
         {error ? (
-          <View style={[styles.errorBox, { borderColor: '#fecaca' }]}>
-            <Text style={[styles.errorText, { color: '#dc2626' }]}>{error}</Text>
+          <View className="rounded-md border border-red-200 p-3">
+            <Text className="text-[13px] text-red-600">{error}</Text>
           </View>
         ) : null}
 
         {connected && hostId ? (
-          <View style={[styles.successBox, { borderColor: '#bbf7d0' }]}>
-            <View style={[styles.successDot, { backgroundColor: '#22c55e' }]} />
+          <View className="flex-row items-center gap-2.5 rounded-md border border-green-200 p-3">
+            <View className="w-2 h-2 rounded-full bg-green-500" />
             <View>
-              <Text style={[styles.successTitle, { color: '#16a34a' }]}>Connected</Text>
-              <Text style={[styles.successId, { color: '#16a34a' }]}>
+              <Text className="text-sm font-medium text-green-600">Connected</Text>
+              <Text className="text-xs font-mono text-green-600">
                 {hostId.slice(0, 8)}...
               </Text>
             </View>
@@ -332,139 +333,14 @@ export default function SettingsScreen() {
         {connected && (
           <Pressable
             onPress={disconnect}
-            style={[styles.disconnectButton, { borderColor: '#fecaca' }]}
+            className="rounded-md border border-red-200 p-3 items-center"
           >
-            <Text style={[styles.disconnectText, { color: '#dc2626' }]}>Disconnect</Text>
+            <Text className="text-sm font-medium text-red-600">Disconnect</Text>
           </Pressable>
         )}
 
-        <View style={{ height: 40 }} />
+        <View className="h-10" />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, gap: 12 },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  section: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  optionButton: {
-    flex: 1,
-    borderRadius: 6,
-    borderWidth: 1,
-    padding: 10,
-    alignItems: 'center',
-  },
-  optionText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  errorBox: {
-    borderRadius: 6,
-    borderWidth: 1,
-    padding: 12,
-  },
-  errorText: {
-    fontSize: 13,
-  },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-    padding: 12,
-  },
-  successDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 99,
-  },
-  successTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  successId: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  disconnectButton: {
-    borderRadius: 6,
-    borderWidth: 1,
-    padding: 12,
-    alignItems: 'center',
-  },
-  disconnectText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  recentList: {
-    gap: 6,
-  },
-  recentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  recentItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 10,
-  },
-  recentMode: {
-    fontSize: 18,
-  },
-  recentInfo: {
-    flex: 1,
-  },
-  recentLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  recentTime: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  recentRemove: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recentRemoveText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});

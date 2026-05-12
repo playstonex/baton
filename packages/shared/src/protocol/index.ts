@@ -22,7 +22,12 @@ export type ControlAction =
   | 'list_agents'
   | 'attach_session'
   | 'detach_session'
-  | 'resize';
+  | 'resize'
+  | 'claim_session'
+  | 'release_session'
+  | 'permission_response'
+  | 'register_push_token'
+  | 'unregister_push_token';
 
 export interface ControlMessage {
   type: 'control';
@@ -37,6 +42,9 @@ export type DaemonMessage =
   | ParsedEventMessage
   | StatusUpdateMessage
   | AgentListMessage
+  | PermissionRequestMessage
+  | SessionOwnershipMessage
+  | HealthScoreMessage
   | ErrorMessage;
 
 export interface TerminalOutputMessage {
@@ -60,6 +68,33 @@ export interface StatusUpdateMessage {
 export interface AgentListMessage {
   type: 'agent_list';
   agents: { id: string; type: string; status: AgentStatus; projectPath: string }[];
+}
+
+export interface PermissionRequestMessage {
+  type: 'permission_request';
+  sessionId: string;
+  requestId: string;
+  tool: string;
+  action: string;
+  description: string;
+}
+
+export interface SessionOwnershipMessage {
+  type: 'session_ownership';
+  sessionId: string;
+  owner: 'local' | 'remote';
+  claimedBy: string;
+}
+
+export interface HealthScoreMessage {
+  type: 'health_score';
+  score: number;
+  metrics: {
+    successRate: number;
+    avgLatencyMs: number;
+    activeAgents: number;
+    errorCount24h: number;
+  };
 }
 
 export interface ErrorMessage {

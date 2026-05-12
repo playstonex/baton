@@ -20,11 +20,23 @@ export class Transport {
   private clients = new Map<string, Client>();
   private registeredSessions = new Set<string>();
   private sessionUnsubs = new Map<string, { unsubRaw: () => void; unsubEvent: () => void }>();
+  private sessionOwners = new Map<string, string>();
+  private localClientId: string | null = null;
+  private pendingPermissions = new Map<string, { sessionId: string; resolve: (response: string) => void }>();
+  private onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
+  private onPushTokenUnregister?: (clientId: string) => void;
 
   constructor(
     private agentManager: AgentManager,
     private port: number,
-  ) {}
+    opts?: {
+      onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
+      onPushTokenUnregister?: (clientId: string) => void;
+    },
+  ) {
+    this.onPushTokenRegister = opts?.onPushTokenRegister;
+    this.onPushTokenUnregister = opts?.onPushTokenUnregister;
+  }
 
   start(): void {
     const clients = this.clients;
@@ -45,6 +57,7 @@ export class Transport {
           ws.data = { clientId };
           const client: Client = { id: clientId, ws, subscriptions: new Set() };
           clients.set(clientId, client);
+          if (!self.localClientId) self.localClientId = clientId;
           self.sendAgentList(clientId);
         },
         message(ws: import('bun').ServerWebSocket<{ clientId: string }>, message: string | Buffer) {
@@ -179,6 +192,53 @@ export class Transport {
         } catch {
           // ignore
         }
+        break;
+      }
+
+      case 'claim_session': {
+        if (!msg.sessionId) return;
+        this.sessionOwners.set(msg.sessionId, clientId);
+        this.broadcast({
+          type: 'session_ownership',
+          sessionId: msg.sessionId,
+          owner: clientId === this.localClientId ? 'local' : 'remote',
+          claimedBy: clientId,
+        });
+        break;
+      }
+
+      case 'release_session': {
+        if (!msg.sessionId) return;
+        this.sessionOwners.delete(msg.sessionId);
+        this.broadcast({
+          type: 'session_ownership',
+          sessionId: msg.sessionId,
+          owner: 'local',
+          claimedBy: this.localClientId ?? clientId,
+        });
+        break;
+      }
+
+      case 'permission_response': {
+        if (!msg.payload) return;
+        const { requestId, approved } = msg.payload as { requestId: string; approved: boolean };
+        const pending = this.pendingPermissions.get(requestId);
+        if (pending) {
+          this.agentManager.write(pending.sessionId, approved ? 'y\n' : 'n\n');
+          this.pendingPermissions.delete(requestId);
+        }
+        break;
+      }
+
+      case 'register_push_token': {
+        if (!msg.payload) return;
+        const { token, platform } = msg.payload as { token: string; platform: string };
+        this.onPushTokenRegister?.(clientId, token, platform);
+        break;
+      }
+
+      case 'unregister_push_token': {
+        this.onPushTokenUnregister?.(clientId);
         break;
       }
     }

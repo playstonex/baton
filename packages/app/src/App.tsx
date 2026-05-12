@@ -7,6 +7,8 @@ const NAV_ITEMS_MAIN = [
   { to: '/', label: 'Dashboard', end: true, icon: DashboardIcon },
   { to: '/files', label: 'Files', end: false, icon: FilesIcon },
   { to: '/pipelines', label: 'Pipelines', end: false, icon: PipelinesIcon },
+  { to: '/analytics', label: 'Analytics', end: false, icon: AnalyticsIcon },
+  { to: '/orchestration', label: 'Orchestration', end: false, icon: OrchestrationIcon },
 ] as const;
 
 const NAV_ITEMS_SYSTEM = [
@@ -258,6 +260,41 @@ function PipelinesIcon({ className }: { className?: string }) {
       <circle cx="13" cy="8" r="2" />
       <circle cx="8" cy="8" r="2" />
       <path d="M5 8h1M10 8h1" />
+    </svg>
+  );
+}
+
+function AnalyticsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 14V7M6 14V4M10 14V9M14 14V2" />
+    </svg>
+  );
+}
+
+function OrchestrationIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="4" cy="4" r="2" />
+      <circle cx="12" cy="4" r="2" />
+      <circle cx="8" cy="12" r="2" />
+      <path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4" />
     </svg>
   );
 }

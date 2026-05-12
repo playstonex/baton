@@ -29,6 +29,11 @@ export type { AgentConfig, SpawnConfig } from './agent.js';
 export type ParsedEvent =
   | StatusChangeEvent
   | ToolUseEvent
+  | ToolCallStartEvent
+  | ToolCallEndEvent
+  | PermissionRequestEvent
+  | PermissionResponseEvent
+  | TurnBoundaryEvent
   | FileChangeEvent
   | CommandExecEvent
   | ThinkingEvent
@@ -45,6 +50,53 @@ export interface ToolUseEvent {
   type: 'tool_use';
   tool: string;
   args: Record<string, unknown>;
+  timestamp: number;
+}
+
+/** Emitted when a tool call begins — provides structured metadata for UI rendering */
+export interface ToolCallStartEvent {
+  type: 'tool_call_start';
+  callId: string;
+  tool: string;
+  title?: string;
+  description?: string;
+  args: Record<string, unknown>;
+  timestamp: number;
+}
+
+/** Emitted when a tool call finishes — pairs with tool_call_start via callId */
+export interface ToolCallEndEvent {
+  type: 'tool_call_end';
+  callId: string;
+  success: boolean;
+  durationMs?: number;
+  timestamp: number;
+}
+
+/** Agent is requesting user permission to proceed with an action */
+export interface PermissionRequestEvent {
+  type: 'permission_request';
+  requestId: string;
+  tool: string;
+  action: string;
+  description: string;
+  timestamp: number;
+}
+
+/** User response to a permission request */
+export interface PermissionResponseEvent {
+  type: 'permission_response';
+  requestId: string;
+  approved: boolean;
+  timestamp: number;
+}
+
+/** Marks the boundary of a single agent turn (request → response cycle) */
+export interface TurnBoundaryEvent {
+  type: 'turn_boundary';
+  turnId: string;
+  direction: 'start' | 'end';
+  status?: 'completed' | 'failed' | 'cancelled';
   timestamp: number;
 }
 

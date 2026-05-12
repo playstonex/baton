@@ -8,6 +8,8 @@ import { AgentDetailScreen } from './screens/AgentDetail.js';
 import { SettingsScreen } from './screens/Settings.js';
 import { FilesScreen } from './screens/Files.js';
 import { PipelinesScreen } from './screens/Pipelines.js';
+import { AnalyticsScreen } from './screens/Analytics.js';
+import { OrchestrationScreen } from './screens/Orchestration.js';
 import '@xterm/xterm/css/xterm.css';
 import './app.css';
 
@@ -21,6 +23,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="agent/:sessionId" element={<AgentDetailScreen />} />
           <Route path="files" element={<FilesScreen />} />
           <Route path="pipelines" element={<PipelinesScreen />} />
+          <Route path="analytics" element={<AnalyticsScreen />} />
+          <Route path="orchestration" element={<OrchestrationScreen />} />
           <Route path="settings" element={<SettingsScreen />} />
         </Route>
       </Routes>

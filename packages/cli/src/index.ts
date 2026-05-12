@@ -4,6 +4,7 @@ import { agentCommand } from './commands/agent.js';
 import { providerCommand } from './commands/provider.js';
 import { pipelineCommand } from './commands/pipeline.js';
 import { worktreeCommand } from './commands/worktree.js';
+import { doctorCommand } from './commands/doctor.js';
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
@@ -24,6 +25,9 @@ async function main() {
       break;
     case 'worktree':
       await worktreeCommand(args[1], args.slice(2));
+      break;
+    case 'doctor':
+      await doctorCommand();
       break;
 
     // Legacy shortcuts (backward compat)
@@ -79,6 +83,8 @@ function printHelp() {
     baton worktree ls                        List worktrees
     baton worktree create <path> --branch X  Create worktree
     baton worktree archive <path>            Archive worktree
+
+    baton doctor                              Run diagnostics
 
   Legacy shortcuts:
     baton start <path>     = agent run
