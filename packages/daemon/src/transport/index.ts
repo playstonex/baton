@@ -70,7 +70,12 @@ export class Transport {
           }
         },
         close(ws: import('bun').ServerWebSocket<{ clientId: string }>) {
-          clients.delete(ws.data.clientId);
+          const clientId = ws.data.clientId;
+          if (self.localClientId === clientId) {
+            const remaining = Array.from(clients.values()).filter((c) => c.id !== clientId);
+            self.localClientId = remaining[0]?.id ?? null;
+          }
+          clients.delete(clientId);
         },
       },
       hostname,

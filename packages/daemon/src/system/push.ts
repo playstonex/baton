@@ -10,6 +10,12 @@ interface NotificationPayload {
   data?: Record<string, unknown>;
 }
 
+const NOTIFY_EVENT_TYPES = new Set([
+  'permission_request',
+  'error',
+  'status_change',
+]);
+
 export class PushNotificationService {
   private subscriptions = new Map<string, PushSubscription>();
 
@@ -25,13 +31,10 @@ export class PushNotificationService {
     const sub = this.subscriptions.get(clientId);
     if (!sub) return false;
 
-    switch (sub.platform) {
-      case 'web':
-        return this.notifyWebPush(sub.token, payload);
-      case 'ios':
-      case 'android':
-        return this.notifyMobilePush(sub.token, sub.platform, payload);
+    if (sub.platform === 'web') {
+      return this.notifyWebPush(sub.token, payload);
     }
+    return this.notifyMobilePush(sub.token, sub.platform, payload);
   }
 
   broadcast(payload: NotificationPayload): void {
@@ -53,12 +56,7 @@ export class PushNotificationService {
   }
 
   shouldNotify(eventType: string): boolean {
-    const notifyTypes = new Set([
-      'permission_request',
-      'error',
-      'status_change',
-    ]);
-    return notifyTypes.has(eventType);
+    return NOTIFY_EVENT_TYPES.has(eventType);
   }
 
   listSubscriptions(): PushSubscription[] {

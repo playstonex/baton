@@ -158,6 +158,7 @@ export function createDaemon(port = DEFAULT_PORT) {
     );
 
     transport.registerSessionEvents(sessionId);
+    syncActiveAgents();
 
     agentManager.onEvent(sessionId, (event: ParsedEvent) => {
       analytics.logEvent(sessionId, event);
@@ -197,9 +198,17 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json({ sessionId, agentType: body.agentType, status: 'running' });
   });
 
+  function syncActiveAgents(): void {
+    analytics.setActiveAgents(
+      agentManager.list().filter((a) => a.status !== 'stopped').length,
+    );
+  }
+
   app.post('/api/agents/:id/stop', async (c) => {
     const id = c.req.param('id');
     await agentManager.stop(id);
+    compressor.clear(id);
+    syncActiveAgents();
     return c.json({ ok: true });
   });
 

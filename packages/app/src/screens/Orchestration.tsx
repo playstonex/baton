@@ -34,6 +34,8 @@ export function OrchestrationScreen() {
 
   useEffect(() => {
     fetchPipelines();
+    const interval = setInterval(fetchPipelines, 15000);
+    return () => clearInterval(interval);
   }, [fetchPipelines]);
 
   if (loading) {
