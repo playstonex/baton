@@ -20,6 +20,7 @@ import {
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 
 const INPUT_ACCESSORY_ID = 'terminal-shortcut-bar';
 
@@ -103,6 +104,7 @@ export default function TerminalScreen() {
   const [inputText, setInputText] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const c = useThemeColors();
+  const headerHeight = useHeaderHeight();
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -245,7 +247,7 @@ export default function TerminalScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: c.bg }]}
+      style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View

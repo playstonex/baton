@@ -7,6 +7,7 @@ import { useEventsStore } from '../../src/stores/events';
 import { wsService } from '../../src/services/websocket';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { Typography, CornerRadius, Spacing, Colors } from '../../src/constants/theme';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 
 const CHANGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   create: { bg: Colors.success[50], text: Colors.success[600], border: Colors.success[400] },
@@ -32,6 +33,7 @@ export default function AgentDetailScreen() {
   const addEvent = useEventsStore((s) => s.addEvent);
   const clearEvents = useEventsStore((s) => s.clearEvents);
   const c = useThemeColors();
+  const headerHeight = useHeaderHeight();
 
   useEffect(() => {
     if (!sessionId) return;
@@ -61,7 +63,7 @@ export default function AgentDetailScreen() {
   const time = (ts: number) => new Date(ts).toLocaleTimeString();
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg }]}>
+    <View style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight }]}>
       <View style={[styles.toolbar, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
         <View style={styles.toolbarLeft}>
           <View style={[styles.toolbarIcon, { backgroundColor: c.accentBg }]}>

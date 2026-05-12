@@ -1,6 +1,7 @@
 import { KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView } from 'react-native';
 import { useState } from 'react';
 import { Button, Input, Spinner } from 'heroui-native';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useRecentStore } from '../../src/stores/recent';
 import { wsService } from '../../src/services/websocket';
@@ -46,6 +47,7 @@ export default function SettingsScreen() {
   const themeMode = useThemeStore((s) => s.theme);
   const setThemeMode = useThemeStore((s) => s.setTheme);
   const c = useThemeColors();
+  const headerHeight = useHeaderHeight();
 
   const [inputRelayUrl, setInputRelayUrl] = useState(relayUrl);
   const [inputPairingCode, setInputPairingCode] = useState('');
@@ -127,7 +129,7 @@ export default function SettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md }}
+        contentContainerStyle={{ padding: Spacing.lg, paddingTop: headerHeight + Spacing.lg, gap: Spacing.md }}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[Typography.largeTitle, { color: c.textPrimary, marginBottom: Spacing.lg }]}>

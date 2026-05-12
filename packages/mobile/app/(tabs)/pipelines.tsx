@@ -5,6 +5,7 @@ import type { AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { Typography, Spacing, CornerRadius, Colors } from '../../src/constants/theme';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 
 function generateUUID(): string {
   const hex = '0123456789abcdef';
@@ -61,6 +62,7 @@ export default function PipelinesScreen() {
   ]);
   const [creating, setCreating] = useState(false);
   const c = useThemeColors();
+  const headerHeight = useHeaderHeight();
 
   const fetchPipelines = useCallback(async () => {
     try {
@@ -119,7 +121,7 @@ export default function PipelinesScreen() {
       <FlatList
         data={pipelines}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={[Typography.largeTitle, { color: c.textPrimary }]}>Pipelines</Text>
@@ -363,7 +365,7 @@ export default function PipelinesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   listContent: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
     paddingBottom: 100,
   },
   header: {

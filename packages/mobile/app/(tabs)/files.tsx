@@ -7,6 +7,7 @@ import { apiFetch } from '../../src/services/api';
 import { FilePreview } from '../../src/components/FilePreview';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { Colors, Typography, Spacing, CornerRadius, Radius } from '../../src/constants/theme';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 
 interface FileEntry {
   name: string;
@@ -24,6 +25,7 @@ export default function FilesScreen() {
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
   const c = useThemeColors();
+  const headerHeight = useHeaderHeight();
 
   useEffect(() => {
     if (activeAgents.length > 0 && currentPath === '/') fetchDir(activeAgents[0].projectPath);
@@ -55,7 +57,7 @@ export default function FilesScreen() {
 
   if (fileContent !== null) {
     return (
-      <View style={[s.container, { backgroundColor: c.bg }]}>
+      <View style={[s.container, { backgroundColor: c.bg, paddingTop: headerHeight }]}>
         <View style={[s.previewHeader, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
           <Pressable onPress={() => setFileContent(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '500' }]}>
@@ -75,7 +77,7 @@ export default function FilesScreen() {
   }
 
   return (
-    <View style={[s.container, { backgroundColor: c.bg }]}>
+    <View style={[s.container, { backgroundColor: c.bg, paddingTop: headerHeight }]}>
       <View style={[s.breadcrumb, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
         <Pressable onPress={() => fetchDir('/')} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
           <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '500' }]}>~</Text>
@@ -144,7 +146,7 @@ export default function FilesScreen() {
         <FlatList
           data={items}
           keyExtractor={(item) => item.path}
-          contentContainerStyle={[s.list, (!items || items.length === 0) && s.listEmpty]}
+          contentContainerStyle={[s.list, (!items || items.length === 0) && s.listEmpty, { paddingTop: headerHeight + Spacing.xs }]}
           ListEmptyComponent={
             <View style={s.empty}>
               <Text style={[Typography.subhead, { color: c.textSecondary }]}>No files</Text>
@@ -260,7 +262,6 @@ const s = StyleSheet.create({
   },
   list: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xs,
     paddingBottom: Spacing['3xl'],
   },
   listEmpty: {

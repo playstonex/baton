@@ -9,6 +9,7 @@ import {
 import { Text } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Spinner } from 'heroui-native';
 import type { AgentProcess, AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
@@ -56,6 +57,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const c = useThemeColors();
+  const headerHeight = useHeaderHeight();
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -151,7 +153,7 @@ export default function DashboardScreen() {
         data={agents}
         keyExtractor={(item) => item.id}
         style={styles.list}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg }]}
         ListHeaderComponent={
           <View style={styles.headerContent}>
             <View style={styles.titleRow}>
@@ -442,7 +444,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
     paddingBottom: 100,
     gap: Spacing.lg,
   },
