@@ -8,6 +8,7 @@ import { wsService } from '../../src/services/websocket';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { Typography, CornerRadius, Spacing, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CHANGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   create: { bg: Colors.success[50], text: Colors.success[600], border: Colors.success[400] },
@@ -34,6 +35,7 @@ export default function AgentDetailScreen() {
   const clearEvents = useEventsStore((s) => s.clearEvents);
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!sessionId) return;
@@ -63,7 +65,7 @@ export default function AgentDetailScreen() {
   const time = (ts: number) => new Date(ts).toLocaleTimeString();
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight }]}>
+    <View style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}>
       <View style={[styles.toolbar, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
         <View style={styles.toolbarLeft}>
           <View style={[styles.toolbarIcon, { backgroundColor: c.accentBg }]}>
@@ -281,6 +283,7 @@ const styles = StyleSheet.create({
   timelineList: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing['3xl'],
+    paddingTop: Spacing.xs,
   },
   emptyState: {
     padding: Spacing['4xl'],

@@ -68,8 +68,9 @@ function buildHtml(isDark: boolean): string {
   <style>${XTERM_CSS}</style>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #terminal { width: 100%; height: 100%; background: ${theme.background}; overflow: hidden; }
-    .xterm { height: 100%; padding: 2px; }
+    html, body { width: 100%; height: 100%; background: ${theme.background}; overflow: hidden; margin: 0; padding: 0; }
+    #terminal { width: 100%; height: 100%; padding: 2px 0; }
+    .xterm { height: 100%; }
   </style>
 </head>
 <body>

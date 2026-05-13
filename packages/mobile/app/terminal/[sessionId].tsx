@@ -7,7 +7,7 @@ import {
   Easing,
 } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { wsService } from '../../src/services/websocket';
 import {
@@ -15,6 +15,7 @@ import {
   Colors,
   Typography,
   CornerRadius,
+  Spacing,
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
@@ -99,6 +100,7 @@ export default function TerminalScreen() {
   const [xtermStatus, setXtermStatus] = useState<string>('loading...');
   const [wsConnected, setWsConnected] = useState(wsService.connected);
   const [inputText, setInputText] = useState('');
+  const [fullscreen, setFullscreen] = useState(false);
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -209,6 +211,9 @@ export default function TerminalScreen() {
   const isActive =
     status === 'running' || status === 'thinking' || status === 'executing';
 
+  const topPad = fullscreen ? insets.top : headerHeight;
+  const bottomSafePad = insets.bottom;
+
   const renderShortcutKeys = () =>
     SHORTCUT_KEYS.map((key) => (
       <Pressable
@@ -229,61 +234,76 @@ export default function TerminalScreen() {
     ));
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View
-        style={[
-          styles.toolbar,
-          {
-            backgroundColor: c.card,
-            borderBottomColor: c.separator,
-          },
-        ]}
+    <>
+      <Stack.Screen options={{ headerShown: !fullscreen }} />
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: c.bg, paddingTop: topPad }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <StatusDot color={statusColor} active={isActive} />
-
-        <Text
-          style={[styles.sessionId, { color: c.textSecondary }]}
-        >
-          {sessionId?.slice(0, 8)}
-        </Text>
-
+      {/* Toolbar */}
+      {!fullscreen && (
         <View
           style={[
-            styles.statusChip,
-            { backgroundColor: statusColor + '18' },
+            styles.toolbar,
+            {
+              backgroundColor: c.card,
+              borderBottomColor: c.separator,
+            },
           ]}
         >
-          <Text style={[styles.statusChipText, { color: statusColor }]}>
-            {status}
+          <StatusDot color={statusColor} active={isActive} />
+
+          <Text
+            style={[styles.sessionId, { color: c.textSecondary }]}
+          >
+            {sessionId?.slice(0, 8)}
           </Text>
+
+          <View
+            style={[
+              styles.statusChip,
+              { backgroundColor: statusColor + '18' },
+            ]}
+          >
+            <Text style={[styles.statusChipText, { color: statusColor }]}>
+              {status}
+            </Text>
+          </View>
+
+          <View style={styles.spacer} />
+
+          <Pressable
+            onPress={() => setFullscreen(true)}
+            style={[styles.fullscreenButton, { backgroundColor: c.elevated }]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.fullscreenButtonIcon]}>
+              {'\u26F6'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push(`/agent/${sessionId}`)}
+            style={styles.eventsButton}
+          >
+            <Text style={[styles.eventsButtonText]}>
+              Events
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.back()}
+            style={[
+              styles.doneButton,
+              { backgroundColor: c.elevated },
+            ]}
+          >
+            <Text style={[styles.doneButtonText, { color: c.textPrimary }]}>
+              Done
+            </Text>
+          </Pressable>
         </View>
-
-        <View style={styles.spacer} />
-
-        <Pressable
-          onPress={() => router.push(`/agent/${sessionId}`)}
-          style={styles.eventsButton}
-        >
-          <Text style={[styles.eventsButtonText]}>
-            Events
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.back()}
-          style={[
-            styles.doneButton,
-            { backgroundColor: c.elevated },
-          ]}
-        >
-          <Text style={[styles.doneButtonText, { color: c.textPrimary }]}>
-            Done
-          </Text>
-        </Pressable>
-      </View>
+      )}
 
       <XtermWebView
         ref={xtermRef}
@@ -353,6 +373,7 @@ export default function TerminalScreen() {
           {
             backgroundColor: c.card,
             borderTopColor: c.separator,
+            paddingBottom: 6 + bottomSafePad,
           },
         ]}
       >
@@ -362,8 +383,34 @@ export default function TerminalScreen() {
           contentContainerStyle={styles.shortcutScroll}
         >
           {renderShortcutKeys()}
+          <Pressable
+            onPress={() => setFullscreen((f) => !f)}
+            style={({ pressed }) => [
+              styles.shortcutKey,
+              {
+                backgroundColor: pressed ? c.elevated : c.subtle,
+                borderColor: c.cardBorder,
+              },
+            ]}
+          >
+            <Text style={[styles.shortcutKeyLabel, { color: Colors.primary[500] }]}>
+              {fullscreen ? '\u2715' : '\u26F6'}
+            </Text>
+          </Pressable>
         </ScrollView>
       </View>
+
+      {fullscreen && (
+        <Pressable
+          onPress={() => setFullscreen(false)}
+          style={[styles.exitFullscreenBtn, { backgroundColor: c.card, top: insets.top + Spacing.md }]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={[Typography.caption1, { color: c.textSecondary, fontWeight: '600' }]}>
+            {'\u2715'} Exit
+          </Text>
+        </Pressable>
+      )}
 
       {!wsConnected && (
         <View
@@ -372,6 +419,7 @@ export default function TerminalScreen() {
             {
               backgroundColor: c.dangerBg,
               borderColor: Colors.danger[400],
+              bottom: bottomSafePad + 16,
             },
           ]}
         >
@@ -397,6 +445,7 @@ export default function TerminalScreen() {
         </View>
       )}
     </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -450,6 +499,18 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
+  },
+  fullscreenButton: {
+    width: 32,
+    height: 32,
+    borderRadius: CornerRadius.small,
+    borderCurve: 'continuous',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenButtonIcon: {
+    fontSize: 16,
+    color: Colors.primary[500],
   },
   eventsButton: {
     paddingHorizontal: 10,
@@ -540,9 +601,18 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     fontWeight: '600',
   },
+  exitFullscreenBtn: {
+    position: 'absolute',
+    right: Spacing.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: CornerRadius.medium,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
   disconnectBanner: {
     position: 'absolute',
-    bottom: 16,
     left: 16,
     right: 16,
     borderRadius: CornerRadius.large,

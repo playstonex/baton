@@ -7,6 +7,7 @@ import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { Typography, Spacing, CornerRadius, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLayoutStore } from '../../src/stores/layout';
 
 function generateUUID(): string {
   const hex = '0123456789abcdef';
@@ -65,6 +66,7 @@ export default function PipelinesScreen() {
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
 
   const fetchPipelines = useCallback(async () => {
     try {
@@ -123,7 +125,7 @@ export default function PipelinesScreen() {
       <FlatList
         data={pipelines}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + tabBarHeight + Spacing.lg }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={[Typography.largeTitle, { color: c.textPrimary }]}>Pipelines</Text>

@@ -5,6 +5,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Typography, Spacing, Colors } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import { useLayoutStore } from '../../src/stores/layout';
 
 const TAB_ITEMS = [
   { name: 'index', label: 'Agents', icon: 'grid' as const, title: 'Dashboard' },
@@ -16,9 +17,11 @@ const TAB_ITEMS = [
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
+  const setTabBarHeight = useLayoutStore((s) => s.setTabBarHeight);
 
   return (
     <View
+      onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
       style={{
         position: 'absolute',
         bottom: insets.bottom + Spacing.lg,

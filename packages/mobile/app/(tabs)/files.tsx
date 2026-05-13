@@ -9,6 +9,7 @@ import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { Colors, Typography, Spacing, CornerRadius, Radius } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLayoutStore } from '../../src/stores/layout';
 
 interface FileEntry {
   name: string;
@@ -28,7 +29,8 @@ export default function FilesScreen() {
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const tabBarBottom = insets.bottom + 100;
+  const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
+  const tabBarBottom = insets.bottom + tabBarHeight + Spacing.lg;
 
   useEffect(() => {
     if (activeAgents.length > 0 && currentPath === '/') fetchDir(activeAgents[0].projectPath);

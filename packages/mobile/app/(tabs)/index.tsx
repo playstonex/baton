@@ -19,6 +19,7 @@ import { useAgentStore } from '../../src/stores/agents';
 import { useRecentStore } from '../../src/stores/recent';
 import type { RecentSession } from '../../src/stores/recent';
 import { useConnectionStore } from '../../src/stores/connection';
+import { useLayoutStore } from '../../src/stores/layout';
 import {
   Colors,
   CornerRadius,
@@ -60,6 +61,7 @@ export default function DashboardScreen() {
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -155,7 +157,7 @@ export default function DashboardScreen() {
         data={agents}
         keyExtractor={(item) => item.id}
         style={styles.list}
-        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + tabBarHeight + Spacing.lg }]}
         ListHeaderComponent={
           <View style={styles.headerContent}>
             <View style={styles.titleRow}>

@@ -9,6 +9,7 @@ import { wsService } from '../../src/services/websocket';
 import { saveCredentials, clearCredentials } from '../../src/services/secure-storage';
 import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import { useLayoutStore } from '../../src/stores/layout';
 import {
   Typography,
   Spacing,
@@ -50,6 +51,7 @@ export default function SettingsScreen() {
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
 
   const [inputRelayUrl, setInputRelayUrl] = useState(relayUrl);
   const [inputPairingCode, setInputPairingCode] = useState('');
@@ -131,7 +133,7 @@ export default function SettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={{ padding: Spacing.lg, paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 100, gap: Spacing.md }}
+        contentContainerStyle={{ padding: Spacing.lg, paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + tabBarHeight + Spacing.lg, gap: Spacing.md }}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[Typography.largeTitle, { color: c.textPrimary, marginBottom: Spacing.lg }]}>
