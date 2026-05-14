@@ -48,8 +48,17 @@ export default function AgentDetailScreen() {
       }
     });
 
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        for (const event of msg.events) {
+          addEvent(event);
+        }
+      }
+    });
+
     return () => {
       unsubEvent();
+      unsubEventHistory();
     };
   }, [sessionId, addEvent, clearEvents]);
 

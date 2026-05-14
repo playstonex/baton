@@ -134,6 +134,12 @@ export function TerminalScreen() {
       }
     });
 
+    const unsubHistory = wsService.on('history_replay', (msg) => {
+      if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        term.write(msg.output);
+      }
+    });
+
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
         setStatus(msg.status as string);
@@ -144,6 +150,16 @@ export function TerminalScreen() {
       if (msg.type === 'parsed_event' && msg.sessionId === sessionId) {
         if (msg.event.type === 'status_change') {
           setStatus(msg.event.status);
+        }
+      }
+    });
+
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        for (const event of msg.events) {
+          if (event.type === 'status_change') {
+            setStatus(event.status);
+          }
         }
       }
     });
@@ -177,8 +193,10 @@ export function TerminalScreen() {
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
       unsubOutput();
+      unsubHistory();
       unsubStatus();
       unsubEvents();
+      unsubEventHistory();
       unsubOwnership();
       unsubState();
       mql.removeEventListener('change', handleThemeChange);

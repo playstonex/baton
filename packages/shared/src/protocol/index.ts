@@ -39,7 +39,9 @@ export interface ControlMessage {
 // WebSocket message types: Daemon → Client
 export type DaemonMessage =
   | TerminalOutputMessage
+  | HistoryReplayMessage
   | ParsedEventMessage
+  | EventHistoryMessage
   | StatusUpdateMessage
   | AgentListMessage
   | PermissionRequestMessage
@@ -53,10 +55,22 @@ export interface TerminalOutputMessage {
   data: string;
 }
 
+export interface HistoryReplayMessage {
+  type: 'history_replay';
+  sessionId: string;
+  output: string;
+}
+
 export interface ParsedEventMessage {
   type: 'parsed_event';
   sessionId: string;
   event: ParsedEvent;
+}
+
+export interface EventHistoryMessage {
+  type: 'event_history';
+  sessionId: string;
+  events: ParsedEvent[];
 }
 
 export interface StatusUpdateMessage {

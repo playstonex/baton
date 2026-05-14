@@ -21,9 +21,23 @@ export function AgentDetailScreen() {
       }
     });
 
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        for (const event of msg.events) {
+          addEvent(event);
+        }
+      }
+    });
+
     const unsubOutput = wsService.on('terminal_output', (msg) => {
       if (msg.type === 'terminal_output' && msg.sessionId === sessionId) {
         addEvent({ type: 'raw_output', content: msg.data, timestamp: Date.now() });
+      }
+    });
+
+    const unsubHistory = wsService.on('history_replay', (msg) => {
+      if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        addEvent({ type: 'raw_output', content: msg.output, timestamp: Date.now() });
       }
     });
 
@@ -31,7 +45,9 @@ export function AgentDetailScreen() {
 
     return () => {
       unsubEvent();
+      unsubEventHistory();
       unsubOutput();
+      unsubHistory();
     };
   }, [sessionId, addEvent, clearEvents]);
 

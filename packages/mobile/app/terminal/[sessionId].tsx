@@ -127,6 +127,12 @@ export default function TerminalScreen() {
       }
     });
 
+    const unsubHistory = wsService.on('history_replay', (msg) => {
+      if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        xtermRef.current?.write(msg.output);
+      }
+    });
+
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (
         msg.type === 'status_update' &&
@@ -151,6 +157,7 @@ export default function TerminalScreen() {
 
     return () => {
       unsubOutput();
+      unsubHistory();
       unsubStatus();
       unsubState();
       unsubError();

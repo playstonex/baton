@@ -151,20 +151,20 @@ export class Transport {
 
         try {
           const history = this.agentManager.getOutputHistory(msg.sessionId);
-          for (const data of history) {
+          if (history.length > 0) {
             this.send(clientId, {
-              type: 'terminal_output',
+              type: 'history_replay',
               sessionId: msg.sessionId,
-              data,
+              output: history.join(''),
             });
           }
 
           const events = this.agentManager.getEventHistory(msg.sessionId);
-          for (const event of events) {
+          if (events.length > 0) {
             this.send(clientId, {
-              type: 'parsed_event',
+              type: 'event_history',
               sessionId: msg.sessionId,
-              event,
+              events,
             });
           }
 
