@@ -6,4 +6,11 @@ export interface SystemStats {
   hostname: string;
   platform: string;
   loadAvg: number[];
+  sessions: {
+    active: number;
+    stopped: number;
+    totalOutputEntries: number;
+    totalEventEntries: number;
+    estimatedMemoryMB: number;
+  };
 }

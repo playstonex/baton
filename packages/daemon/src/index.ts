@@ -98,7 +98,7 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.get('/api/system/stats', async (c) => {
     const { collectSystemStats } = await import('./system/stats.js');
-    return c.json(await collectSystemStats());
+    return c.json(await collectSystemStats(agentManager));
   });
 
   app.get('/api/analytics/health', (c) => {

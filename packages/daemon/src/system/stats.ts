@@ -1,6 +1,7 @@
 import os from 'node:os';
 import { execSync } from 'node:child_process';
 import type { SystemStats } from '@baton/shared/types';
+import type { AgentManager } from '../agent/manager.js';
 
 function getDiskUsage(): { used: number; total: number; percentage: number } {
   try {
@@ -19,7 +20,35 @@ function getDiskUsage(): { used: number; total: number; percentage: number } {
   }
 }
 
-export async function collectSystemStats(): Promise<SystemStats> {
+function getSessionMetrics(agentManager: AgentManager): SystemStats['sessions'] {
+  const agents = agentManager.list();
+  let totalOutputEntries = 0;
+  let totalEventEntries = 0;
+
+  const active = agents.filter((a) => a.status !== 'stopped').length;
+  const stopped = agents.length - active;
+
+  for (const agent of agents) {
+    try {
+      totalOutputEntries += agentManager.getOutputHistory(agent.id).length;
+      totalEventEntries += agentManager.getEventHistory(agent.id).length;
+    } catch {
+    }
+  }
+
+  // Rough estimate: ~1KB per output entry, ~0.5KB per event entry
+  const estimatedMemoryMB = Math.round((totalOutputEntries * 1 + totalEventEntries * 0.5) / 1024);
+
+  return {
+    active,
+    stopped,
+    totalOutputEntries,
+    totalEventEntries,
+    estimatedMemoryMB,
+  };
+}
+
+export async function collectSystemStats(agentManager?: AgentManager): Promise<SystemStats> {
   const cores = os.cpus().length;
   const loadAvg = os.loadavg();
   const total = os.totalmem();
@@ -41,5 +70,12 @@ export async function collectSystemStats(): Promise<SystemStats> {
     hostname: os.hostname(),
     platform: process.platform,
     loadAvg,
+    sessions: agentManager ? getSessionMetrics(agentManager) : {
+      active: 0,
+      stopped: 0,
+      totalOutputEntries: 0,
+      totalEventEntries: 0,
+      estimatedMemoryMB: 0,
+    },
   };
 }
