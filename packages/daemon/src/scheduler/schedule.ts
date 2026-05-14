@@ -75,10 +75,10 @@ export class ScheduleService {
 
   private async runSchedule(schedule: ScheduleConfig): Promise<void> {
     try {
-      const adapter = createAdapter(schedule.agentType as 'claude-code' | 'codex' | 'opencode');
+      const adapter = createAdapter(schedule.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
       const sessionId = await this.agentManager.start(
         {
-          type: schedule.agentType as 'claude-code' | 'codex' | 'opencode',
+          type: schedule.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
           projectPath: schedule.projectPath,
         },
         adapter,

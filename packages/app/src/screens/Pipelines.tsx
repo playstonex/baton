@@ -28,12 +28,13 @@ interface Pipeline {
   results: PipelineStepResult[];
 }
 
-const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode'];
+const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode', 'kiro-cli'];
 
 const AGENT_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
+  'kiro-cli': 'Kiro',
 };
 
 const STEP_DOT_COLOR: Record<string, string> = {

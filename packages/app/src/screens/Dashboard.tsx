@@ -26,6 +26,11 @@ const AGENT_OPTIONS: {
     label: 'OpenCode',
     desc: 'Flexible open-source runtime for portable workflows.',
   },
+  {
+    type: 'kiro-cli',
+    label: 'Kiro CLI',
+    desc: 'Amazon Kiro agent for spec-driven development.',
+  },
 ];
 
 const STATUS_COLORS: Record<string, 'success' | 'accent' | 'default' | 'warning' | 'danger'> = {

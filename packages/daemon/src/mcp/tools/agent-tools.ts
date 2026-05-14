@@ -8,7 +8,7 @@ const agentCreate = buildTool({
   name: 'agent_create',
   description: 'Start a new coding agent',
   inputSchema: {
-    provider: z.enum(['claude-code', 'codex', 'opencode']),
+    provider: z.enum(['claude-code', 'codex', 'opencode', 'kiro-cli']),
     projectPath: z.string().describe('Absolute path to the project directory'),
     prompt: z.string().optional().describe('Initial prompt to send to the agent'),
     worktree: z.boolean().default(false).describe('Create a git worktree for isolation'),
@@ -17,10 +17,10 @@ const agentCreate = buildTool({
   isConcurrencySafe: false,
   execute: async (params, ctx) => {
     const agentManager = ctx.agentManager as AgentManager;
-    const adapter = createAdapter(params.provider as 'claude-code' | 'codex' | 'opencode');
-    const sessionId = await agentManager.start(
-      {
-        type: params.provider as 'claude-code' | 'codex' | 'opencode',
+      const adapter = createAdapter(params.provider as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
+      const sessionId = await agentManager.start(
+        {
+          type: params.provider as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
         projectPath: params.projectPath as string,
       },
       adapter as BaseAgentAdapter,

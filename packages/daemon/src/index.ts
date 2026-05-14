@@ -338,7 +338,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       models?: string[];
     }>();
     await providerRegistry.set(body.name, {
-      type: body.type as 'claude-code' | 'codex' | 'opencode' | 'custom',
+      type: body.type as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli' | 'custom',
       binary: body.binary,
       args: [],
       env: {},

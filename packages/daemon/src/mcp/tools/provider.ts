@@ -81,7 +81,7 @@ const providerAdd = buildTool({
   description: 'Add or update a provider configuration',
   inputSchema: {
     name: z.string().describe('Provider name (e.g. "claude-opus", "qwen")'),
-    type: z.enum(['claude-code', 'codex', 'opencode', 'custom']),
+    type: z.enum(['claude-code', 'codex', 'opencode', 'kiro-cli', 'custom']),
     binary: z.string().optional().describe('Path to custom binary (for custom type)'),
     models: z.array(z.string()).optional().describe('Available models'),
   },
@@ -90,7 +90,7 @@ const providerAdd = buildTool({
   execute: async (params) => {
     const config = await loadProviderConfig();
     config.providers[params.name as string] = {
-      type: params.type as 'claude-code' | 'codex' | 'opencode' | 'custom',
+      type: params.type as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli' | 'custom',
       ...(params.binary ? { binary: params.binary as string } : {}),
       ...(params.models ? { models: params.models as string[] } : {}),
       args: [],

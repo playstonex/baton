@@ -34,6 +34,7 @@ const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
   { type: 'claude-code', label: 'Claude Code', desc: 'Deep code work' },
   { type: 'codex', label: 'Codex', desc: 'Fast execution' },
   { type: 'opencode', label: 'OpenCode', desc: 'Open stack' },
+  { type: 'kiro-cli', label: 'Kiro CLI', desc: 'Amazon Kiro agent' },
 ];
 
 function formatTime(ts: number): string {

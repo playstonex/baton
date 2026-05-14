@@ -41,7 +41,7 @@ interface Pipeline {
   results: PipelineStepResult[];
 }
 
-const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode'];
+const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode', 'kiro-cli'];
 
 const STEP_STATUS_COLOR: Record<string, string> = {
   pending: '#71717a',
