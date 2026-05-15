@@ -177,10 +177,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       }
 
       if (compressor.needsCompaction(sessionId)) {
-        const result = compressor.compact(sessionId);
-        if (result) {
-          console.log(`Context compacted for ${sessionId}: ${result.originalEventCount} → ${result.compactedEventCount} events`);
-        }
+        compressor.compact(sessionId);
       }
     });
 

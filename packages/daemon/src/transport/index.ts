@@ -58,6 +58,7 @@ export class Transport {
           const client: Client = { id: clientId, ws, subscriptions: new Set() };
           clients.set(clientId, client);
           if (!self.localClientId) self.localClientId = clientId;
+          console.log(`[WS] Client connected: ${clientId.slice(0, 8)} (total: ${clients.size})`);
           self.sendAgentList(clientId);
         },
         message(ws: import('bun').ServerWebSocket<{ clientId: string }>, message: string | Buffer) {
@@ -71,6 +72,7 @@ export class Transport {
         },
         close(ws: import('bun').ServerWebSocket<{ clientId: string }>) {
           const clientId = ws.data.clientId;
+          console.log(`[WS] Client disconnected: ${clientId.slice(0, 8)}`);
           if (self.localClientId === clientId) {
             const remaining = Array.from(clients.values()).filter((c) => c.id !== clientId);
             self.localClientId = remaining[0]?.id ?? null;
@@ -136,9 +138,13 @@ export class Transport {
       case 'attach_session': {
         if (!msg.sessionId) return;
         const client = this.clients.get(clientId);
-        if (!client) return;
+        if (!client) {
+          console.log(`[ATTACH] No client found for ${clientId.slice(0, 8)}`);
+          return;
+        }
 
         if (!this.agentManager.get(msg.sessionId)) {
+          console.log(`[ATTACH] Session not found: ${msg.sessionId.slice(0, 8)} (client: ${clientId.slice(0, 8)})`);
           this.send(clientId, {
             type: 'error',
             message: `Session ${msg.sessionId} not found`,
@@ -151,6 +157,7 @@ export class Transport {
 
         try {
           const history = this.agentManager.getOutputHistory(msg.sessionId);
+          console.log(`[ATTACH] ${msg.sessionId.slice(0, 8)} → client ${clientId.slice(0, 8)} | history: ${history.length} chunks`);
           if (history.length > 0) {
             this.send(clientId, {
               type: 'history_replay',
@@ -176,8 +183,8 @@ export class Transport {
               status: proc.status,
             });
           }
-        } catch {
-          // Session might not exist
+        } catch (err) {
+          console.log(`[ATTACH] Error replaying history for ${msg.sessionId.slice(0, 8)}: ${err}`);
         }
         break;
       }
@@ -250,17 +257,25 @@ export class Transport {
   }
 
   private ensureSessionRegistered(sessionId: string): void {
-    if (this.registeredSessions.has(sessionId)) return;
+    if (this.registeredSessions.has(sessionId)) {
+      console.log(`[SESSION] Already registered: ${sessionId.slice(0, 8)}, rawCallbacks: ${this.agentManager.get(sessionId) ? 'has agent' : 'no agent'}`);
+      return;
+    }
     this.registeredSessions.add(sessionId);
+    console.log(`[SESSION] Registering new session: ${sessionId.slice(0, 8)}`);
 
     const unsubRaw = this.agentManager.onRaw(sessionId, (data, sid) => {
+      const subscriberCount = Array.from(this.clients.values()).filter(c => c.subscriptions.has(sid)).length;
       const msg: DaemonMessage = { type: 'terminal_output', sessionId: sid, data };
       const payload = JSON.stringify(msg);
+      let sent = 0;
       for (const client of this.clients.values()) {
         if (client.subscriptions.has(sid) && client.ws.readyState === OPEN) {
           client.ws.send(payload);
+          sent++;
         }
       }
+      console.log(`[RAW] ${sid.slice(0, 8)} | ${data.length}b | subscribers: ${subscriberCount} → sent: ${sent}`);
     });
 
     const unsubEvent = this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {

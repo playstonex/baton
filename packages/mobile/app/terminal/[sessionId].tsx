@@ -7,6 +7,7 @@ import {
   Easing,
 } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { wsService } from '../../src/services/websocket';
@@ -34,6 +35,136 @@ const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '/', data: '/' },
   { label: '~', data: '~' },
 ];
+
+function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attached: boolean }) {
+  const c = useThemeColors();
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const dotPhase = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const spin = Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    spin.start();
+    return () => spin.stop();
+  }, [spinAnim]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(dotPhase, {
+        toValue: 3,
+        duration: 1500,
+        easing: Easing.step0,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [dotPhase]);
+
+  let label: string;
+  let iconName: string;
+  if (!wsConnected) {
+    label = 'Connecting to daemon';
+    iconName = 'cloud-outline';
+  } else if (!attached) {
+    label = 'Attaching to session';
+    iconName = 'link-outline';
+  } else {
+    label = 'Waiting for agent output';
+    iconName = 'terminal-outline';
+  }
+
+  const dots = dotPhase.interpolate({
+    inputRange: [0, 1, 2, 3],
+    outputRange: ['', '.', '..', '...'],
+  });
+
+  const rotation = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={[waitingStyles.overlay, { backgroundColor: c.bg }]} pointerEvents="none">
+      <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+        <Ionicons name="sync-outline" size={28} color={c.textTertiary} />
+      </Animated.View>
+      <View style={waitingStyles.textWrap}>
+        <Ionicons name={iconName as any} size={16} color={c.textTertiary} />
+        <Text style={[waitingStyles.label, { color: c.textSecondary }]}>
+          {label}
+        </Text>
+        <Animated.Text style={[waitingStyles.dots, { color: c.textTertiary }]}>
+          {dots}
+        </Animated.Text>
+      </View>
+    </View>
+  );
+}
+
+const waitingStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.lg,
+  },
+  textWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  label: {
+    ...Typography.subhead,
+    fontWeight: '500',
+  },
+  dots: {
+    ...Typography.subhead,
+    fontWeight: '500',
+    width: 24,
+  },
+});
+
+const errorStyles = StyleSheet.create({
+  card: {
+    borderRadius: CornerRadius.large,
+    borderWidth: 1,
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    gap: Spacing.md,
+    maxWidth: 320,
+    width: '85%',
+  },
+  title: {
+    ...Typography.headline,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  message: {
+    ...Typography.subhead,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  btn: {
+    borderRadius: CornerRadius.medium,
+    paddingHorizontal: Spacing['2xl'],
+    paddingVertical: Spacing.md,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  btnText: {
+    ...Typography.subhead,
+    fontWeight: '600',
+  },
+});
 
 function StatusDot({
   color,
@@ -99,6 +230,9 @@ export default function TerminalScreen() {
   const [status, setStatus] = useState('running');
   const [xtermStatus, setXtermStatus] = useState<string>('loading...');
   const [wsConnected, setWsConnected] = useState(wsService.connected);
+  const [hasReceivedOutput, setHasReceivedOutput] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const attachSent = useRef(false);
   const [inputText, setInputText] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
   const c = useThemeColors();
@@ -124,12 +258,14 @@ export default function TerminalScreen() {
     const unsubOutput = wsService.on('terminal_output', (msg) => {
       if (msg.type === 'terminal_output' && msg.sessionId === sessionId) {
         xtermRef.current?.write(msg.data);
+        setHasReceivedOutput(true);
       }
     });
 
     const unsubHistory = wsService.on('history_replay', (msg) => {
       if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
         xtermRef.current?.write(msg.output);
+        setHasReceivedOutput(true);
       }
     });
 
@@ -149,9 +285,13 @@ export default function TerminalScreen() {
 
     const unsubError = wsService.on('error', (msg) => {
       if ('message' in msg) {
+        const message = (msg as { message: string }).message;
         xtermRef.current?.write(
-          `\x1b[31mError: ${msg.message}\x1b[0m\r\n`,
+          `\x1b[31mError: ${message}\x1b[0m\r\n`,
         );
+        if (message.includes('not found') || message.includes('Not found')) {
+          setSessionError(message);
+        }
       }
     });
 
@@ -172,8 +312,10 @@ export default function TerminalScreen() {
       action: 'attach_session',
       sessionId,
     });
+    attachSent.current = true;
 
     return () => {
+      attachSent.current = false;
       wsService.send({
         type: 'control',
         action: 'detach_session',
@@ -320,6 +462,36 @@ export default function TerminalScreen() {
           setXtermStatus(loaded ? 'xterm loaded' : `xterm error: ${error}`);
         }}
       />
+
+      {!hasReceivedOutput && !sessionError && (
+        <WaitingOverlay wsConnected={wsConnected} attached={attachSent.current} />
+      )}
+
+      {!!sessionError && (
+        <View style={[waitingStyles.overlay, { backgroundColor: c.bg }]} pointerEvents="auto">
+          <View style={[errorStyles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+            <Ionicons name="alert-circle-outline" size={36} color={Colors.danger[400]} />
+            <Text style={[errorStyles.title, { color: c.textPrimary }]}>
+              Session Unavailable
+            </Text>
+            <Text style={[errorStyles.message, { color: c.textTertiary }]}>
+              {sessionError}
+            </Text>
+            <Pressable
+              onPress={() => router.back()}
+              style={[errorStyles.btn, { backgroundColor: c.subtle }]}
+            >
+              <Text style={[errorStyles.btnText, { color: c.textPrimary }]}>Go Back</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.replace('/(tabs)')}
+              style={[errorStyles.btn, { backgroundColor: Colors.primary[500] }]}
+            >
+              <Text style={[errorStyles.btnText, { color: '#FFFFFF' }]}>Dashboard</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       <View
         style={[

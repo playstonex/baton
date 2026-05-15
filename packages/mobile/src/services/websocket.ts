@@ -26,8 +26,10 @@ export class WebSocketService {
   private _connected = false;
   private config: ConnectionConfig = { mode: 'remote' };
   private reconnectDelay = 1000;
+  private reconnectAttempts = 0;
   private activeSessionId: string | null = null;
   private appStateSub: { remove: () => void } | null = null;
+  private onErrorCallback: ((attempt: number) => void) | null = null;
 
   get connected(): boolean {
     return this._connected;
@@ -35,6 +37,10 @@ export class WebSocketService {
 
   configure(config: Partial<ConnectionConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  onError(cb: (attempt: number) => void): void {
+    this.onErrorCallback = cb;
   }
 
   connect(): void {
@@ -62,6 +68,7 @@ export class WebSocketService {
     this.ws.onopen = () => {
       this._connected = true;
       this.reconnectDelay = 1000;
+      this.reconnectAttempts = 0;
       this.startHeartbeat();
       this.notifyStateChange();
 
@@ -94,6 +101,8 @@ export class WebSocketService {
       this.activeSessionId = null;
       this.stopHeartbeat();
       this.notifyStateChange();
+      this.reconnectAttempts++;
+      if (this.onErrorCallback) this.onErrorCallback(this.reconnectAttempts);
       this.scheduleReconnect();
     };
 

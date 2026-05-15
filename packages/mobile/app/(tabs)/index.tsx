@@ -1,12 +1,14 @@
 import {
   Alert,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
 import { Text } from 'react-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -30,11 +32,17 @@ import {
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { DirectoryPicker } from '../../src/components/DirectoryPicker';
 
-const AGENT_OPTIONS: { type: AgentType; label: string; desc: string }[] = [
-  { type: 'claude-code', label: 'Claude Code', desc: 'Deep code work' },
-  { type: 'codex', label: 'Codex', desc: 'Fast execution' },
-  { type: 'opencode', label: 'OpenCode', desc: 'Open stack' },
-  { type: 'kiro-cli', label: 'Kiro CLI', desc: 'Amazon Kiro agent' },
+const AGENT_OPTIONS: {
+  type: AgentType;
+  label: string;
+  desc: string;
+  icon: string;
+  color: string;
+}[] = [
+  { type: 'claude-code', label: 'Claude Code', desc: 'Deep code work', icon: 'sparkles', color: '#D97757' },
+  { type: 'codex', label: 'Codex', desc: 'Fast execution', icon: 'terminal', color: '#10A37F' },
+  { type: 'opencode', label: 'OpenCode', desc: 'Open stack', icon: 'code-slash', color: '#6366F1' },
+  { type: 'kiro-cli', label: 'Kiro CLI', desc: 'Amazon Kiro agent', icon: 'rocket', color: '#FF9900' },
 ];
 
 function formatTime(ts: number): string {
@@ -59,6 +67,7 @@ export default function DashboardScreen() {
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [loading, setLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -202,35 +211,81 @@ export default function DashboardScreen() {
             <View style={[styles.launchCard, { backgroundColor: c.card }]}>
               <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Launch Session</Text>
 
-              <View style={styles.agentPills}>
-                {AGENT_OPTIONS.map((option) => {
-                  const active = option.type === agentType;
-                  return (
-                    <Pressable
-                      key={option.type}
-                      onPress={() => setAgentType(option.type)}
-                      style={[
-                        styles.agentPill,
-                        {
-                          backgroundColor: active ? c.accentBg : c.subtle,
-                          borderColor: active ? c.accentBorder : 'transparent',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.agentPillText,
-                          {
-                            color: active ? Colors.primary[500] : c.textSecondary,
-                          },
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Agent</Text>
+              <Pressable
+                onPress={() => setMenuOpen(true)}
+                style={({ pressed }) => [
+                  styles.agentTrigger,
+                  {
+                    backgroundColor: pressed ? c.subtle : c.elevated,
+                    borderColor: c.cardBorder,
+                  },
+                ]}
+              >
+                <Ionicons name={selectedAgent.icon as any} size={18} color={selectedAgent.color} />
+                <Text style={[styles.agentTriggerLabel, { color: c.textPrimary }]}>
+                  {selectedAgent.label}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={c.textTertiary} />
+              </Pressable>
+
+              <Modal
+                visible={menuOpen}
+                animationType="fade"
+                transparent
+                onRequestClose={() => setMenuOpen(false)}
+              >
+                <Pressable
+                  style={styles.menuOverlay}
+                  onPress={() => setMenuOpen(false)}
+                >
+                  <Pressable
+                    style={[styles.menuCard, { backgroundColor: c.elevated }]}
+                    onPress={(e) => e.stopPropagation()}
+                  >
+                    <Text style={[styles.menuTitle, { color: c.textSecondary }]}>
+                      Select Agent
+                    </Text>
+                    {AGENT_OPTIONS.map((option) => {
+                      const active = option.type === agentType;
+                      return (
+                        <Pressable
+                          key={option.type}
+                          onPress={() => {
+                            setAgentType(option.type);
+                            setMenuOpen(false);
+                          }}
+                          style={({ pressed }) => [
+                            styles.menuRow,
+                            {
+                              backgroundColor: pressed
+                                ? c.subtle
+                                : active
+                                  ? c.accentBg
+                                  : 'transparent',
+                            },
+                          ]}
+                        >
+                          <View style={[styles.menuIconWrap, { backgroundColor: option.color + '18' }]}>
+                            <Ionicons name={option.icon as any} size={20} color={option.color} />
+                          </View>
+                          <View style={styles.menuTextWrap}>
+                            <Text style={[styles.menuRowLabel, { color: c.textPrimary }]}>
+                              {option.label}
+                            </Text>
+                            <Text style={[styles.menuRowDesc, { color: c.textTertiary }]}>
+                              {option.desc}
+                            </Text>
+                          </View>
+                          {active && (
+                            <Ionicons name="checkmark" size={20} color={Colors.primary[500]} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </Pressable>
+                </Pressable>
+              </Modal>
 
               <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Project Path</Text>
               <View style={styles.inputRow}>
@@ -295,9 +350,12 @@ export default function DashboardScreen() {
                 {loading ? (
                   <Spinner size="sm" color="#fff" />
                 ) : (
-                  <Text style={styles.launchBtnText}>
-                    Launch {selectedAgent.label}
-                  </Text>
+                  <View style={styles.launchBtnInner}>
+                    <Ionicons name={selectedAgent.icon as any} size={18} color="#FFFFFF" />
+                    <Text style={styles.launchBtnText}>
+                      Launch {selectedAgent.label}
+                    </Text>
+                  </View>
                 )}
               </Pressable>
             </View>
@@ -329,39 +387,53 @@ export default function DashboardScreen() {
                     Recent Sessions
                   </Text>
                 </View>
-                {inactiveRecent.slice(0, 8).map((session) => (
-                  <Pressable
-                    key={session.id}
-                    onPress={() => {
-                      addRecentSession({
-                        ...session,
-                        lastActivity: Date.now(),
-                      });
-                      router.push(`/terminal/${session.id}`);
-                    }}
-                    style={({ pressed }) => [
-                      styles.recentRow,
-                      {
-                        backgroundColor: pressed ? c.subtle : c.card,
-                      },
-                    ]}
-                  >
-                    <View style={styles.recentLeft}>
-                      <Text style={[styles.recentType, { color: c.textPrimary }]}>
-                        {AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type}
+                {inactiveRecent.slice(0, 8).map((session) => {
+                  const isAlive = agents.some((a) => a.id === session.id);
+                  return (
+                    <Pressable
+                      key={session.id}
+                      onPress={() => {
+                        if (!connected) return;
+                        addRecentSession({
+                          ...session,
+                          lastActivity: Date.now(),
+                        });
+                        router.push(`/terminal/${session.id}`);
+                      }}
+                      style={({ pressed }) => [
+                        styles.recentRow,
+                        {
+                          backgroundColor: pressed && connected ? c.subtle : c.card,
+                          opacity: connected ? 1 : 0.5,
+                        },
+                      ]}
+                    >
+                      <View style={styles.recentLeft}>
+                        <View style={styles.recentLabelRow}>
+                          <Text style={[styles.recentType, { color: c.textPrimary }]}>
+                            {AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type}
+                          </Text>
+                          {!isAlive && (
+                            <View style={[styles.expiredBadge, { backgroundColor: c.subtle }]}>
+                              <Text style={[styles.expiredText, { color: c.textTertiary }]}>
+                                expired
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text
+                          style={[styles.recentPath, { color: c.textTertiary }]}
+                          numberOfLines={1}
+                        >
+                          {session.projectPath}
+                        </Text>
+                      </View>
+                      <Text style={[styles.recentTime, { color: c.textTertiary }]}>
+                        {formatTime(session.lastActivity)}
                       </Text>
-                      <Text
-                        style={[styles.recentPath, { color: c.textTertiary }]}
-                        numberOfLines={1}
-                      >
-                        {session.projectPath}
-                      </Text>
-                    </View>
-                    <Text style={[styles.recentTime, { color: c.textTertiary }]}>
-                      {formatTime(session.lastActivity)}
-                    </Text>
-                  </Pressable>
-                ))}
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
           </View>
@@ -516,23 +588,77 @@ const styles = StyleSheet.create({
     lineHeight: Typography.headline.lineHeight,
     fontWeight: '600',
   },
-  agentPills: {
+  agentTrigger: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  agentPill: {
-    flex: 1,
-    borderRadius: CornerRadius.large,
-    borderWidth: 1,
-    paddingVertical: Spacing.md,
     alignItems: 'center',
+    gap: Spacing.sm,
+    borderRadius: CornerRadius.medium,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
     minHeight: 44,
-    justifyContent: 'center',
   },
-  agentPillText: {
+  agentTriggerLabel: {
+    flex: 1,
     fontSize: Typography.subhead.fontSize,
     lineHeight: Typography.subhead.lineHeight,
     fontWeight: '600',
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  menuCard: {
+    borderRadius: CornerRadius.large,
+    paddingVertical: Spacing.sm,
+    maxHeight: 380,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  menuTitle: {
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    minHeight: 56,
+    borderRadius: CornerRadius.medium,
+    marginHorizontal: Spacing.xs,
+  },
+  menuIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: CornerRadius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTextWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  menuRowLabel: {
+    fontSize: Typography.subhead.fontSize,
+    lineHeight: Typography.subhead.lineHeight,
+    fontWeight: '600',
+  },
+  menuRowDesc: {
+    fontSize: Typography.caption1.fontSize,
+    lineHeight: Typography.caption1.lineHeight,
   },
   inputLabel: {
     fontSize: Typography.subhead.fontSize,
@@ -585,6 +711,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  launchBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -627,6 +758,21 @@ const styles = StyleSheet.create({
   recentLeft: {
     flex: 1,
     gap: 2,
+  },
+  recentLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  expiredBadge: {
+    borderRadius: CornerRadius.small,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 1,
+  },
+  expiredText: {
+    fontSize: Typography.caption2.fontSize,
+    lineHeight: Typography.caption2.lineHeight,
+    fontWeight: '500',
   },
   recentType: {
     fontSize: Typography.subhead.fontSize,

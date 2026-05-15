@@ -1,7 +1,7 @@
 import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useEffect, useRef } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
@@ -47,7 +47,20 @@ export default function RootLayout() {
       setConnected(wsService.connected);
     });
 
-    return unsub;
+    wsService.onError((attempt) => {
+      if (attempt === 1) {
+        Alert.alert(
+          'Connection Failed',
+          'Could not connect to the daemon. Make sure it is running and check your settings.',
+          [{ text: 'OK' }],
+        );
+      }
+    });
+
+    return () => {
+      unsub();
+      wsService.onError(() => {});
+    };
   }, []);
 
   return (

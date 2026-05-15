@@ -3,21 +3,22 @@ import { execSync } from 'node:child_process';
 import type { SystemStats } from '@baton/shared/types';
 import type { AgentManager } from '../agent/manager.js';
 
+let diskCache = { used: 0, total: 0, percentage: 0, ts: 0 };
+const DISK_CACHE_TTL = 30_000;
+
 function getDiskUsage(): { used: number; total: number; percentage: number } {
+  if (Date.now() - diskCache.ts < DISK_CACHE_TTL) return diskCache;
   try {
-    const output = execSync('df -k /', { encoding: 'utf-8' });
+    const output = execSync('df -k /', { encoding: 'utf-8', timeout: 3000 });
     const lines = output.trim().split('\n');
     const parts = lines[lines.length - 1]?.trim().split(/\s+/) ?? [];
     const total = Number(parts[1] ?? 0) * 1024;
     const used = Number(parts[2] ?? 0) * 1024;
-    return {
-      used,
-      total,
-      percentage: total > 0 ? (used / total) * 100 : 0,
-    };
+    diskCache = { used, total, percentage: total > 0 ? (used / total) * 100 : 0, ts: Date.now() };
   } catch {
-    return { used: 0, total: 0, percentage: 0 };
+    diskCache = { ...diskCache, ts: Date.now() };
   }
+  return diskCache;
 }
 
 function getSessionMetrics(agentManager: AgentManager): SystemStats['sessions'] {

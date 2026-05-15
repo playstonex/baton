@@ -234,6 +234,8 @@ export class AgentManager {
       rows,
     });
 
+    console.log(`[AGENT] Started ${id.slice(0, 8)} type=${config.type} pid=${pty.pid} cwd=${spawnConfig.cwd}`);
+
     const agentProcess: AgentProcess = {
       id,
       type: config.type,
@@ -266,16 +268,17 @@ export class AgentManager {
         managed.outputHistory = managed.outputHistory.slice(-OUTPUT_TRIM_TO);
       }
 
-      // Broadcast raw terminal data
-      for (const cb of managed.rawCallbacks) {
-        cb(data, id);
-      }
-
       if (!managed.firstOutputReceived) {
+        console.log(`[PTY] First output for ${id.slice(0, 8)} (${data.length}b) | rawCallbacks: ${managed.rawCallbacks.size}`);
         managed.firstOutputReceived = true;
         if (managed.state.status === 'initializing') {
           this.transition(id, 'running');
         }
+      }
+
+      // Broadcast raw terminal data
+      for (const cb of managed.rawCallbacks) {
+        cb(data, id);
       }
 
       // Parse and broadcast structured events
