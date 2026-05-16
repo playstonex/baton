@@ -27,26 +27,8 @@ pub enum Event {
     Ready { pid: u32 },
     #[serde(rename = "output")]
     Output { data: String },
-    #[serde(rename = "render")]
-    Render {
-        cols: u16,
-        rows: u16,
-        cells: Vec<CellUpdate>,
-    },
     #[serde(rename = "exit")]
     Exit { code: i32, signal: Option<i32> },
     #[serde(rename = "error")]
     Error { message: String },
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CellUpdate {
-    pub row: u16,
-    pub col: u16,
-    pub text: String,
-    pub fg: Option<String>,
-    pub bg: Option<String>,
-    pub bold: bool,
-    pub italic: bool,
-    pub underline: bool,
 }

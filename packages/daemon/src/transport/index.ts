@@ -157,7 +157,6 @@ export class Transport {
 
         try {
           const history = this.agentManager.getOutputHistory(msg.sessionId);
-          console.log(`[ATTACH] ${msg.sessionId.slice(0, 8)} → client ${clientId.slice(0, 8)} | history: ${history.length} chunks`);
           if (history.length > 0) {
             this.send(clientId, {
               type: 'history_replay',
@@ -258,24 +257,18 @@ export class Transport {
 
   private ensureSessionRegistered(sessionId: string): void {
     if (this.registeredSessions.has(sessionId)) {
-      console.log(`[SESSION] Already registered: ${sessionId.slice(0, 8)}, rawCallbacks: ${this.agentManager.get(sessionId) ? 'has agent' : 'no agent'}`);
       return;
     }
     this.registeredSessions.add(sessionId);
-    console.log(`[SESSION] Registering new session: ${sessionId.slice(0, 8)}`);
 
     const unsubRaw = this.agentManager.onRaw(sessionId, (data, sid) => {
-      const subscriberCount = Array.from(this.clients.values()).filter(c => c.subscriptions.has(sid)).length;
       const msg: DaemonMessage = { type: 'terminal_output', sessionId: sid, data };
       const payload = JSON.stringify(msg);
-      let sent = 0;
       for (const client of this.clients.values()) {
         if (client.subscriptions.has(sid) && client.ws.readyState === OPEN) {
           client.ws.send(payload);
-          sent++;
         }
       }
-      console.log(`[RAW] ${sid.slice(0, 8)} | ${data.length}b | subscribers: ${subscriberCount} → sent: ${sent}`);
     });
 
     const unsubEvent = this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {
