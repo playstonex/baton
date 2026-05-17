@@ -39,7 +39,7 @@ const SHORTCUT_KEYS: { label: string; data: string }[] = [
 function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attached: boolean }) {
   const c = useThemeColors();
   const spinAnim = useRef(new Animated.Value(0)).current;
-  const dotPhase = useRef(new Animated.Value(0)).current;
+  const [dotCount, setDotCount] = useState(0);
 
   useEffect(() => {
     const spin = Animated.loop(
@@ -55,17 +55,11 @@ function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attac
   }, [spinAnim]);
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(dotPhase, {
-        toValue: 3,
-        duration: 1500,
-        easing: Easing.step0,
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [dotPhase]);
+    const interval = setInterval(() => {
+      setDotCount((d) => (d + 1) % 4);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   let label: string;
   let iconName: string;
@@ -79,11 +73,6 @@ function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attac
     label = 'Waiting for agent output';
     iconName = 'terminal-outline';
   }
-
-  const dots = dotPhase.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: ['', '.', '..', '...'],
-  });
 
   const rotation = spinAnim.interpolate({
     inputRange: [0, 1],
@@ -100,9 +89,9 @@ function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attac
         <Text style={[waitingStyles.label, { color: c.textSecondary }]}>
           {label}
         </Text>
-        <Animated.Text style={[waitingStyles.dots, { color: c.textTertiary }]}>
-          {dots}
-        </Animated.Text>
+        <Text style={[waitingStyles.dots, { color: c.textTertiary }]}>
+          {'.'.repeat(dotCount)}
+        </Text>
       </View>
     </View>
   );
@@ -631,6 +620,7 @@ export default function TerminalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    overflow: 'hidden',
   },
   toolbar: {
     flexDirection: 'row',

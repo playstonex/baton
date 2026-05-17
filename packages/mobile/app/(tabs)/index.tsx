@@ -31,6 +31,7 @@ import {
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { DirectoryPicker } from '../../src/components/DirectoryPicker';
+import { ResourceMonitor } from '../../src/components/ResourceMonitor';
 
 const AGENT_OPTIONS: {
   type: AgentType;
@@ -207,6 +208,8 @@ export default function DashboardScreen() {
                 <Text style={[styles.statLabel, { color: c.textTertiary }]}>Total</Text>
               </View>
             </View>
+
+            <ResourceMonitor connected={connected} />
 
             <View style={[styles.launchCard, { backgroundColor: c.card }]}>
               <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>Launch Session</Text>

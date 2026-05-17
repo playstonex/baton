@@ -149,12 +149,16 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
     <WebView
       ref={webViewRef}
       source={{ html: buildHtml(isDark) }}
-      style={{ flex: 1, backgroundColor: isDark ? '#191919' : '#fafaf9' }}
+      style={{ flex: 1, backgroundColor: isDark ? '#191919' : '#fafaf9', overflow: 'hidden' }}
       originWhitelist={['file:*', 'data:*']}
       onMessage={handleMessage}
       allowsBackForwardNavigationGestures={false}
       keyboardDisplayRequiresUserAction={false}
       javaScriptEnabled
+      nestedScrollEnabled={false}
+      scrollEnabled={false}
+      bounces={false}
+      overScrollMode="never"
       onLoadEnd={() => {
         webViewRef.current?.injectJavaScript(
           'setTimeout(function(){ window._termFit(); }, 200); true;',
