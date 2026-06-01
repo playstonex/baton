@@ -99,7 +99,7 @@ function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attac
 
 const waitingStyles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.lg,
