@@ -27,7 +27,19 @@ export type ControlAction =
   | 'release_session'
   | 'permission_response'
   | 'register_push_token'
-  | 'unregister_push_token';
+  | 'unregister_push_token'
+  | 'set_access_mode'
+  | 'git_status'
+  | 'git_commit'
+  | 'git_push'
+  | 'git_pull'
+  | 'git_branches'
+  | 'git_checkout'
+  | 'git_create_branch'
+  | 'git_log'
+  | 'git_stash'
+  | 'git_stash_pop'
+  | 'git_remote_url';
 
 export interface ControlMessage {
   type: 'control';
@@ -47,6 +59,8 @@ export type DaemonMessage =
   | PermissionRequestMessage
   | SessionOwnershipMessage
   | HealthScoreMessage
+  | AccessModeMessage
+  | GitResultMessage
   | ErrorMessage;
 
 export interface TerminalOutputMessage {
@@ -115,6 +129,23 @@ export interface ErrorMessage {
   type: 'error';
   message: string;
   code?: string;
+}
+
+// Access control modes for agent permission handling
+export type AccessMode = 'on-request' | 'full-access';
+
+export interface AccessModeMessage {
+  type: 'access_mode';
+  mode: AccessMode;
+}
+
+// Git result message: Daemon → Client
+export interface GitResultMessage {
+  type: 'git_result';
+  action: string;
+  success: boolean;
+  data?: unknown;
+  error?: string;
 }
 
 // Relay protocol (Phase 2)

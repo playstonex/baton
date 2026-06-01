@@ -181,3 +181,4 @@ export interface Session {
 export * from './system.js';
 export * from './agent.js';
 export * from './provider.js';
+export * from './git.js';
