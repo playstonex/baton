@@ -15,6 +15,7 @@ import { Orchestrator } from './orchestrator/index.js';
 import { AnalyticsService } from './system/analytics.js';
 import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
+import { GitService } from './git/index.js';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
   StartAgentRequest,
@@ -46,12 +47,16 @@ export function createDaemon(port = DEFAULT_PORT) {
   const analytics = new AnalyticsService(join(batonHome, 'analytics.db'));
   const pushService = new PushNotificationService();
   const compressor = new ContextCompressor();
+  const gitService = new GitService();
   const transport = new Transport(agentManager, port, {
     onPushTokenRegister: (clientId, token, platform) => {
       pushService.register(clientId, token, platform as 'ios' | 'android' | 'web');
     },
     onPushTokenUnregister: (clientId) => {
       pushService.unregister(clientId);
+    },
+    onAccessModeChange: (mode) => {
+      pushService.setAccessMode(mode);
     },
   });
   const watchers = new Map<string, FileWatcher>();
@@ -308,6 +313,102 @@ export function createDaemon(port = DEFAULT_PORT) {
       });
     } catch {
       return c.json({ error: 'Cannot read file' }, 400);
+    }
+  });
+
+  // Git RPC API
+  app.get('/api/git/status', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.status(projectPath));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git status failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/commit', async (c) => {
+    const body = await c.req.json<{ projectPath: string; message?: string; all?: boolean }>();
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.commit(body));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git commit failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/push', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.push(projectPath));
+  });
+
+  app.post('/api/git/pull', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.pull(projectPath));
+  });
+
+  app.get('/api/git/branches', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.branches(projectPath));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git branches failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/checkout', async (c) => {
+    const body = await c.req.json<{ projectPath: string; branch: string }>();
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.checkout(body));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git checkout failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/create-branch', async (c) => {
+    const body = await c.req.json<{ projectPath: string; branch: string; checkout?: boolean }>();
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.createBranch(body));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git create branch failed' }, 500);
+    }
+  });
+
+  app.get('/api/git/log', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    const count = parseInt(c.req.query('count') ?? '25', 10);
+    return c.json(await gitService.log(projectPath, count));
+  });
+
+  app.post('/api/git/stash', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.stash(projectPath));
+  });
+
+  app.post('/api/git/stash-pop', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.stashPop(projectPath));
+  });
+
+  app.get('/api/git/remote-url', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.remoteUrl(projectPath));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git remote-url failed' }, 500);
     }
   });
 
