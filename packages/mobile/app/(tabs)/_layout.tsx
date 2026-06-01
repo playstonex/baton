@@ -9,6 +9,7 @@ import { useLayoutStore } from '../../src/stores/layout';
 
 const TAB_ITEMS = [
   { name: 'index', label: 'Agents', icon: 'grid' as const, title: 'Dashboard' },
+  { name: 'git', label: 'Git', icon: 'git-commit' as const, title: 'Git' },
   { name: 'files', label: 'Files', icon: 'folder' as const, title: 'Files' },
   { name: 'pipelines', label: 'Pipelines', icon: 'git-branch' as const, title: 'Pipelines' },
   { name: 'settings', label: 'Settings', icon: 'settings' as const, title: 'Settings' },
