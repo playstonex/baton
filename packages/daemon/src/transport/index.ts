@@ -4,6 +4,7 @@ import type {
   DaemonMessage,
   ParsedEvent,
 } from '@baton/shared';
+import type { AccessMode } from '@baton/shared';
 
 type BunWebSocket = import('bun').ServerWebSocket<{ clientId: string }>;
 
@@ -23,8 +24,10 @@ export class Transport {
   private sessionOwners = new Map<string, string>();
   private localClientId: string | null = null;
   private pendingPermissions = new Map<string, { sessionId: string; resolve: (response: string) => void }>();
+  private accessModes = new Map<string, AccessMode>();
   private onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
   private onPushTokenUnregister?: (clientId: string) => void;
+  private onAccessModeChange?: (mode: AccessMode) => void;
 
   constructor(
     private agentManager: AgentManager,
@@ -32,10 +35,12 @@ export class Transport {
     opts?: {
       onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
       onPushTokenUnregister?: (clientId: string) => void;
+      onAccessModeChange?: (mode: AccessMode) => void;
     },
   ) {
     this.onPushTokenRegister = opts?.onPushTokenRegister;
     this.onPushTokenUnregister = opts?.onPushTokenUnregister;
+    this.onAccessModeChange = opts?.onAccessModeChange;
   }
 
   start(): void {
@@ -77,6 +82,7 @@ export class Transport {
             const remaining = Array.from(clients.values()).filter((c) => c.id !== clientId);
             self.localClientId = remaining[0]?.id ?? null;
           }
+          self.accessModes.delete(clientId);
           clients.delete(clientId);
         },
       },
@@ -252,6 +258,18 @@ export class Transport {
         this.onPushTokenUnregister?.(clientId);
         break;
       }
+
+      case 'set_access_mode': {
+        if (!msg.payload) return;
+        const { mode } = msg.payload as { mode: AccessMode };
+        this.accessModes.set(clientId, mode);
+        this.onAccessModeChange?.(mode);
+        this.broadcast({
+          type: 'access_mode',
+          mode,
+        } as DaemonMessage);
+        break;
+      }
     }
   }
 
@@ -288,6 +306,11 @@ export class Transport {
         };
         this.broadcast(statusMsg);
       }
+
+      // Auto-approve permissions when any subscribed client has full-access mode
+      if (event.type === 'permission_request' && this.hasFullAccessClient(sid)) {
+        this.agentManager.write(sid, 'y\n');
+      }
     });
 
     this.sessionUnsubs.set(sessionId, { unsubRaw, unsubEvent });
@@ -295,6 +318,18 @@ export class Transport {
 
   registerSessionEvents(sessionId: string): void {
     this.ensureSessionRegistered(sessionId);
+  }
+
+  private hasFullAccessClient(sessionId: string): boolean {
+    for (const [clientId, mode] of this.accessModes.entries()) {
+      if (mode === 'full-access') {
+        const client = this.clients.get(clientId);
+        if (client && client.subscriptions.has(sessionId) && client.ws.readyState === OPEN) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private sendAgentList(clientId: string): void {
