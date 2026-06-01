@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button, Input, Spinner } from 'heroui-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { AccessMode } from '@baton/shared';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useRecentStore } from '../../src/stores/recent';
 import { wsService } from '../../src/services/websocket';
@@ -59,6 +60,7 @@ export default function SettingsScreen() {
   const [inputLocalWs, setInputLocalWs] = useState(localWsUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [accessMode, setAccessModeState] = useState<AccessMode>('on-request');
 
   async function pairAndConnect() {
     if (!inputRelayUrl.trim() || !inputPairingCode.trim()) return;
@@ -124,6 +126,15 @@ export default function SettingsScreen() {
     wsService.disconnect();
     setConnected(false);
     await clearCredentials();
+  }
+
+  function setAccessMode(mode: AccessMode) {
+    setAccessModeState(mode);
+    wsService.send({
+      type: 'control',
+      action: 'set_access_mode',
+      payload: { mode },
+    });
   }
 
   return (
@@ -235,6 +246,84 @@ export default function SettingsScreen() {
             })}
           </View>
         </View>
+
+        {connected && (
+          <>
+            <Text
+              style={[
+                Typography.caption1,
+                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
+              ]}
+            >
+              Access Control
+            </Text>
+            <View
+              style={{
+                backgroundColor: c.card,
+                borderRadius: CornerRadius.large,
+                padding: Spacing.lg,
+                gap: Spacing.sm,
+              }}
+            >
+              <Text style={[Typography.footnote, { color: c.textSecondary }]}>
+                How agents handle permission requests
+              </Text>
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                {([
+                  { key: 'on-request' as const, label: 'On Request', desc: 'Ask me each time' },
+                  { key: 'full-access' as const, label: 'Full Access', desc: 'Auto-approve all' },
+                ] as const).map((opt) => {
+                  const active = accessMode === opt.key;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      onPress={() => setAccessMode(opt.key)}
+                      style={{
+                        flex: 1,
+                        minHeight: 60,
+                        borderRadius: CornerRadius.medium,
+                        borderWidth: 1,
+                        paddingVertical: Spacing.md,
+                        paddingHorizontal: Spacing.sm,
+                        backgroundColor: active ? c.accentBg : c.elevated,
+                        borderColor: active ? c.accentBorder : c.cardBorder,
+                      }}
+                    >
+                      <Text
+                        style={[
+                          Typography.subhead,
+                          {
+                            color: active ? Colors.primary[500] : c.textPrimary,
+                            fontWeight: '600',
+                          },
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                      <Text style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}>
+                        {opt.desc}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {accessMode === 'full-access' && (
+                <View
+                  style={{
+                    backgroundColor: c.dangerBg,
+                    borderRadius: CornerRadius.medium,
+                    padding: Spacing.sm,
+                    marginTop: Spacing.xs,
+                  }}
+                >
+                  <Text style={[Typography.caption1, { color: Colors.danger[400] }]}>
+                    All tool executions will be automatically approved. Use with caution.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
 
         {recentConnections.length > 0 && (
           <>
