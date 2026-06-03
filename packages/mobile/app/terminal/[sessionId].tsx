@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, type Href } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { wsService } from '../../src/services/websocket';
 import {
@@ -411,6 +411,22 @@ export default function TerminalScreen() {
           <View style={styles.spacer} />
 
           <Pressable
+            onPress={() => router.push(`/files/${sessionId}` as Href)}
+            style={styles.navButton}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          >
+            <Ionicons name="folder-outline" size={18} color={c.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push(`/git/${sessionId}` as Href)}
+            style={styles.navButton}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          >
+            <Ionicons name="git-branch-outline" size={18} color={c.textSecondary} />
+          </Pressable>
+
+          <Pressable
             onPress={() => setFullscreen(true)}
             style={[styles.fullscreenButton, { backgroundColor: c.elevated }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -703,6 +719,12 @@ const styles = StyleSheet.create({
   doneButtonText: {
     ...Typography.caption1,
     fontWeight: '600',
+  },
+  navButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   inputBar: {
     flexDirection: 'row',

@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { View, Text, FlatList, Pressable } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import Ionicons from '@react-native-vector-icons/ionicons';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../../src/stores/events';
@@ -87,13 +88,29 @@ export default function AgentDetailScreen() {
             </Text>
           </View>
         </View>
-        <Pressable
-          onPress={() => router.push(`/terminal/${sessionId}`)}
-          style={[styles.terminalButton, { backgroundColor: c.accentBg }]}
-        >
-          <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '600' }]}>Terminal</Text>
-          <Text style={[Typography.footnote, { color: Colors.primary[500] }]}>{'\u{2192}'}</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+          <Pressable
+            onPress={() => router.push(`/files/${sessionId}` as Href)}
+            style={styles.navButton}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          >
+            <Ionicons name="folder-outline" size={20} color={c.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push(`/git/${sessionId}` as Href)}
+            style={styles.navButton}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          >
+            <Ionicons name="git-branch-outline" size={20} color={c.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push(`/terminal/${sessionId}`)}
+            style={[styles.terminalButton, { backgroundColor: c.accentBg }]}
+          >
+            <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '600' }]}>Terminal</Text>
+            <Text style={[Typography.footnote, { color: Colors.primary[500] }]}>{'\u{2192}'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.statsRow}>
@@ -223,6 +240,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toolbarIconText: { fontSize: 16 },
+  navButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: CornerRadius.small,
+    borderCurve: 'continuous',
+  },
   terminalButton: {
     flexDirection: 'row',
     alignItems: 'center',

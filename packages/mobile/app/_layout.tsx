@@ -107,6 +107,20 @@ export default function RootLayout() {
               headerTintColor: c.textPrimary,
             }}
           />
+          <Stack.Screen
+            name="files/[sessionId]"
+            options={{
+              title: 'Files',
+              headerTintColor: c.textPrimary,
+            }}
+          />
+          <Stack.Screen
+            name="git/[sessionId]"
+            options={{
+              title: 'Git',
+              headerTintColor: c.textPrimary,
+            }}
+          />
         </Stack>
       </HeroUINativeProvider>
     </GestureHandlerRootView>
