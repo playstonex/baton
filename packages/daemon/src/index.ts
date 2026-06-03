@@ -27,16 +27,27 @@ import type {
 
 const DEFAULT_PORT = 3210;
 
-function getLocalIp(): string | null {
+function getLocalIps(): { ipv4: string | null; ipv6: string | null } {
   const nets = Object.values(os.networkInterfaces());
+  let ipv4: string | null = null;
+  let ipv6: string | null = null;
   for (const interfaces of nets) {
     for (const iface of interfaces ?? []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+      if (iface.internal) continue;
+      if (iface.family === 'IPv4' && !ipv4) {
+        ipv4 = iface.address;
+      }
+      if (iface.family === 'IPv6' && !ipv6) {
+        ipv6 = iface.address;
       }
     }
   }
-  return null;
+  return { ipv4, ipv6 };
+}
+
+/** Format host for display in URLs — wraps IPv6 addresses in brackets. */
+function formatHostForUrl(host: string): string {
+  return host.includes(':') ? `[${host}]` : host;
 }
 
 export function createDaemon(port = DEFAULT_PORT) {
@@ -551,7 +562,8 @@ export async function main() {
 
   transport.start();
 
-  const hostname = process.env.HOST || '0.0.0.0';
+  const hostname = process.env.HOST || '::';
+  const displayHost = formatHostForUrl(hostname);
 
   Bun.serve({
     fetch: app.fetch,
@@ -559,13 +571,19 @@ export async function main() {
     hostname,
   });
 
-  const localIp = getLocalIp();
+  const localIps = getLocalIps();
   console.log(`\n  Baton Daemon v0.0.1`);
-  console.log(`  HTTP:      http://${hostname}:${port}`);
-  console.log(`  WebSocket: ws://${hostname}:${port + 1}`);
-  if (localIp && hostname === '0.0.0.0') {
-    console.log(`  LAN HTTP:  http://${localIp}:${port}`);
-    console.log(`  LAN WS:    ws://${localIp}:${port + 1}`);
+  console.log(`  HTTP:      http://${displayHost}:${port}`);
+  console.log(`  WebSocket: ws://${displayHost}:${port + 1}`);
+  if (hostname === '::') {
+    if (localIps.ipv4) {
+      console.log(`  LAN HTTP:  http://${localIps.ipv4}:${port}`);
+      console.log(`  LAN WS:    ws://${localIps.ipv4}:${port + 1}`);
+    }
+    if (localIps.ipv6) {
+      console.log(`  LAN HTTP:  http://[${localIps.ipv6}]:${port}`);
+      console.log(`  LAN WS:    ws://[${localIps.ipv6}]:${port + 1}`);
+    }
   }
   console.log(`  Host: ${os.hostname()} (${process.platform})\n`);
 

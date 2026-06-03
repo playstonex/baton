@@ -47,7 +47,7 @@ export class Transport {
     const clients = this.clients;
     const self = this;
 
-    const hostname = process.env.HOST || '0.0.0.0';
+    const hostname = process.env.HOST || '::';
 
     this.server = Bun.serve<{ clientId: string }>({
       fetch(req, server) {

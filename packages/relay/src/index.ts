@@ -93,12 +93,13 @@ export class RelayServer {
           self.handleDisconnect(ws);
         },
       },
+      hostname: '::',
       port: this.port,
     });
 
     console.log(`\n  Baton Relay v0.0.1`);
-    console.log(`  WebSocket: ws://localhost:${this.port}`);
-    console.log(`  Health:    http://localhost:${this.port}/health\n`);
+    console.log(`  WebSocket: ws://[::]:${this.port}`);
+    console.log(`  Health:    http://[::]:${this.port}/health\n`);
 
     this.cleanupTimer = setInterval(() => this.cleanup(), 60000);
   }

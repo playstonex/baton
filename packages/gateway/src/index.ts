@@ -135,9 +135,9 @@ export function main() {
   const port = parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
   const { app } = createGateway(port);
 
-  Bun.serve({ fetch: app.fetch, port });
+  Bun.serve({ fetch: app.fetch, port, hostname: '::' });
   console.log(`\n  Baton Gateway v0.0.1`);
-  console.log(`  HTTP: http://localhost:${port}\n`);
+  console.log(`  HTTP: http://[::]:${port}\n`);
 }
 
 main();
