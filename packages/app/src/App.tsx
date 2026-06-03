@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback } from 'react';
 
 const NAV_ITEMS_MAIN = [
   { to: '/', label: 'Dashboard', end: true, icon: DashboardIcon },
-  { to: '/files', label: 'Files', end: false, icon: FilesIcon },
   { to: '/pipelines', label: 'Pipelines', end: false, icon: PipelinesIcon },
   { to: '/analytics', label: 'Analytics', end: false, icon: AnalyticsIcon },
   { to: '/orchestration', label: 'Orchestration', end: false, icon: OrchestrationIcon },
@@ -225,22 +224,6 @@ function DashboardIcon({ className }: { className?: string }) {
       <rect x="9.5" y="1.5" width="5" height="5" rx="1" />
       <rect x="1.5" y="9.5" width="5" height="5" rx="1" />
       <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
-    </svg>
-  );
-}
-
-function FilesIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h4.172a1 1 0 0 1 .707.293l1.328 1.328a1 1 0 0 0 .707.293H12.5A1.5 1.5 0 0 1 14 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9Z" />
     </svg>
   );
 }

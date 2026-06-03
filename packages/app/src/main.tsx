@@ -7,6 +7,7 @@ import { TerminalScreen } from './screens/Terminal.js';
 import { AgentDetailScreen } from './screens/AgentDetail.js';
 import { SettingsScreen } from './screens/Settings.js';
 import { FilesScreen } from './screens/Files.js';
+import { GitScreen } from './screens/Git.js';
 import { PipelinesScreen } from './screens/Pipelines.js';
 import { AnalyticsScreen } from './screens/Analytics.js';
 import { OrchestrationScreen } from './screens/Orchestration.js';
@@ -21,7 +22,8 @@ createRoot(document.getElementById('root')!).render(
           <Route index element={<DashboardScreen />} />
           <Route path="terminal/:sessionId" element={<TerminalScreen />} />
           <Route path="agent/:sessionId" element={<AgentDetailScreen />} />
-          <Route path="files" element={<FilesScreen />} />
+          <Route path="files/:sessionId" element={<FilesScreen />} />
+          <Route path="git/:sessionId" element={<GitScreen />} />
           <Route path="pipelines" element={<PipelinesScreen />} />
           <Route path="analytics" element={<AnalyticsScreen />} />
           <Route path="orchestration" element={<OrchestrationScreen />} />

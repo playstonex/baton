@@ -254,6 +254,12 @@ export function TerminalScreen() {
           <Chip size="sm" variant="soft" color={connected ? 'success' : 'danger'}>
             {connected ? 'Connected' : 'Disconnected'}
           </Chip>
+          <Button size="sm" variant="outline" onPress={() => navigate(`/files/${sessionId}`)}>
+            Files
+          </Button>
+          <Button size="sm" variant="outline" onPress={() => navigate(`/git/${sessionId}`)}>
+            Git
+          </Button>
           <Button size="sm" variant="outline" onPress={() => navigate(`/agent/${sessionId}`)}>
             Events
           </Button>

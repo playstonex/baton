@@ -74,6 +74,12 @@ export function AgentDetailScreen() {
           <span className="font-mono text-surface-600 dark:text-surface-300">{sessionId?.slice(0, 8)}</span>
         </div>
         <div className="flex-1" />
+        <Button variant="outline" size="sm" onPress={() => navigate(`/files/${sessionId}`)}>
+          Files
+        </Button>
+        <Button variant="outline" size="sm" onPress={() => navigate(`/git/${sessionId}`)}>
+          Git
+        </Button>
         <Button variant="outline" size="sm" onPress={() => navigate(`/terminal/${sessionId}`)} className="gap-1.5">
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="1.5" y="2" width="13" height="12" rx="1.5" />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Card, CardContent, CardHeader, Chip } from '@heroui/react';
+import { useParams, useNavigate } from 'react-router';
+import { Button, Card, CardContent, CardHeader } from '@heroui/react';
 import { useAgentStore } from '../stores/connection.js';
 
 interface FileEntry {
@@ -45,8 +46,10 @@ function getFileIcon(name: string, isDir: boolean): string {
 }
 
 export function FilesScreen() {
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
   const agents = useAgentStore((s) => s.agents);
-  const activeAgents = agents.filter((a) => a.status !== 'stopped');
+  const agent = sessionId ? agents.find((a) => a.id === sessionId) : null;
 
   const [currentPath, setCurrentPath] = useState('/');
   const [items, setItems] = useState<FileEntry[]>([]);
@@ -54,10 +57,10 @@ export function FilesScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (activeAgents.length > 0 && currentPath === '/') {
-      setCurrentPath(activeAgents[0].projectPath);
+    if (agent && currentPath === '/') {
+      setCurrentPath(agent.projectPath);
     }
-  }, [activeAgents, currentPath]);
+  }, [agent, currentPath]);
 
   const fetchDir = useCallback(async (path: string) => {
     setLoading(true);
@@ -96,7 +99,20 @@ export function FilesScreen() {
   const lineCount = selectedFile?.content ? selectedFile.content.split('\n').length : 0;
 
   return (
-    <div className="flex h-[calc(100dvh-88px)] gap-4 md:h-[calc(100dvh-96px)]">
+    <div className="flex h-[calc(100dvh-88px)] flex-col gap-2 md:h-[calc(100dvh-96px)]">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onPress={() => navigate(-1)} className="-ml-2 text-surface-500">
+          <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 12L6 8l4-4" />
+          </svg>
+        </Button>
+        <span className="text-sm font-medium text-surface-500">
+          {agent?.projectPath.split('/').pop() ?? 'Files'}
+        </span>
+        <span className="font-mono text-xs text-surface-400">{sessionId?.slice(0, 8)}</span>
+      </div>
+
+    <div className="flex flex-1 gap-4 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex flex-wrap items-center gap-1 rounded-lg border border-surface-200 bg-white px-3 py-2 dark:border-surface-700 dark:bg-surface-800/50">
           <Button variant="ghost" size="sm" onPress={() => fetchDir('/')} className="font-mono text-[13px] px-1.5 text-surface-400 hover:text-primary-500">
@@ -155,32 +171,10 @@ export function FilesScreen() {
               />
             ))
           )}
-        </Card>
+         </Card>
+       </div>
 
-        {activeAgents.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {activeAgents.map((a) => {
-              const isActive = currentPath === a.projectPath;
-              return (
-                <button key={a.id} type="button" onClick={() => fetchDir(a.projectPath)} className="cursor-pointer">
-                  <Chip
-                    variant={isActive ? 'primary' : 'tertiary'}
-                    color={isActive ? 'accent' : 'default'}
-                    className={`font-mono text-[11px] transition-all ${isActive ? 'shadow-sm' : ''}`}
-                  >
-                    {isActive && (
-                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-primary-400" />
-                    )}
-                    {a.projectPath.split('/').pop()}
-                  </Chip>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <Card className="hidden w-[55%] overflow-hidden rounded-lg border border-surface-200 dark:border-surface-700 sm:flex flex-col">
+       <Card className="hidden w-[55%] overflow-hidden rounded-lg border border-surface-200 dark:border-surface-700 sm:flex flex-col">
         {selectedFile ? (
           <>
             <CardHeader className="shrink-0 items-center justify-between border-b border-surface-200 px-4 py-3 dark:border-surface-700">
@@ -214,7 +208,8 @@ export function FilesScreen() {
             <p className="text-sm text-surface-400">Select a file to view its content</p>
           </CardContent>
         )}
-      </Card>
+       </Card>
+    </div>
     </div>
   );
 }
