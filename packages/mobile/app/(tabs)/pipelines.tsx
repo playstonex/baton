@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Typography, Spacing, CornerRadius, Colors } from '../../src/constants/theme';
+import { Typography, Spacing, CornerRadius, iOSGroupedRadius, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLayoutStore } from '../../src/stores/layout';
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   formCard: {
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderCurve: 'continuous',
     borderWidth: 1,
     padding: Spacing.lg,
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pipelineCard: {
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderCurve: 'continuous',
     borderWidth: 1,
     padding: Spacing.lg,

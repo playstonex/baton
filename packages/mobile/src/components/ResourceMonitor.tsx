@@ -6,6 +6,7 @@ import {
   Typography,
   Spacing,
   CornerRadius,
+  iOSGroupedRadius,
   Colors,
 } from '../constants/theme';
 
@@ -107,7 +108,7 @@ export function ResourceMonitor({ connected }: { connected: boolean }) {
       <View
         style={{
           backgroundColor: c.card,
-          borderRadius: CornerRadius.large,
+          borderRadius: iOSGroupedRadius,
           padding: Spacing.lg,
           gap: Spacing.md,
         }}

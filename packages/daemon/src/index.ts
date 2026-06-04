@@ -423,6 +423,31 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
+  app.get('/api/git/diff', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      const file = c.req.query('file') || undefined;
+      const staged = c.req.query('staged') === 'true';
+      return c.json(await gitService.diff(projectPath, file, staged));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git diff failed' }, 500);
+    }
+  });
+
+  app.get('/api/git/commit-diff', async (c) => {
+    const projectPath = c.req.query('path');
+    const hash = c.req.query('hash');
+    if (!projectPath || !hash) return c.json({ error: 'Missing path or hash' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.commitDiff(projectPath, hash));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git commit-diff failed' }, 500);
+    }
+  });
+
   // Provider API
   const providerRegistry = new ProviderRegistry();
 

@@ -1,9 +1,15 @@
 import { Tabs } from 'expo-router';
-import { View, Text, Platform, Pressable } from 'react-native';
+import { View, Text, Platform, Pressable, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Spacing, Colors } from '../../src/constants/theme';
+import {
+  Typography,
+  Spacing,
+  Colors,
+  CornerRadius,
+  iOSGroupedRadius,
+} from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { useLayoutStore } from '../../src/stores/layout';
 
@@ -23,9 +29,9 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
       onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
       style={{
         position: 'absolute',
-        bottom: insets.bottom + Spacing.lg,
-        left: Spacing.xl,
-        right: Spacing.xl,
+        bottom: insets.bottom + Spacing.md,
+        left: Spacing.lg,
+        right: Spacing.lg,
       }}
     >
       <BlurView
@@ -35,13 +41,15 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           flexDirection: 'row',
           justifyContent: 'space-around',
           alignItems: 'center',
-          borderRadius: 28,
+          borderRadius: CornerRadius.xl,
           paddingVertical: Spacing.sm + 2,
           paddingHorizontal: Spacing.md,
           overflow: 'hidden',
           backgroundColor: c.glassTabBar,
-          borderWidth: 0.5,
-          borderColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.55)',
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: c.isDark
+            ? 'rgba(255,255,255,0.06)'
+            : 'rgba(0,0,0,0.04)',
         }}
       >
         {state.routes.map((route: any, index: number) => {
@@ -51,7 +59,11 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           const iconName = tabItem?.icon ?? 'ellipse';
 
           const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);
             }
@@ -72,7 +84,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             >
               <View
                 style={{
-                  width: 48,
+                  width: 52,
                   height: 32,
                   borderRadius: 16,
                   alignItems: 'center',
@@ -90,7 +102,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
               </View>
               <Text
                 style={{
-                  ...Typography.caption2,
+                  ...Typography.caption1,
                   fontWeight: isFocused ? '600' : '500',
                   color: isFocused ? Colors.primary[500] : c.textTertiary,
                 }}

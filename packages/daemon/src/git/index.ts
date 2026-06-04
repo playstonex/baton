@@ -12,6 +12,10 @@ import type {
   GitCommitRequest,
   GitCheckoutRequest,
   GitCreateBranchRequest,
+  GitDiffResult,
+  GitFileDiff,
+  GitDiffHunk,
+  GitDiffLine,
 } from '@baton/shared';
 
 interface GitOutput {
@@ -197,10 +201,11 @@ export class GitService {
   }
 
   async log(projectPath: string, count = 25): Promise<GitLogResult> {
+    const SEP = '\x1f';
     const out = await this.executeGit(projectPath, [
       'log',
       `--max-count=${count}`,
-      '--pretty=format:%H|%h|%an|%aI|%s',
+      `--pretty=format:%H${SEP}%h${SEP}%P${SEP}%an${SEP}%aI${SEP}%s`,
     ]);
 
     if (out.exitCode !== 0) {
@@ -211,13 +216,14 @@ export class GitService {
       .split('\n')
       .filter(Boolean)
       .map((line) => {
-        const [hash, shortHash, author, date, ...messageParts] = line.split('|');
+        const [hash, shortHash, parents, author, date, ...messageParts] = line.split(SEP);
         return {
           hash: hash ?? '',
           shortHash: shortHash ?? '',
+          parents: parents ? parents.split(' ').filter(Boolean) : [],
           author: author ?? '',
           date: date ?? '',
-          message: messageParts.join('|'),
+          message: messageParts.join(SEP),
         };
       });
 
@@ -250,6 +256,27 @@ export class GitService {
     };
   }
 
+  async diff(projectPath: string, file?: string, staged?: boolean): Promise<GitDiffResult> {
+    const args = ['diff', '--unified=3', '--no-color'];
+    if (staged) args.push('--cached');
+    if (file) args.push('--', file);
+    const out = await this.executeGit(projectPath, args);
+    if (out.exitCode !== 0 || !out.stdout) return { files: [] };
+    return { files: parseUnifiedDiff(out.stdout) };
+  }
+
+  async commitDiff(projectPath: string, hash: string): Promise<GitDiffResult> {
+    const out = await this.executeGit(projectPath, [
+      'show',
+      '--format=',
+      '--unified=3',
+      '--no-color',
+      hash,
+    ]);
+    if (out.exitCode !== 0 || !out.stdout) return { files: [] };
+    return { files: parseUnifiedDiff(out.stdout) };
+  }
+
   async handleAction(
     action: string,
     projectPath: string,
@@ -278,8 +305,111 @@ export class GitService {
         return this.stashPop(projectPath);
       case 'git_remote_url':
         return this.remoteUrl(projectPath);
+      case 'git_diff':
+        return this.diff(projectPath, payload?.file as string | undefined, payload?.staged as boolean | undefined);
+      case 'git_commit_diff':
+        return this.commitDiff(projectPath, payload?.hash as string);
       default:
         throw new Error(`Unknown git action: ${action}`);
     }
   }
+}
+
+function parseUnifiedDiff(text: string): GitFileDiff[] {
+  const files: GitFileDiff[] = [];
+  const lines = text.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    if (!lines[i].startsWith('diff --git')) {
+      i++;
+      continue;
+    }
+
+    const header = lines[i];
+    const pathMatch = header.match(/^diff --git a\/(.+) b\/(.+)$/);
+    const newPath = pathMatch?.[2] ?? '';
+    let oldPath: string | null = null;
+
+    i++;
+
+    let status: GitFileDiff['status'] = 'modified';
+    let additions = 0;
+    let deletions = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (line.startsWith('@@')) break;
+      if (line.startsWith('diff --git')) break;
+
+      if (line.startsWith('new file mode')) status = 'added';
+      else if (line.startsWith('deleted file mode')) status = 'deleted';
+      else if (line.startsWith('rename from')) {
+        status = 'renamed';
+        oldPath = line.slice('rename from '.length);
+      } else if (line.startsWith('rename to')) {
+        oldPath = oldPath ?? newPath;
+      }
+      i++;
+    }
+
+    const hunks: GitDiffHunk[] = [];
+
+    while (i < lines.length && lines[i].startsWith('@@')) {
+      const hunkHeader = lines[i];
+      const hunkMatch = hunkHeader.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      let oldLine = parseInt(hunkMatch?.[1] ?? '0', 10);
+      let newLine = parseInt(hunkMatch?.[3] ?? '0', 10);
+      i++;
+
+      const hunkLines: GitDiffLine[] = [];
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.startsWith('diff --git') || line.startsWith('@@')) break;
+        if (line.startsWith('\\ No newline')) {
+          i++;
+          continue;
+        }
+
+        if (line.startsWith('+')) {
+          additions++;
+          hunkLines.push({
+            type: 'add',
+            oldLine: null,
+            newLine: newLine++,
+            content: line.slice(1),
+          });
+        } else if (line.startsWith('-')) {
+          deletions++;
+          hunkLines.push({
+            type: 'remove',
+            oldLine: oldLine++,
+            newLine: null,
+            content: line.slice(1),
+          });
+        } else if (line.startsWith(' ')) {
+          hunkLines.push({
+            type: 'context',
+            oldLine: oldLine++,
+            newLine: newLine++,
+            content: line.slice(1),
+          });
+        }
+        i++;
+      }
+
+      hunks.push({ header: hunkHeader, lines: hunkLines });
+    }
+
+    files.push({
+      path: newPath,
+      oldPath,
+      status,
+      additions,
+      deletions,
+      hunks,
+    });
+  }
+
+  return files;
 }

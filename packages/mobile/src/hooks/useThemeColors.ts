@@ -5,6 +5,8 @@ import { Colors } from '../constants/theme';
 export interface ThemeColors {
   isDark: boolean;
   bg: string;
+  groupedBg: string;
+  secondaryBg: string;
   card: string;
   cardBorder: string;
   elevated: string;
@@ -35,6 +37,8 @@ export function useThemeColors(): ThemeColors {
   return {
     isDark,
     bg: p.bg,
+    groupedBg: p.groupedBg,
+    secondaryBg: p.secondaryBg,
     card: p.card,
     cardBorder: p.cardBorder,
     elevated: p.elevated,

@@ -15,6 +15,7 @@ import {
   Typography,
   Spacing,
   CornerRadius,
+  iOSGroupedRadius,
   Colors,
 } from '../../src/constants/theme';
 
@@ -162,7 +163,7 @@ export default function SettingsScreen() {
         <View
           style={{
             backgroundColor: c.card,
-            borderRadius: CornerRadius.large,
+            borderRadius: iOSGroupedRadius,
             padding: Spacing.lg,
             gap: Spacing.md,
           }}
@@ -210,7 +211,7 @@ export default function SettingsScreen() {
         <View
           style={{
             backgroundColor: c.card,
-            borderRadius: CornerRadius.large,
+            borderRadius: iOSGroupedRadius,
             padding: Spacing.lg,
             gap: Spacing.md,
           }}
@@ -260,7 +261,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: c.card,
-                borderRadius: CornerRadius.large,
+                borderRadius: iOSGroupedRadius,
                 padding: Spacing.lg,
                 gap: Spacing.sm,
               }}
@@ -338,7 +339,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: c.card,
-                borderRadius: CornerRadius.large,
+                borderRadius: iOSGroupedRadius,
                 overflow: 'hidden',
               }}
             >
@@ -420,7 +421,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: c.card,
-                borderRadius: CornerRadius.large,
+                borderRadius: iOSGroupedRadius,
                 padding: Spacing.lg,
                 gap: Spacing.md,
               }}
@@ -495,7 +496,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: c.card,
-                borderRadius: CornerRadius.large,
+                borderRadius: iOSGroupedRadius,
                 padding: Spacing.lg,
                 gap: Spacing.md,
               }}

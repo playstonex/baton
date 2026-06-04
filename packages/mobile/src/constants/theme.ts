@@ -50,6 +50,8 @@ export const Colors = {
 
   dark: {
     bg: '#000000',
+    groupedBg: '#000000',
+    secondaryBg: '#1C1C1E',
     card: '#1C1C1E',
     cardBorder: 'rgba(255,255,255,0.08)',
     elevated: '#2C2C2E',
@@ -71,6 +73,8 @@ export const Colors = {
 
   light: {
     bg: '#F2F2F7',
+    groupedBg: '#F2F2F7',
+    secondaryBg: '#FFFFFF',
     card: '#FFFFFF',
     cardBorder: 'rgba(60,60,67,0.08)',
     elevated: '#F2F2F7',
@@ -191,3 +195,29 @@ export const CHANGE_COLORS: Record<string, { bg: string; text: string }> = {
   modify: { bg: Colors.primary[100], text: Colors.primary[700] },
   delete: { bg: Colors.danger[100], text: Colors.danger[600] },
 };
+
+export const InsetGrouped = {
+  horizontal: 20,
+  sectionGap: 24,
+  rowMinHeight: 44,
+  headerHeight: 32,
+} as const;
+
+export const Shadows = {
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  elevated: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+} as const;
+
+export const iOSGroupedRadius = 10;

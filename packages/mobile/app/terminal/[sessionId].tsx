@@ -16,12 +16,14 @@ import {
   Colors,
   Typography,
   CornerRadius,
+  iOSGroupedRadius,
   Spacing,
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTerminalSettingsStore } from '../../src/stores/terminal-settings';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '\u2191', data: '\x1b[A' },
@@ -122,7 +124,7 @@ const waitingStyles = StyleSheet.create({
 
 const errorStyles = StyleSheet.create({
   card: {
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderWidth: 1,
     padding: Spacing['2xl'],
     alignItems: 'center',
@@ -227,6 +229,7 @@ export default function TerminalScreen() {
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const termSettings = useTerminalSettingsStore();
 
   const handleResize = useCallback(
     (cols: number, rows: number) => {
@@ -349,7 +352,7 @@ export default function TerminalScreen() {
   const isActive =
     status === 'running' || status === 'thinking' || status === 'executing';
 
-  const topPad = fullscreen ? insets.top : headerHeight;
+  const topPad = fullscreen ? insets.top : Math.max(headerHeight, insets.top);
   const bottomSafePad = insets.bottom;
 
   const renderShortcutKeys = () =>
@@ -373,89 +376,77 @@ export default function TerminalScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: !fullscreen }} />
-      <KeyboardAvoidingView
-        style={[styles.container, { backgroundColor: c.bg, paddingTop: topPad }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-      {/* Toolbar */}
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={{ flex: 1, backgroundColor: c.card }}>
+        <View style={{ height: topPad, backgroundColor: c.card }} />
+        <KeyboardAvoidingView
+          style={[styles.container, { backgroundColor: c.bg }]}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+      {/* Compact nav bar with status + actions */}
       {!fullscreen && (
         <View
           style={[
-            styles.toolbar,
+            styles.navBar,
             {
               backgroundColor: c.card,
               borderBottomColor: c.separator,
             },
           ]}
         >
-          <StatusDot color={statusColor} active={isActive} />
-
-          <Text
-            style={[styles.sessionId, { color: c.textSecondary }]}
-          >
-            {sessionId?.slice(0, 8)}
-          </Text>
-
-          <View
-            style={[
-              styles.statusChip,
-              { backgroundColor: statusColor + '18' },
-            ]}
-          >
-            <Text style={[styles.statusChipText, { color: statusColor }]}>
-              {status}
-            </Text>
-          </View>
-
-          <View style={styles.spacer} />
-
-          <Pressable
-            onPress={() => router.push(`/files/${sessionId}` as Href)}
-            style={styles.navButton}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-          >
-            <Ionicons name="folder-outline" size={18} color={c.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push(`/git/${sessionId}` as Href)}
-            style={styles.navButton}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-          >
-            <Ionicons name="git-branch-outline" size={18} color={c.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            onPress={() => setFullscreen(true)}
-            style={[styles.fullscreenButton, { backgroundColor: c.elevated }]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.fullscreenButtonIcon]}>
-              {'\u26F6'}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push(`/agent/${sessionId}`)}
-            style={styles.eventsButton}
-          >
-            <Text style={[styles.eventsButtonText]}>
-              Events
-            </Text>
-          </Pressable>
-
           <Pressable
             onPress={() => router.back()}
-            style={[
-              styles.doneButton,
-              { backgroundColor: c.elevated },
-            ]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.navBack}
           >
-            <Text style={[styles.doneButtonText, { color: c.textPrimary }]}>
-              Done
+            <Ionicons name="chevron-back" size={22} color={Colors.primary[500]} />
+            <Text style={[Typography.body, { color: Colors.primary[500], marginLeft: -2 }]}>
+              Back
             </Text>
           </Pressable>
+
+          <View style={styles.navStatus}>
+            <StatusDot color={statusColor} active={isActive} />
+            <View style={[styles.statusChip, { backgroundColor: statusColor + '18' }]}>
+              <Text style={[styles.statusChipText, { color: statusColor }]}>
+                {status}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.navActions}>
+            <Pressable
+              onPress={() => router.push(`/terminal-settings/${sessionId}` as Href)}
+              style={styles.navIconButton}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            >
+              <Ionicons name="settings-outline" size={18} color={c.textSecondary} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(`/files/${sessionId}` as Href)}
+              style={styles.navIconButton}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            >
+              <Ionicons name="folder-outline" size={18} color={c.textSecondary} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(`/git/${sessionId}` as Href)}
+              style={styles.navIconButton}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            >
+              <Ionicons name="git-branch-outline" size={18} color={c.textSecondary} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setFullscreen(true)}
+              style={[styles.navIconButton, { backgroundColor: c.elevated, borderRadius: CornerRadius.small }]}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            >
+              <Ionicons name="expand-outline" size={16} color={Colors.primary[500]} />
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -466,6 +457,11 @@ export default function TerminalScreen() {
         onStatus={(loaded, error) => {
           setXtermStatus(loaded ? 'xterm loaded' : `xterm error: ${error}`);
         }}
+        termFontSize={termSettings.fontSize}
+        termFontFamily={termSettings.fontFamily}
+        termThemeName={termSettings.theme}
+        termScrollback={termSettings.scrollback}
+        termCursorBlink={termSettings.cursorBlink}
       />
 
       {!hasReceivedOutput && !sessionError && (
@@ -629,6 +625,7 @@ export default function TerminalScreen() {
         </View>
       )}
     </KeyboardAvoidingView>
+      </View>
     </>
   );
 }
@@ -638,42 +635,58 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  toolbar: {
+  navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-    minHeight: 50,
+    minHeight: 44,
+  },
+  navBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  navStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    gap: 6,
+  },
+  navActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  navIconButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statusDotOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statusDotPulse: {
     position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   statusDotInner: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  sessionId: {
-    ...Typography.caption1,
-    fontFamily: 'monospace',
-    fontWeight: '500',
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
   },
@@ -681,50 +694,6 @@ const styles = StyleSheet.create({
     ...Typography.caption2,
     fontWeight: '700',
     letterSpacing: 0.3,
-  },
-  spacer: {
-    flex: 1,
-  },
-  fullscreenButton: {
-    width: 32,
-    height: 32,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullscreenButtonIcon: {
-    fontSize: 16,
-    color: Colors.primary[500],
-  },
-  eventsButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  eventsButtonText: {
-    ...Typography.caption1,
-    fontWeight: '600',
-    color: Colors.primary[500],
-  },
-  doneButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  doneButtonText: {
-    ...Typography.caption1,
-    fontWeight: '600',
-  },
-  navButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   inputBar: {
     flexDirection: 'row',
@@ -806,7 +775,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderCurve: 'continuous',
     borderWidth: 1,
     overflow: 'hidden',

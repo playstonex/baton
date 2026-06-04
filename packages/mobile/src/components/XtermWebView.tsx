@@ -1,7 +1,9 @@
-import { forwardRef, useImperativeHandle, useRef, useCallback } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useCallback, useEffect } from 'react';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useColorScheme } from 'react-native';
 import { XTERM_JS, XTERM_CSS, ADDON_FIT_JS } from './xterm-bundle';
+import type { TerminalTheme, TerminalFont } from '../stores/terminal-settings';
+import { getTerminalThemeColors } from '../stores/terminal-settings';
 
 export interface XtermWebViewRef {
   write: (data: string) => void;
@@ -12,6 +14,11 @@ interface XtermWebViewProps {
   onResize?: (cols: number, rows: number) => void;
   onStatus?: (loaded: boolean, error?: string) => void;
   isDark?: boolean;
+  termFontSize?: number;
+  termFontFamily?: TerminalFont;
+  termThemeName?: TerminalTheme;
+  termScrollback?: number;
+  termCursorBlink?: boolean;
 }
 
 const LIGHT_THEME = {
@@ -58,8 +65,18 @@ const DARK_THEME = {
   brightWhite: '#ffffff',
 };
 
-function buildHtml(isDark: boolean): string {
-  const theme = isDark ? DARK_THEME : LIGHT_THEME;
+function buildHtml(
+  isDark: boolean,
+  fontSize: number,
+  fontFamily: TerminalFont,
+  themeName: TerminalTheme,
+  scrollback: number,
+  cursorBlink: boolean,
+): string {
+  const baseTheme = isDark ? DARK_THEME : LIGHT_THEME;
+  const customTheme = getTerminalThemeColors(themeName, isDark);
+  const theme = customTheme ?? baseTheme;
+  const bg = (customTheme ?? baseTheme).background;
 
   return `<!DOCTYPE html>
 <html>
@@ -68,9 +85,11 @@ function buildHtml(isDark: boolean): string {
   <style>${XTERM_CSS}</style>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: ${theme.background}; overflow: hidden; margin: 0; padding: 0; }
-    #terminal { width: 100%; height: 100%; padding: 2px 0; }
-    .xterm { height: 100%; }
+    html, body { width: 100%; height: 100%; background: ${bg}; overflow: hidden; margin: 0; padding: 0; }
+    #terminal { width: 100%; height: 100%; }
+    .xterm { height: 100%; padding: 0 !important; margin: 0 !important; }
+    .xterm-viewport { padding: 0 !important; margin: 0 !important; }
+    .xterm-screen { padding: 0 !important; margin: 0 !important; }
   </style>
 </head>
 <body>
@@ -84,10 +103,10 @@ function buildHtml(isDark: boolean): string {
     try {
       var term = new Terminal({
         theme: ${JSON.stringify(theme)},
-        fontSize: 13,
-        fontFamily: 'JetBrains Mono, Menlo, Monaco, monospace',
-        cursorBlink: true,
-        scrollback: 5000,
+        fontSize: ${fontSize},
+        fontFamily: '${fontFamily}, Menlo, Monaco, monospace',
+        cursorBlink: ${cursorBlink},
+        scrollback: ${scrollback},
         convertEol: true,
       });
       var fitAddon = new FitAddon.FitAddon();
@@ -104,6 +123,8 @@ function buildHtml(isDark: boolean): string {
       window._termWrite = function(data) { term.write(data); };
       window._termFit = function() { fitAddon.fit(); };
       window._termSetTheme = function(t) { term.options.theme = t; };
+      window._termSetFont = function(s) { term.options.fontSize = s; };
+      window._termSetFontFamily = function(f) { term.options.fontFamily = f; };
       notify({ type: 'status', loaded: true });
     } catch(e) {
       notify({ type: 'status', loaded: false, error: e.message || String(e) });
@@ -114,7 +135,17 @@ function buildHtml(isDark: boolean): string {
 }
 
 export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(function XtermWebView(
-  { onInput, onResize, onStatus, isDark: isDarkProp },
+  {
+    onInput,
+    onResize,
+    onStatus,
+    isDark: isDarkProp,
+    termFontSize = 13,
+    termFontFamily = 'JetBrains Mono',
+    termThemeName = 'default',
+    termScrollback = 5000,
+    termCursorBlink = true,
+  },
   ref,
 ) {
   const webViewRef = useRef<WebView>(null);
@@ -126,6 +157,27 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
       webViewRef.current?.injectJavaScript(`window._termWrite(${JSON.stringify(data)}); true;`);
     },
   }));
+
+  useEffect(() => {
+    const customTheme = getTerminalThemeColors(termThemeName, isDark);
+    if (customTheme) {
+      webViewRef.current?.injectJavaScript(
+        `window._termSetTheme(${JSON.stringify(customTheme)}); true;`,
+      );
+    }
+  }, [termThemeName, isDark]);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(
+      `window._termSetFont(${termFontSize}); true;`,
+    );
+  }, [termFontSize]);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(
+      `window._termSetFontFamily('${termFontFamily}, Menlo, Monaco, monospace'); true;`,
+    );
+  }, [termFontFamily]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -145,11 +197,18 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
     [onInput, onResize, onStatus],
   );
 
+  const html = buildHtml(isDark, termFontSize, termFontFamily, termThemeName, termScrollback, termCursorBlink);
+  const bg = (() => {
+    const customTheme = getTerminalThemeColors(termThemeName, isDark);
+    if (customTheme) return customTheme.background;
+    return isDark ? '#191919' : '#fafaf9';
+  })();
+
   return (
     <WebView
       ref={webViewRef}
-      source={{ html: buildHtml(isDark) }}
-      style={{ flex: 1, backgroundColor: isDark ? '#191919' : '#fafaf9', overflow: 'hidden' }}
+      source={{ html }}
+      style={{ flex: 1, backgroundColor: bg, overflow: 'hidden' }}
       originWhitelist={['file:*', 'data:*']}
       onMessage={handleMessage}
       allowsBackForwardNavigationGestures={false}

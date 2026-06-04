@@ -7,7 +7,7 @@ import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../../src/stores/events';
 import { wsService } from '../../src/services/websocket';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Typography, CornerRadius, Spacing, Colors } from '../../src/constants/theme';
+import { Typography, CornerRadius, iOSGroupedRadius, Spacing, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderCurve: 'continuous',
     padding: Spacing.lg,
     alignItems: 'center',
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   fileChangesList: {
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderCurve: 'continuous',
     overflow: 'hidden',
   },
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   emptyState: {
     padding: Spacing['4xl'],
     alignItems: 'center',
-    borderRadius: CornerRadius.large,
+    borderRadius: iOSGroupedRadius,
     borderCurve: 'continuous',
     marginTop: Spacing.xs,
   },

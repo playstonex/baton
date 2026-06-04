@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import FileIcon, { defaultStyles } from 'react-native-file-icon';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { Spinner } from 'heroui-native';
 import { useAgentStore } from '../../src/stores/agents';
 import { apiFetch } from '../../src/services/api';
@@ -17,6 +17,42 @@ interface FileEntry {
   path: string;
   isDir: boolean;
   size: number;
+}
+
+interface FileIconMap {
+  [key: string]: { icon: string; color: string };
+}
+
+const FILE_ICONS: FileIconMap = {
+  ts: { icon: 'logo-nodejs', color: '#3178c6' },
+  tsx: { icon: 'logo-react', color: '#61dafb' },
+  js: { icon: 'logo-nodejs', color: '#f7df1e' },
+  jsx: { icon: 'logo-react', color: '#61dafb' },
+  json: { icon: 'code-slash', color: '#5b9bd5' },
+  css: { icon: 'color-palette', color: '#264de4' },
+  html: { icon: 'globe', color: '#e34c26' },
+  md: { icon: 'document-text', color: '#8b949e' },
+  py: { icon: 'logo-python', color: '#3776ab' },
+  rb: { icon: 'logo-ruby', color: '#cc342d' },
+  rs: { icon: 'cog', color: '#dea584' },
+  go: { icon: 'code-slash', color: '#00add8' },
+  sh: { icon: 'terminal', color: '#4eaa25' },
+  yaml: { icon: 'settings', color: '#cb171e' },
+  yml: { icon: 'settings', color: '#cb171e' },
+  toml: { icon: 'settings', color: '#9c4221' },
+  sql: { icon: 'server', color: '#336791' },
+  png: { icon: 'image', color: '#e8710a' },
+  jpg: { icon: 'image', color: '#e8710a' },
+  jpeg: { icon: 'image', color: '#e8710a' },
+  svg: { icon: 'image', color: '#ffb13b' },
+  gif: { icon: 'image', color: '#e8710a' },
+  lock: { icon: 'lock-closed', color: '#6e7681' },
+  env: { icon: 'key', color: '#ecd53f' },
+  gitignore: { icon: 'git-branch', color: '#f05032' },
+};
+
+function getFileIconInfo(ext: string): { icon: string; color: string } {
+  return FILE_ICONS[ext] ?? { icon: 'document', color: '#8b949e' };
 }
 
 function getExtension(filename: string): string {
@@ -71,17 +107,17 @@ export default function FilesScreen() {
     return (
       <View style={[s.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}>
         <View style={[s.previewHeader, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
-          <Pressable onPress={() => setFileContent(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '500' }]}>
-              {'\u2190'} Back
-            </Text>
-          </Pressable>
           <Text
             style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: 'monospace' }]}
             numberOfLines={1}
           >
             {fileName}
           </Text>
+          <Pressable onPress={() => setFileContent(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[s.closeBtn, { backgroundColor: c.elevated }]}
+          >
+            <Ionicons name="close" size={16} color={c.textSecondary} />
+          </Pressable>
         </View>
         <FilePreview fileName={fileName} content={fileContent} />
       </View>
@@ -91,12 +127,8 @@ export default function FilesScreen() {
   return (
     <View style={[s.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}>
       <View style={[s.breadcrumb, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
-        <Pressable onPress={() => router.back()} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-          <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '500' }]}>{'\u2190'} Files</Text>
-        </Pressable>
-        <Text style={[Typography.footnote, { color: c.separator, marginHorizontal: Spacing.xs }]}>/</Text>
-        <Pressable onPress={() => fetchDir('/')} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-          <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '500' }]}>~</Text>
+        <Pressable onPress={() => fetchDir(projectPath)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+          <Ionicons name="home-outline" size={14} color={c.textSecondary} />
         </Pressable>
         {pathParts.map((part, i) => {
           const path = '/' + pathParts.slice(0, i + 1).join('/');
@@ -135,7 +167,7 @@ export default function FilesScreen() {
           }
           renderItem={({ item }) => {
             const ext = getExtension(item.name);
-            const iconStyle = ext && (defaultStyles as Record<string, object>)[ext];
+            const iconInfo = getFileIconInfo(ext);
             return (
               <Pressable
                 onPress={() => (item.isDir ? fetchDir(item.path) : openFile(item.path))}
@@ -153,11 +185,9 @@ export default function FilesScreen() {
               >
                 <View style={[s.iconBox, { backgroundColor: item.isDir ? c.accentBg : c.elevated }]}>
                   {item.isDir ? (
-                    <Text style={[Typography.caption1, { color: Colors.primary[500], fontWeight: '600' }]}>folder</Text>
-                  ) : iconStyle ? (
-                    <FileIcon extension={ext} size={22} {...iconStyle} />
+                    <Ionicons name="folder" size={18} color={Colors.primary[500]} />
                   ) : (
-                    <FileIcon extension={ext || 'txt'} size={22} />
+                    <Ionicons name={iconInfo.icon as React.ComponentProps<typeof Ionicons>['name']} size={18} color={iconInfo.color} />
                   )}
                 </View>
                 <Text
@@ -248,6 +278,13 @@ const s = StyleSheet.create({
     height: 32,
     borderRadius: CornerRadius.small,
     borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },

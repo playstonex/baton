@@ -10,6 +10,7 @@ import type {
   GitCreateBranchRequest,
   GitLogResult,
   GitRemoteUrlResult,
+  GitDiffResult,
 } from '@baton/shared';
 
 export const gitService = {
@@ -76,5 +77,18 @@ export const gitService = {
 
   remoteUrl(projectPath: string): Promise<GitRemoteUrlResult> {
     return apiFetch<GitRemoteUrlResult>(`/api/git/remote-url?path=${encodeURIComponent(projectPath)}`);
+  },
+
+  diff(projectPath: string, file?: string, staged?: boolean): Promise<GitDiffResult> {
+    let url = `/api/git/diff?path=${encodeURIComponent(projectPath)}`;
+    if (file) url += `&file=${encodeURIComponent(file)}`;
+    if (staged) url += `&staged=true`;
+    return apiFetch<GitDiffResult>(url);
+  },
+
+  commitDiff(projectPath: string, hash: string): Promise<GitDiffResult> {
+    return apiFetch<GitDiffResult>(
+      `/api/git/commit-diff?path=${encodeURIComponent(projectPath)}&hash=${encodeURIComponent(hash)}`,
+    );
   },
 };

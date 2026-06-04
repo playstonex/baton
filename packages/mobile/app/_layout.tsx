@@ -14,12 +14,14 @@ import { wsService } from '../src/services/websocket';
 import { loadCredentials } from '../src/services/secure-storage';
 import { Typography } from '../src/constants/theme';
 import { useThemeStore } from '../src/stores/theme';
+import { useTerminalSettingsStore } from '../src/stores/terminal-settings';
 import { useThemeColors } from '../src/hooks/useThemeColors';
 
 export default function RootLayout() {
   const setCredentials = useConnectionStore((s) => s.setCredentials);
   const setConnected = useConnectionStore((s) => s.setConnected);
   const loadTheme = useThemeStore((s) => s.loadTheme);
+  const loadTerminalSettings = useTerminalSettingsStore((s) => s.loadSettings);
   const loadAgents = useAgentStore((s) => s.loadAgents);
   const loadRecent = useRecentStore((s) => s.loadRecent);
   const initialized = useRef(false);
@@ -31,6 +33,7 @@ export default function RootLayout() {
     initialized.current = true;
 
     loadTheme();
+    loadTerminalSettings();
     loadAgents();
     loadRecent();
 
@@ -96,8 +99,16 @@ export default function RootLayout() {
           <Stack.Screen
             name="terminal/[sessionId]"
             options={{
-              title: 'Terminal',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="terminal-settings/[sessionId]"
+            options={{
+              title: 'Terminal Settings',
               headerTintColor: c.textPrimary,
+              headerBackTitle: 'Terminal',
+              headerBackTitleStyle: { fontSize: 17 },
             }}
           />
           <Stack.Screen
@@ -105,6 +116,8 @@ export default function RootLayout() {
             options={{
               title: 'Agent Detail',
               headerTintColor: c.textPrimary,
+              headerBackTitle: 'Back',
+              headerBackTitleStyle: { fontSize: 17 },
             }}
           />
           <Stack.Screen
@@ -112,6 +125,8 @@ export default function RootLayout() {
             options={{
               title: 'Files',
               headerTintColor: c.textPrimary,
+              headerBackTitle: 'Back',
+              headerBackTitleStyle: { fontSize: 17 },
             }}
           />
           <Stack.Screen
@@ -119,6 +134,8 @@ export default function RootLayout() {
             options={{
               title: 'Git',
               headerTintColor: c.textPrimary,
+              headerBackTitle: 'Back',
+              headerBackTitleStyle: { fontSize: 17 },
             }}
           />
         </Stack>

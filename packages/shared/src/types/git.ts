@@ -11,7 +11,9 @@ export type GitAction =
   | 'git_log'
   | 'git_stash'
   | 'git_stash_pop'
-  | 'git_remote_url';
+  | 'git_remote_url'
+  | 'git_diff'
+  | 'git_commit_diff';
 
 export interface GitStatusFile {
   path: string;
@@ -76,6 +78,7 @@ export interface GitCreateBranchRequest {
 export interface GitLogEntry {
   hash: string;
   shortHash: string;
+  parents: string[];
   author: string;
   date: string;
   message: string;
@@ -89,4 +92,29 @@ export interface GitRemoteUrlResult {
   url: string;
   owner: string;
   repo: string;
+}
+
+export interface GitDiffLine {
+  type: 'add' | 'remove' | 'context';
+  oldLine: number | null;
+  newLine: number | null;
+  content: string;
+}
+
+export interface GitDiffHunk {
+  header: string;
+  lines: GitDiffLine[];
+}
+
+export interface GitFileDiff {
+  path: string;
+  oldPath: string | null;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  additions: number;
+  deletions: number;
+  hunks: GitDiffHunk[];
+}
+
+export interface GitDiffResult {
+  files: GitFileDiff[];
 }
