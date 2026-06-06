@@ -1,0 +1,205 @@
+name: Release Daemon
+
+# Build & publish standalone daemon+PTY bundles.
+# Triggers:
+#   1. Push a tag matching `daemon-v*`        -> stable daemon release
+#   2. Nightly cron at 08:00 UTC              -> prerelease `daemon-nightly-<date>-<sha>`
+#   3. workflow_dispatch                       -> manual run, behaves like nightly
+#
+# Targets (matches .github/workflows/release.yml build-daemon matrix):
+#   - linux-x64   (ubuntu-latest)
+#   - macos-arm64 (macos-latest)
+
+on:
+  push:
+    tags: ['daemon-v*']
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      prerelease_name:
+        description: 'Optional override for the prerelease tag (defaults to daemon-nightly-<date>-<sha>)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-daemon-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build daemon (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            bun_target: bun-linux-x64
+          - os: macos-latest
+            target: macos-arm64
+            bun_target: bun-darwin-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust PTY build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/daemon/pty
+          key: ${{ matrix.target }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Rust PTY binary
+        run: cargo build --release --manifest-path packages/daemon/pty/Cargo.toml
+
+      - name: Compile daemon + bundle PTY
+        run: |
+          mkdir -p bundle
+          cp packages/daemon/pty/target/release/baton-pty bundle/
+          bun build ./packages/daemon/src/index.ts \
+            --compile \
+            --target=${{ matrix.bun_target }} \
+            --outfile=bundle/baton-daemon
+
+      - name: Create tarball
+        run: |
+          cd bundle
+          tar czf ../baton-daemon-${{ matrix.target }}.tar.gz baton-daemon baton-pty
+
+      - name: Generate SHA256 checksum
+        run: |
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum baton-daemon-${{ matrix.target }}.tar.gz > baton-daemon-${{ matrix.target }}.tar.gz.sha256
+          else
+            shasum -a 256 baton-daemon-${{ matrix.target }}.tar.gz > baton-daemon-${{ matrix.target }}.tar.gz.sha256
+          fi
+          cat baton-daemon-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Verify bundle contents
+        run: |
+          echo "--- tarball listing ---"
+          tar tzf baton-daemon-${{ matrix.target }}.tar.gz
+          echo "--- bundle sizes ---"
+          ls -lh bundle/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baton-daemon-${{ matrix.target }}
+          path: |
+            baton-daemon-${{ matrix.target }}.tar.gz
+            baton-daemon-${{ matrix.target }}.tar.gz.sha256
+          retention-days: 14
+
+  release:
+    name: Publish release
+    needs: build
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec cp {} release-assets/ \;
+          echo "--- release assets ---"
+          ls -la release-assets/
+
+      - name: Compute release metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          REF="${GITHUB_REF:-}"
+          EVENT="${GITHUB_EVENT_NAME:-}"
+          INPUT_NAME="${INPUT_PRERELEASE_NAME:-}"
+          if [[ "$REF" == refs/tags/daemon-v* ]]; then
+            TAG="${REF#refs/tags/}"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "name=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "body<<EOF"
+              echo "## Daemon ${TAG}"
+              echo ""
+              echo "Standalone daemon + PTY bundle."
+              echo ""
+              echo "**Install:**"
+              echo '```bash'
+              echo "tar xzf baton-daemon-<target>.tar.gz"
+              echo "./baton-daemon"
+              echo '```'
+              echo ""
+              echo "**Targets:** linux-x64, macos-arm64"
+              echo ""
+              echo "**Verify:** compare the \`.sha256\` file against the tarball."
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            DATE=$(date -u +%Y-%m-%d)
+            SHA=$(git rev-parse --short HEAD)
+            if [[ -n "$INPUT_NAME" ]]; then
+              TAG="$INPUT_NAME"
+              NAME="$INPUT_NAME"
+            else
+              TAG="daemon-nightly-${DATE}-${SHA}"
+              NAME="Daemon Nightly ${DATE} (${SHA})"
+            fi
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "body<<EOF"
+              echo "Automated nightly build of the daemon from \`${SHA}\` on ${DATE}."
+              echo ""
+              echo "Not a stable release — expect rough edges. Pin a \`daemon-v*\` tag for production."
+              echo ""
+              echo "**Targets:** linux-x64, macos-arm64"
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          INPUT_PRERELEASE_NAME: ${{ inputs.prerelease_name }}
+
+      - name: Delete existing release for this tag (best-effort)
+        if: steps.meta.outputs.prerelease == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Re-runs on the same day, or manual overrides, can collide with an existing tag.
+          # Wipe it cleanly so we can recreate.
+          gh release delete "${{ steps.meta.outputs.tag }}" \
+            --yes --cleanup-tag --repo "${{ github.repository }}" || true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          body: ${{ steps.meta.outputs.body }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          make_latest: ${{ steps.meta.outputs.make_latest }}
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
