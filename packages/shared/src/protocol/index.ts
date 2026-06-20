@@ -5,15 +5,149 @@ import type {
   SessionStatus,
   HostStatus,
   AdapterMode,
+  ThinkingConfig,
+  ReasoningEffort,
+  ServiceTier,
 } from '../types/index.js';
+// AccessMode is defined locally below (kept for backward compat with main).
 
 // WebSocket message types: Client → Daemon
-export type ClientMessage = TerminalInputMessage | ControlMessage;
+export type ClientMessage =
+  | TerminalInputMessage
+  | ChatInputMessage
+  | SteerInputMessage
+  | CancelTurnMessage
+  | ApproveInputMessage
+  | RejectInputMessage
+  | ModelListRequestMessage
+  | ModelSelectMessage
+  | ReasoningEffortSelectMessage
+  | ThinkingConfigSelectMessage
+  | AccessModeSelectMessage
+  | ServiceTierSelectMessage
+  | GitBranchListRequestMessage
+  | GitBranchSelectMessage
+  | GitStatusRequestMessage
+  | GitCommitMessage
+  | GitPushMessage
+  | GitPullMessage
+  | GitCreateBranchMessage
+  | ControlMessage;
 
 export interface TerminalInputMessage {
   type: 'terminal_input';
   sessionId: string;
   data: string;
+}
+
+// ── Chat / SDK input messages (Client → Daemon) ────────────────────
+
+/** Conversational message — routed to SDK messageQueue (preferred) or PTY stdin. */
+export interface ChatInputMessage {
+  type: 'chat_input';
+  sessionId: string;
+  content: string;
+  model?: string;
+  /** Optional message ID for request-response tracking */
+  messageId?: string;
+}
+
+/** Mid-turn steering — injects a follow-up while the agent is still running (SDK only). */
+export interface SteerInputMessage {
+  type: 'steer_input';
+  sessionId: string;
+  content: string;
+}
+
+/** Cancel the current in-progress turn. */
+export interface CancelTurnMessage {
+  type: 'cancel_turn';
+  sessionId: string;
+}
+
+export interface ApproveInputMessage {
+  type: 'approve_input';
+  sessionId: string;
+  reason?: string;
+}
+
+export interface RejectInputMessage {
+  type: 'reject_input';
+  sessionId: string;
+  reason?: string;
+}
+
+export interface ModelListRequestMessage {
+  type: 'model_list_request';
+  sessionId: string;
+}
+
+export interface ModelSelectMessage {
+  type: 'model_select';
+  sessionId: string;
+  model: string;
+}
+
+export interface ReasoningEffortSelectMessage {
+  type: 'reasoning_effort_select';
+  sessionId: string;
+  effort: ReasoningEffort;
+}
+
+export interface ThinkingConfigSelectMessage {
+  type: 'thinking_config_select';
+  sessionId: string;
+  config: ThinkingConfig;
+}
+
+export interface AccessModeSelectMessage {
+  type: 'access_mode_select';
+  sessionId: string;
+  mode: AccessMode;
+}
+
+export interface ServiceTierSelectMessage {
+  type: 'service_tier_select';
+  sessionId: string;
+  tier: ServiceTier;
+}
+
+export interface GitBranchListRequestMessage {
+  type: 'git_branch_list_request';
+  sessionId: string;
+}
+
+export interface GitBranchSelectMessage {
+  type: 'git_branch_select';
+  sessionId: string;
+  branch: string;
+}
+
+export interface GitStatusRequestMessage {
+  type: 'git_status_request';
+  sessionId: string;
+}
+
+export interface GitCommitMessage {
+  type: 'git_commit';
+  sessionId: string;
+  message: string;
+}
+
+export interface GitPushMessage {
+  type: 'git_push';
+  sessionId: string;
+}
+
+export interface GitPullMessage {
+  type: 'git_pull';
+  sessionId: string;
+}
+
+export interface GitCreateBranchMessage {
+  type: 'git_create_branch';
+  sessionId: string;
+  name: string;
 }
 
 export type ControlAction =
@@ -60,7 +194,11 @@ export type DaemonMessage =
   | SessionOwnershipMessage
   | HealthScoreMessage
   | AccessModeMessage
+  | ModelListMessage
+  | GitBranchListMessage
+  | GitStatusMessage
   | GitResultMessage
+  | AckMessage
   | ErrorMessage;
 
 export interface TerminalOutputMessage {
@@ -129,6 +267,37 @@ export interface ErrorMessage {
   type: 'error';
   message: string;
   code?: string;
+  /** Optional: echo back the messageId from the original request */
+  replyToMessageId?: string;
+}
+
+export interface AckMessage {
+  type: 'ack';
+  status: 'ok' | 'error';
+  messageId: string;
+  error?: string;
+}
+
+export interface ModelListMessage {
+  type: 'model_list';
+  sessionId: string;
+  models: string[];
+  selected?: string;
+}
+
+export interface GitBranchListMessage {
+  type: 'git_branch_list';
+  sessionId: string;
+  branches: string[];
+  currentBranch: string;
+}
+
+export interface GitStatusMessage {
+  type: 'git_status';
+  sessionId: string;
+  status: string;
+  diff: string;
+  projectPath: string;
 }
 
 // Access control modes for agent permission handling
@@ -146,6 +315,10 @@ export interface GitResultMessage {
   success: boolean;
   data?: unknown;
   error?: string;
+  /** Optional for new chat-style per-session operations; absent on legacy broadcasts. */
+  sessionId?: string;
+  /** New unified operation tag (checkout/commit/push/pull/create_branch). */
+  operation?: string;
 }
 
 // Relay protocol (Phase 2)

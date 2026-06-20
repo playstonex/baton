@@ -1,4 +1,13 @@
-import type { AgentConfig, AgentProcess, ParsedEvent } from '@baton/shared';
+import type {
+  AgentConfig,
+  AgentProcess,
+  ParsedEvent,
+  SdkAgentAdapter,
+  ThinkingConfig,
+  ReasoningEffort,
+  AccessMode,
+  ServiceTier,
+} from '@baton/shared';
 import { VALID_TRANSITIONS, generateId } from '@baton/shared';
 import type { AgentState, AgentSnapshot, TimelineItem } from '@baton/shared';
 import type { BaseAgentAdapter } from './adapter.js';
@@ -15,14 +24,22 @@ interface IPty {
   onExit(cb: (e: { exitCode: number; signal?: number }) => void): void;
 }
 
+interface SdkSession {
+  write: (input: string) => void;
+  stop: () => Promise<void>;
+}
+
 interface ManagedAgent {
   process: AgentProcess;
   adapter: BaseAgentAdapter | null;
   pty: IPty | null;
+  sdk: SdkSession | null;
+  sdkAdapter: SdkAgentAdapter | null;
   state: AgentState;
   cols: number;
   rows: number;
   outputHistory: string[];
+  displayHistory: string[];
   eventHistory: ParsedEvent[];
   timeline: TimelineItem[];
   eventCallbacks: Set<(event: ParsedEvent, sessionId: string) => void>;
@@ -199,10 +216,13 @@ export class AgentManager {
               process: agentProcess,
               adapter: null,
               pty: null,
+              sdk: null,
+              sdkAdapter: null,
               state: snapshot.state,
               cols: snapshot.cols ?? DEFAULT_COLS,
               rows: snapshot.rows ?? DEFAULT_ROWS,
               outputHistory: [],
+              displayHistory: [],
               eventHistory: snapshot.timeline as unknown as ParsedEvent[],
               timeline: snapshot.timeline,
               eventCallbacks: new Set(),
@@ -249,10 +269,13 @@ export class AgentManager {
       process: agentProcess,
       adapter,
       pty,
+      sdk: null,
+      sdkAdapter: null,
       state: { status: 'initializing', at: Date.now() },
       cols,
       rows,
       outputHistory: [],
+      displayHistory: [],
       eventHistory: [],
       timeline: [],
       eventCallbacks: new Set(),
@@ -276,9 +299,16 @@ export class AgentManager {
         }
       }
 
-      // Broadcast raw terminal data
-      for (const cb of managed.rawCallbacks) {
-        cb(data, id);
+      // Broadcast raw terminal data (adapter may filter for non-terminal protocols)
+      const filtered = adapter.filterRawOutput(data);
+      if (filtered !== null) {
+        managed.displayHistory.push(filtered);
+        if (managed.displayHistory.length > MAX_OUTPUT_HISTORY) {
+          managed.displayHistory = managed.displayHistory.slice(-OUTPUT_TRIM_TO);
+        }
+        for (const cb of managed.rawCallbacks) {
+          cb(filtered, id);
+        }
       }
 
       // Parse and broadcast structured events
@@ -301,6 +331,17 @@ export class AgentManager {
           this.pushTimeline(managed, 'tool_use', `Tool: ${event.tool}`);
         } else if (event.type === 'error') {
           this.pushTimeline(managed, 'error', event.message);
+        }
+
+        // For adapters that suppress raw output, forward text events to terminal
+        if (filtered === null && event.type === 'raw_output') {
+          managed.displayHistory.push(event.content);
+          if (managed.displayHistory.length > MAX_OUTPUT_HISTORY) {
+            managed.displayHistory = managed.displayHistory.slice(-OUTPUT_TRIM_TO);
+          }
+          for (const cb of managed.rawCallbacks) {
+            cb(event.content, id);
+          }
         }
 
         for (const cb of managed.eventCallbacks) {
@@ -338,6 +379,84 @@ export class AgentManager {
     });
 
     this.agents.set(id, managed);
+    adapter.afterSpawn((data) => pty.write(data), config);
+    this.persist(id);
+    return id;
+  }
+
+  /** Start an agent backed by an SDK adapter (no PTY, no spawn). */
+  async startSdk(config: AgentConfig, sdkAdapter: SdkAgentAdapter): Promise<string> {
+    const id = generateId();
+    const cols = DEFAULT_COLS;
+    const rows = DEFAULT_ROWS;
+
+    const agentProcess: AgentProcess = {
+      id,
+      type: config.type,
+      projectPath: config.projectPath,
+      status: 'starting',
+      startedAt: new Date().toISOString(),
+    };
+
+    const managed: ManagedAgent = {
+      process: agentProcess,
+      adapter: null,
+      pty: null,
+      sdk: null,
+      sdkAdapter,
+      state: { status: 'initializing', at: Date.now() },
+      cols,
+      rows,
+      outputHistory: [],
+      displayHistory: [],
+      eventHistory: [],
+      timeline: [],
+      eventCallbacks: new Set(),
+      rawCallbacks: new Set(),
+      firstOutputReceived: false,
+    };
+
+    this.agents.set(id, managed);
+
+    const { write, stop } = await sdkAdapter.startSession(config, (event: ParsedEvent) => {
+      managed.eventHistory.push(event);
+      if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
+        managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
+      }
+
+      if (managed.state.status === 'initializing') {
+        this.transition(id, 'running');
+      }
+
+      if (event.type === 'tool_use' && managed.state.status === 'running') {
+        managed.state = {
+          ...managed.state,
+          toolCount: managed.state.toolCount + 1,
+        };
+      }
+
+      if (event.type === 'tool_use') {
+        this.pushTimeline(managed, 'tool_use', `Tool: ${event.tool}`);
+      } else if (event.type === 'error') {
+        this.pushTimeline(managed, 'error', event.message);
+      } else if (event.type === 'chat_message' || event.type === 'raw_output') {
+        // Mirror assistant text into displayHistory so terminal reconnection
+        // shows the conversation even for SDK-only agents.
+        managed.displayHistory.push(event.content);
+        if (managed.displayHistory.length > MAX_OUTPUT_HISTORY) {
+          managed.displayHistory = managed.displayHistory.slice(-OUTPUT_TRIM_TO);
+        }
+        for (const cb of managed.rawCallbacks) cb(event.content, id);
+      }
+
+      for (const cb of managed.eventCallbacks) cb(event, id);
+    });
+
+    managed.sdk = { write, stop };
+
+    if (managed.state.status === 'initializing') {
+      this.transition(id, 'running');
+    }
     this.persist(id);
     return id;
   }
@@ -350,11 +469,14 @@ export class AgentManager {
     managed.eventCallbacks.clear();
     managed.rawCallbacks.clear();
 
+    if (managed.sdk) {
+      await managed.sdk.stop();
+    }
     if (managed.pty) {
       managed.pty.kill();
     }
 
-    if (!managed.pty) {
+    if (!managed.pty && !managed.sdk) {
       managed.process.stoppedAt = new Date().toISOString();
       managed.state = { status: 'stopped', at: Date.now(), exitCode: 0 };
       managed.process.status = 'stopped';
@@ -398,8 +520,93 @@ export class AgentManager {
     const managed = this.agents.get(id);
     if (!managed) throw new Error(`Agent ${id} not found`);
     if (managed.state.status === 'stopped') throw new Error(`Agent ${id} is stopped`);
-    if (!managed.pty) throw new Error(`Agent ${id} has no PTY`);
-    managed.pty.write(data);
+    if (managed.pty) {
+      const transformed = managed.adapter?.transformInput(data) ?? data;
+      if (transformed !== null) {
+        managed.pty.write(transformed);
+      }
+    } else if (managed.sdk) {
+      managed.sdk.write(data);
+    } else {
+      throw new Error(`Agent ${id} has no active session`);
+    }
+  }
+
+  /** Conversational write — appends newline for PTY agents, raw for SDK agents. */
+  chatWrite(id: string, content: string): void {
+    const managed = this.agents.get(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    if (managed.state.status === 'stopped') throw new Error(`Agent ${id} is stopped`);
+
+    if (managed.sdk) {
+      managed.sdk.write(content);
+    } else if (managed.pty) {
+      managed.pty.write(content + '\n');
+    } else {
+      throw new Error(`Agent ${id} has no active session`);
+    }
+  }
+
+  /** Mid-turn steering — injects a follow-up while the agent is still running. */
+  steer(id: string, content: string): void {
+    const managed = this.agents.get(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    if (managed.state.status === 'stopped') throw new Error(`Agent ${id} is stopped`);
+
+    if (managed.sdk) {
+      managed.sdk.write(content);
+    } else if (managed.pty) {
+      // ESC to interrupt current prompt, then send the new content
+      managed.pty.write('\x1b');
+      setTimeout(() => {
+        if (managed.pty) managed.pty.write(content + '\n');
+      }, 200);
+      for (const cb of managed.eventCallbacks) {
+        cb({ type: 'chat_message', role: 'user', content, timestamp: Date.now() }, id);
+      }
+    } else {
+      throw new Error(`Agent ${id} has no active session`);
+    }
+  }
+
+  /** Cancel the current in-progress turn (SDK stop or PTY Ctrl-C). */
+  async cancelTurn(id: string): Promise<void> {
+    const managed = this.agents.get(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    if (managed.state.status === 'stopped') throw new Error(`Agent ${id} is stopped`);
+
+    if (managed.sdk) {
+      await managed.sdk.stop();
+    } else if (managed.pty) {
+      managed.pty.write('\x03');
+    }
+  }
+
+  /** Allow external code to register an SDK session on an existing agent record. */
+  registerSdk(id: string, sdk: SdkSession, adapter?: SdkAgentAdapter): void {
+    const managed = this.agents.get(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    managed.sdk = sdk;
+    if (adapter) managed.sdkAdapter = adapter;
+  }
+
+  /** Allow external code to register the SDK adapter (e.g. for approve/reject). */
+  registerSdkAdapter(id: string, adapter: SdkAgentAdapter): void {
+    const managed = this.agents.get(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    managed.sdkAdapter = adapter;
+  }
+
+  async approve(id: string, reason?: string): Promise<void> {
+    const managed = this.agents.get(id);
+    if (!managed?.sdkAdapter?.approve) return;
+    await managed.sdkAdapter.approve(reason);
+  }
+
+  async reject(id: string, reason?: string): Promise<void> {
+    const managed = this.agents.get(id);
+    if (!managed?.sdkAdapter?.reject) return;
+    await managed.sdkAdapter.reject(reason);
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -416,6 +623,12 @@ export class AgentManager {
     const managed = this.agents.get(id);
     if (!managed) throw new Error(`Agent ${id} not found`);
     return [...managed.outputHistory];
+  }
+
+  getDisplayHistory(id: string): string[] {
+    const managed = this.agents.get(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    return [...managed.displayHistory];
   }
 
   getEventHistory(id: string): ParsedEvent[] {
@@ -444,5 +657,183 @@ export class AgentManager {
     if (!managed) throw new Error(`Agent ${id} not found`);
     managed.rawCallbacks.add(callback);
     return () => managed.rawCallbacks.delete(callback);
+  }
+
+  // ── Model Management ──────────────────────────────────────────────
+
+  async listModels(id: string): Promise<string[]> {
+    const adapter = this.getAdapterWithModels(id);
+    if (!adapter) return [];
+    const managed = this.agents.get(id);
+    if (managed?.state?.status === 'stopped' || managed?.state?.status === 'error') return [];
+    if ('listModels' in adapter && typeof adapter.listModels === 'function') {
+      return Promise.resolve(adapter.listModels());
+    }
+    return [];
+  }
+
+  setModel(id: string, model: string): void {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter) adapter.selectedModel = model;
+  }
+
+  getSelectedModel(id: string): string | undefined {
+    const adapter = this.getAdapterWithModels(id);
+    return adapter?.selectedModel ?? undefined;
+  }
+
+  setReasoningEffort(id: string, effort: ReasoningEffort): void {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter && 'selectedReasoningEffort' in adapter) {
+      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort = effort;
+    }
+  }
+
+  setThinkingConfig(id: string, config: ThinkingConfig): void {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter && 'setThinkingConfig' in adapter) {
+      (adapter as unknown as { setThinkingConfig: (c: ThinkingConfig) => void }).setThinkingConfig(config);
+    } else if (adapter && 'selectedReasoningEffort' in adapter) {
+      // Fallback: map to legacy effort if adapter doesn't support ThinkingConfig
+      const effort: ReasoningEffort =
+        config.mode === 'level' && config.level === 'high'
+          ? 'high'
+          : config.mode === 'level' && config.level === 'low'
+            ? 'low'
+            : config.mode === 'level' && config.level === 'medium'
+              ? 'medium'
+              : config.mode === 'budget' && config.budget && config.budget > 1024
+                ? 'high'
+                : config.mode === 'budget' && config.budget && config.budget > 512
+                  ? 'medium'
+                  : config.mode === 'budget' && config.budget
+                    ? 'low'
+                    : 'medium';
+      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort = effort;
+    }
+  }
+
+  setAccessMode(id: string, mode: AccessMode): void {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter && 'selectedAccessMode' in adapter) {
+      (adapter as unknown as { selectedAccessMode: AccessMode }).selectedAccessMode = mode;
+    }
+  }
+
+  setServiceTier(id: string, tier: ServiceTier): void {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter && 'selectedServiceTier' in adapter) {
+      (adapter as unknown as { selectedServiceTier: ServiceTier }).selectedServiceTier = tier;
+    }
+  }
+
+  // ── Git via SDK adapter (Codex/Claude SDK adapters expose git helpers) ──
+
+  async listGitBranches(id: string): Promise<{ branches: string[]; currentBranch: string }> {
+    const managed = this.agents.get(id);
+    if (!managed?.sdkAdapter) return { branches: [], currentBranch: '' };
+    const sa = managed.sdkAdapter as unknown as Record<string, unknown>;
+    if ('listGitBranches' in sa && typeof sa.listGitBranches === 'function') {
+      return (
+        sa as unknown as { listGitBranches: () => Promise<{ branches: string[]; currentBranch: string }> }
+      ).listGitBranches();
+    }
+    return { branches: [], currentBranch: '' };
+  }
+
+  async gitStatus(id: string): Promise<string> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitStatus() : '';
+  }
+
+  async gitDiff(id: string): Promise<string> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitDiff() : '';
+  }
+
+  async gitLog(id: string, count?: number): Promise<string> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitLog(count) : '';
+  }
+
+  async gitCheckout(id: string, branch: string): Promise<{ success: boolean; error?: string }> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitCheckout(branch) : { success: false, error: 'No adapter' };
+  }
+
+  async gitCommit(id: string, message: string): Promise<{ success: boolean; error?: string }> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitCommit(message) : { success: false, error: 'No adapter' };
+  }
+
+  async gitPush(id: string): Promise<{ success: boolean; error?: string }> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitPush() : { success: false, error: 'No adapter' };
+  }
+
+  async gitPull(id: string): Promise<{ success: boolean; error?: string }> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitPull() : { success: false, error: 'No adapter' };
+  }
+
+  async gitCreateBranch(id: string, name: string): Promise<{ success: boolean; error?: string }> {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.gitCreateBranch(name) : { success: false, error: 'No adapter' };
+  }
+
+  getProjectPath(id: string): string {
+    const adapter = this.getGitAdapter(id);
+    return adapter ? adapter.getProjectPath() : '';
+  }
+
+  private getGitAdapter(id: string): {
+    gitStatus: () => Promise<string>;
+    gitDiff: () => Promise<string>;
+    gitLog: (count?: number) => Promise<string>;
+    gitCheckout: (branch: string) => Promise<{ success: boolean; error?: string }>;
+    gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
+    gitPush: () => Promise<{ success: boolean; error?: string }>;
+    gitPull: () => Promise<{ success: boolean; error?: string }>;
+    gitCreateBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
+    getProjectPath: () => string;
+  } | null {
+    const managed = this.agents.get(id);
+    if (!managed?.sdkAdapter) return null;
+    const sa = managed.sdkAdapter as unknown as Record<string, unknown>;
+    if ('gitStatus' in sa && typeof sa.gitStatus === 'function') {
+      return sa as unknown as {
+        gitStatus: () => Promise<string>;
+        gitDiff: () => Promise<string>;
+        gitLog: (count?: number) => Promise<string>;
+        gitCheckout: (branch: string) => Promise<{ success: boolean; error?: string }>;
+        gitCommit: (message: string) => Promise<{ success: boolean; error?: string }>;
+        gitPush: () => Promise<{ success: boolean; error?: string }>;
+        gitPull: () => Promise<{ success: boolean; error?: string }>;
+        gitCreateBranch: (name: string) => Promise<{ success: boolean; error?: string }>;
+        getProjectPath: () => string;
+      };
+    }
+    return null;
+  }
+
+  private getAdapterWithModels(id: string): {
+    selectedModel: string | null;
+    listModels?: () => Promise<string[]> | string[];
+  } | null {
+    const managed = this.agents.get(id);
+    if (!managed) return null;
+
+    if (managed.sdkAdapter && typeof managed.sdkAdapter === 'object') {
+      const sa = managed.sdkAdapter as unknown as Record<string, unknown>;
+      if ('selectedModel' in sa) {
+        return sa as unknown as { selectedModel: string | null; listModels?: () => Promise<string[]> | string[] };
+      }
+    }
+
+    const adapter = managed.adapter as Record<string, unknown> | null;
+    if (adapter && 'selectedModel' in adapter) {
+      return adapter as unknown as { selectedModel: string | null; listModels?: () => Promise<string[]> | string[] };
+    }
+    return null;
   }
 }

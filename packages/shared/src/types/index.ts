@@ -1,7 +1,15 @@
 import type { AgentConfig, SpawnConfig } from './agent.js';
 
 // Agent types
-export type AgentType = 'claude-code' | 'claude-code-sdk' | 'codex' | 'opencode' | 'kiro-cli' | 'custom';
+export type AgentType =
+  | 'claude-code'
+  | 'claude-code-sdk'
+  | 'codex'
+  | 'codex-sdk'
+  | 'opencode'
+  | 'kiro-cli'
+  | 'kiro-cli-acp'
+  | 'custom';
 
 export type AgentStatus =
   | 'starting'
@@ -38,7 +46,14 @@ export type ParsedEvent =
   | CommandExecEvent
   | ThinkingEvent
   | ErrorEvent
-  | RawOutputEvent;
+  | RawOutputEvent
+  | ChatMessageEvent
+  | WaitingApprovalEvent
+  | PlanEvent
+  | TokenUsageEvent
+  | UserInputPromptEvent
+  | DiffEvent
+  | SubagentEvent;
 
 export interface StatusChangeEvent {
   type: 'status_change';
@@ -51,6 +66,7 @@ export interface ToolUseEvent {
   tool: string;
   args: Record<string, unknown>;
   timestamp: number;
+  itemId?: string;
 }
 
 /** Emitted when a tool call begins — provides structured metadata for UI rendering */
@@ -106,19 +122,24 @@ export interface FileChangeEvent {
   changeType: 'create' | 'modify' | 'delete';
   diff?: string;
   timestamp: number;
+  itemId?: string;
 }
 
 export interface CommandExecEvent {
   type: 'command_exec';
   command: string;
   exitCode?: number;
+  output?: string;
+  isStreaming?: boolean;
   timestamp: number;
+  itemId?: string;
 }
 
 export interface ThinkingEvent {
   type: 'thinking';
   content: string;
   timestamp: number;
+  itemId?: string;
 }
 
 export interface ErrorEvent {
@@ -131,7 +152,131 @@ export interface RawOutputEvent {
   type: 'raw_output';
   content: string;
   timestamp: number;
+  itemId?: string;
 }
+
+// ── Chat / SDK events (Codex-style) ────────────────────────────────
+
+export type ChatRole = 'user' | 'assistant';
+
+export interface ChatMessageEvent {
+  type: 'chat_message';
+  role: ChatRole;
+  content: string;
+  timestamp: number;
+}
+
+export interface WaitingApprovalEvent {
+  type: 'waiting_approval';
+  timestamp: number;
+}
+
+export interface PlanEvent {
+  type: 'plan';
+  explanation?: string;
+  steps?: Array<{ step: string; status: 'pending' | 'in_progress' | 'completed' }>;
+  presentation: 'progress' | 'resultStreaming' | 'resultReady' | 'resultCompleted';
+  timestamp: number;
+  itemId?: string;
+}
+
+export interface TokenUsageEvent {
+  type: 'token_usage';
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  timestamp: number;
+}
+
+export interface UserInputPromptEvent {
+  type: 'user_input_prompt';
+  questions: Array<{
+    id: string;
+    header: string;
+    question: string;
+    options?: Array<{ label: string; description: string }>;
+  }>;
+  timestamp: number;
+}
+
+export interface DiffEvent {
+  type: 'diff';
+  diff: string;
+  path?: string;
+  timestamp: number;
+  itemId?: string;
+}
+
+export interface SubagentEvent {
+  type: 'subagent';
+  action: 'started' | 'completed' | 'message';
+  name?: string;
+  model?: string;
+  content?: string;
+  status?: string;
+  timestamp: number;
+  itemId?: string;
+}
+
+// ── Thinking Configuration (unified) ───────────────────────────────
+
+export type ThinkingMode = 'budget' | 'level' | 'none' | 'auto';
+
+export type ThinkingLevel = 'none' | 'auto' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+export interface ThinkingConfig {
+  mode: ThinkingMode;
+  /** Token budget, effective when mode='budget'. Special values: 0=disabled, -1=auto */
+  budget?: number;
+  /** Discrete level, effective when mode='level' */
+  level?: ThinkingLevel;
+}
+
+const LEVEL_TO_BUDGET: Record<string, number> = {
+  none: 0,
+  auto: -1,
+  minimal: 512,
+  low: 1024,
+  medium: 8192,
+  high: 24576,
+  xhigh: 32768,
+};
+
+export function levelToBudget(level: ThinkingLevel): number {
+  return LEVEL_TO_BUDGET[level] ?? -1;
+}
+
+export function budgetToLevel(budget: number): ThinkingLevel {
+  if (budget < 0) return 'auto';
+  if (budget === 0) return 'none';
+  if (budget <= 512) return 'minimal';
+  if (budget <= 1024) return 'low';
+  if (budget <= 8192) return 'medium';
+  if (budget <= 24576) return 'high';
+  return 'xhigh';
+}
+
+export function thinkingConfigToEffort(config?: ThinkingConfig | null): string | undefined {
+  if (!config) return undefined;
+  if (config.mode === 'none') return undefined;
+  if (config.mode === 'auto') return undefined;
+  if (config.mode === 'level' && config.level) {
+    const v = config.level;
+    if (v === 'low' || v === 'medium' || v === 'high') return v;
+    if (v === 'minimal') return 'low';
+    if (v === 'xhigh') return 'high';
+    if (v === 'none' || v === 'auto') return undefined;
+  }
+  if (config.mode === 'budget' && config.budget !== undefined) {
+    return budgetToLevel(config.budget);
+  }
+  return undefined;
+}
+
+/** @deprecated Use ThinkingConfig with mode='level'. Kept for backward compat with older SDK adapters. */
+export type ReasoningEffort = 'low' | 'medium' | 'high';
+
+export type ServiceTier = 'default' | 'fast';
 
 // Agent Adapter interface
 export interface AgentAdapter {
@@ -148,6 +293,10 @@ export interface SdkAgentAdapter extends AgentAdapter {
     config: AgentConfig,
     onEvent: (event: ParsedEvent) => void,
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }>;
+  approve?(reason?: string): Promise<void>;
+  reject?(reason?: string): Promise<void>;
+  selectedModel?: string | null;
+  setThinkingConfig?(config: ThinkingConfig): void;
 }
 
 export type AdapterMode = 'pty' | 'sdk' | 'auto';

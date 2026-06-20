@@ -121,6 +121,12 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="chat/[sessionId]"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
             name="files/[sessionId]"
             options={{
               title: 'Files',

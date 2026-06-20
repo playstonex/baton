@@ -7,7 +7,7 @@ import { cors } from 'hono/cors';
 import QRCode from 'qrcode';
 import { generateKeyPair, keyToFingerprint } from '@baton/shared/crypto';
 import { AgentManager } from './agent/manager.js';
-import { createAdapter, ProviderRegistry } from './agent/index.js';
+import { createAdapter, createSdkAdapter, ProviderRegistry } from './agent/index.js';
 import { Transport } from './transport/index.js';
 import { RelayConnection } from './transport/relay.js';
 import { FileWatcher } from './watcher/index.js';
@@ -154,8 +154,6 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.post('/api/agents/start', async (c) => {
     const body = await c.req.json<StartAgentRequest>();
-    const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
-
     const absPath = resolve(body.projectPath);
     const safe = await access(absPath).then(() => true).catch(() => false);
     if (!safe) {
@@ -163,15 +161,23 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
     allowedProjectPaths.add(absPath);
 
-    const sessionId = await agentManager.start(
-      {
-        type: body.agentType,
-        projectPath: body.projectPath,
-        args: body.args,
-        env: body.env,
-      },
-      adapter,
-    );
+    const agentConfig = {
+      type: body.agentType,
+      projectPath: body.projectPath,
+      args: body.args,
+      env: body.env,
+    };
+
+    // SDK mode: try the SDK adapter first; fall back to PTY if unavailable.
+    const sdkAdapter = createSdkAdapter(body.agentType);
+    const wantSdk = (body.mode ?? 'pty') === 'sdk' || (body.mode === 'auto' && !!sdkAdapter?.isSdkAvailable());
+    let sessionId: string;
+    if (wantSdk && sdkAdapter) {
+      sessionId = await agentManager.startSdk(agentConfig, sdkAdapter);
+    } else {
+      const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
+      sessionId = await agentManager.start(agentConfig, adapter);
+    }
 
     transport.registerSessionEvents(sessionId);
     syncActiveAgents();

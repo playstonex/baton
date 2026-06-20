@@ -107,6 +107,304 @@ export class Transport {
         break;
       }
 
+      case 'chat_input': {
+        try {
+          this.agentManager.chatWrite(msg.sessionId, msg.content);
+          if (msg.messageId) {
+            this.send(clientId, { type: 'ack', status: 'ok', messageId: msg.messageId });
+          }
+        } catch (err) {
+          if (msg.messageId) {
+            this.send(clientId, {
+              type: 'ack',
+              status: 'error',
+              messageId: msg.messageId,
+              error: err instanceof Error ? err.message : 'chatWrite failed',
+            });
+          } else {
+            this.send(clientId, {
+              type: 'error',
+              message: err instanceof Error ? err.message : 'chatWrite failed',
+            });
+          }
+        }
+        break;
+      }
+
+      case 'steer_input': {
+        try {
+          this.agentManager.steer(msg.sessionId, msg.content);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'steer failed',
+          });
+        }
+        break;
+      }
+
+      case 'cancel_turn': {
+        try {
+          void this.agentManager.cancelTurn(msg.sessionId);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'cancelTurn failed',
+          });
+        }
+        break;
+      }
+
+      case 'approve_input': {
+        try {
+          void this.agentManager.approve(msg.sessionId, msg.reason);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'approve failed',
+          });
+        }
+        break;
+      }
+
+      case 'reject_input': {
+        try {
+          void this.agentManager.reject(msg.sessionId, msg.reason);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'reject failed',
+          });
+        }
+        break;
+      }
+
+      case 'model_list_request': {
+        try {
+          void this.agentManager.listModels(msg.sessionId).then((models) => {
+            this.send(clientId, {
+              type: 'model_list',
+              sessionId: msg.sessionId,
+              models,
+              selected: this.agentManager.getSelectedModel(msg.sessionId),
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'listModels failed',
+          });
+        }
+        break;
+      }
+
+      case 'model_select': {
+        try {
+          this.agentManager.setModel(msg.sessionId, msg.model);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setModel failed',
+          });
+        }
+        break;
+      }
+
+      case 'reasoning_effort_select': {
+        try {
+          this.agentManager.setReasoningEffort(msg.sessionId, msg.effort);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setReasoningEffort failed',
+          });
+        }
+        break;
+      }
+
+      case 'thinking_config_select': {
+        try {
+          this.agentManager.setThinkingConfig(msg.sessionId, msg.config);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setThinkingConfig failed',
+          });
+        }
+        break;
+      }
+
+      case 'access_mode_select': {
+        try {
+          this.agentManager.setAccessMode(msg.sessionId, msg.mode);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setAccessMode failed',
+          });
+        }
+        break;
+      }
+
+      case 'service_tier_select': {
+        try {
+          this.agentManager.setServiceTier(msg.sessionId, msg.tier);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setServiceTier failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_branch_list_request': {
+        try {
+          void this.agentManager.listGitBranches(msg.sessionId).then(({ branches, currentBranch }) => {
+            this.send(clientId, {
+              type: 'git_branch_list',
+              sessionId: msg.sessionId,
+              branches,
+              currentBranch,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'listGitBranches failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_branch_select': {
+        try {
+          void this.agentManager.gitCheckout(msg.sessionId, msg.branch).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'checkout',
+              operation: 'checkout',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitCheckout failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_status_request': {
+        try {
+          void Promise.all([
+            this.agentManager.gitStatus(msg.sessionId),
+            this.agentManager.gitDiff(msg.sessionId),
+          ]).then(([status, diff]) => {
+            this.send(clientId, {
+              type: 'git_status',
+              sessionId: msg.sessionId,
+              status,
+              diff,
+              projectPath: this.agentManager.getProjectPath(msg.sessionId),
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitStatus failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_commit': {
+        try {
+          void this.agentManager.gitCommit(msg.sessionId, msg.message).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'commit',
+              operation: 'commit',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitCommit failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_push': {
+        try {
+          void this.agentManager.gitPush(msg.sessionId).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'push',
+              operation: 'push',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitPush failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_pull': {
+        try {
+          void this.agentManager.gitPull(msg.sessionId).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'pull',
+              operation: 'pull',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitPull failed',
+          });
+        }
+        break;
+      }
+
+      case 'git_create_branch': {
+        try {
+          void this.agentManager.gitCreateBranch(msg.sessionId, msg.name).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'create_branch',
+              operation: 'create_branch',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitCreateBranch failed',
+          });
+        }
+        break;
+      }
+
       case 'control':
         this.handleControl(clientId, msg);
         break;
@@ -162,7 +460,7 @@ export class Transport {
         this.ensureSessionRegistered(msg.sessionId);
 
         try {
-          const history = this.agentManager.getOutputHistory(msg.sessionId);
+          const history = this.agentManager.getDisplayHistory(msg.sessionId);
           if (history.length > 0) {
             this.send(clientId, {
               type: 'history_replay',

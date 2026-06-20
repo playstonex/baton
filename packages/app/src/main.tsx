@@ -5,6 +5,7 @@ import { App } from './App.js';
 import { DashboardScreen } from './screens/Dashboard.js';
 import { TerminalScreen } from './screens/Terminal.js';
 import { AgentDetailScreen } from './screens/AgentDetail.js';
+import { ChatScreen } from './screens/Chat.js';
 import { SettingsScreen } from './screens/Settings.js';
 import { FilesScreen } from './screens/Files.js';
 import { GitScreen } from './screens/Git.js';
@@ -22,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
           <Route index element={<DashboardScreen />} />
           <Route path="terminal/:sessionId" element={<TerminalScreen />} />
           <Route path="agent/:sessionId" element={<AgentDetailScreen />} />
+          <Route path="chat/:sessionId" element={<ChatScreen />} />
           <Route path="files/:sessionId" element={<FilesScreen />} />
           <Route path="git/:sessionId" element={<GitScreen />} />
           <Route path="pipelines" element={<PipelinesScreen />} />
