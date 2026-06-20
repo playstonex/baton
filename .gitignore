@@ -28,3 +28,18 @@ packages/mobile/android/
 
 # Rust build artifacts
 packages/daemon/pty/target/
+
+# Agent / tooling working files (not project source)
+.agents/
+.omo/
+.omo-*.md
+.playwright-mcp/
+skills-lock.json
+
+# Debug snapshots
+dashboard-snapshot.md
+baton-dashboard.png
+design/icons/Untitled*.icon/
+
+# Bun lockfile (project uses pnpm)
+bun.lock
