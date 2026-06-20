@@ -4,6 +4,7 @@ export { ClaudeSdkAdapter, claudeSdkAdapter } from './claude-sdk.js';
 export { CodexAdapter } from './codex.js';
 export { CodexSdkAdapter, codexSdkAdapter } from './codex-sdk.js';
 export { KiroCliAdapter } from './kiro-cli.js';
+export { KiroAcpAdapter } from './kiro-acp.js';
 export { OpenCodeAdapter } from './opencode.js';
 export { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
 export { AgentManager } from './manager.js';
@@ -15,6 +16,7 @@ import { ClaudeSdkAdapter, claudeSdkAdapter } from './claude-sdk.js';
 import { CodexAdapter } from './codex.js';
 import { codexSdkAdapter } from './codex-sdk.js';
 import { KiroCliAdapter } from './kiro-cli.js';
+import { KiroAcpAdapter } from './kiro-acp.js';
 import { OpenCodeAdapter } from './opencode.js';
 import { opencodeSdkAdapter } from './opencode-sdk.js';
 import type { BaseAgentAdapter } from './adapter.js';
@@ -24,6 +26,7 @@ const adapters: Record<string, new () => BaseAgentAdapter> = {
   'claude-code-sdk': ClaudeSdkAdapter,
   codex: CodexAdapter,
   'kiro-cli': KiroCliAdapter,
+  'kiro-cli-acp': KiroAcpAdapter,
   opencode: OpenCodeAdapter,
 };
 

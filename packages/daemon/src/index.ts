@@ -16,6 +16,8 @@ import { AnalyticsService } from './system/analytics.js';
 import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
 import { GitService } from './git/index.js';
+import { proxyChatCompletion, ApiProviderRegistry } from './api-converter/index.js';
+import type { ChatCompletionRequest } from './api-converter/index.js';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
   StartAgentRequest,
@@ -23,6 +25,7 @@ import type {
   ParsedEvent,
   ClientMessage,
   DaemonMessage,
+  ApiProviderProfile,
 } from '@baton/shared';
 
 const DEFAULT_PORT = 3210;
@@ -333,6 +336,45 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
+  const RAW_MIME: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+  };
+
+  app.get('/api/files/raw', async (c) => {
+    const filePath = c.req.query('path');
+    if (!filePath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(filePath)) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
+
+    try {
+      const s = await stat(filePath);
+      if (s.isDirectory()) return c.json({ error: 'Path is a directory' }, 400);
+      if (s.size > 10 * 1024 * 1024) return c.json({ error: 'File too large (max 10MB)' }, 400);
+
+      const ext = extname(filePath).toLowerCase();
+      const contentType = RAW_MIME[ext] ?? 'application/octet-stream';
+
+      const data = await readFile(filePath);
+      return new Response(data, {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': String(s.size),
+          'Cache-Control': 'no-cache',
+        },
+      });
+    } catch {
+      return c.json({ error: 'Cannot read file' }, 400);
+    }
+  });
+
   // Git RPC API
   app.get('/api/git/status', async (c) => {
     const projectPath = c.req.query('path');
@@ -493,6 +535,117 @@ export function createDaemon(port = DEFAULT_PORT) {
     const removed = await providerRegistry.remove(c.req.param('name'));
     if (!removed) return c.json({ error: 'Provider not found' }, 404);
     return c.json({ ok: true });
+  });
+
+  // OpenAI Chat Completions → Responses API Converter
+  const apiProviderRegistry = new ApiProviderRegistry();
+  const envApiKey = process.env.OPENAI_API_KEY ?? '';
+  const envBaseUrl = process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
+
+  app.get('/api/api-providers', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    return c.json(apiProviderRegistry.list());
+  });
+
+  app.get('/api/api-providers/default', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const provider = apiProviderRegistry.getDefault();
+    if (!provider) return c.json({ error: 'No provider configured' }, 404);
+    return c.json(provider);
+  });
+
+  app.get('/api/api-providers/:name', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const profile = apiProviderRegistry.get(c.req.param('name'));
+    if (!profile) return c.json({ error: 'Provider not found' }, 404);
+    return c.json({ name: c.req.param('name'), ...profile });
+  });
+
+  app.post('/api/api-providers', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const body = await c.req.json<{
+      name: string;
+      baseUrl: string;
+      apiKey: string;
+      models?: string[];
+      enabled?: boolean;
+      isDefault?: boolean;
+    }>();
+
+    const profile: ApiProviderProfile = {
+      baseUrl: body.baseUrl,
+      apiKey: body.apiKey,
+      models: body.models ?? [],
+      enabled: body.enabled ?? true,
+      isDefault: body.isDefault ?? false,
+      createdAt: new Date().toISOString(),
+    };
+
+    await apiProviderRegistry.set(body.name, profile);
+    return c.json({ ok: true }, 201);
+  });
+
+  app.put('/api/api-providers/:name', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const name = c.req.param('name');
+    const existing = apiProviderRegistry.get(name);
+    if (!existing) return c.json({ error: 'Provider not found' }, 404);
+
+    const body = await c.req.json<Partial<ApiProviderProfile>>();
+    await apiProviderRegistry.set(name, { ...existing, ...body });
+    return c.json({ ok: true });
+  });
+
+  app.delete('/api/api-providers/:name', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const removed = await apiProviderRegistry.remove(c.req.param('name'));
+    if (!removed) return c.json({ error: 'Provider not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/openai/v1/chat/completions', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+
+    const requestedProvider = c.req.header('X-Provider');
+    let provider = requestedProvider
+      ? apiProviderRegistry.get(requestedProvider)
+      : apiProviderRegistry.getDefault();
+
+    if (!provider || !provider.enabled) {
+      if (envApiKey) {
+        provider = {
+          baseUrl: envBaseUrl,
+          apiKey: envApiKey,
+          models: [],
+          enabled: true,
+          isDefault: false,
+        };
+      } else {
+        return c.json({ error: 'No API provider configured' }, 500);
+      }
+    }
+
+    const chatReq = (await c.req.json()) as ChatCompletionRequest;
+    const result = await proxyChatCompletion(chatReq, {
+      apiKey: provider.apiKey,
+      baseUrl: provider.baseUrl,
+    });
+
+    if (result.error) {
+      return c.json({ error: result.error }, result.status as 400 | 401 | 403 | 404 | 429 | 500);
+    }
+
+    if (result.stream) {
+      return new Response(result.stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
+    return c.json(result.json);
   });
 
   // Pipeline / Orchestration API

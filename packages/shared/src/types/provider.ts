@@ -30,3 +30,22 @@ export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
 // Default empty config
 export const EMPTY_PROVIDER_CONFIG: ProviderConfig = { providers: {} };
+
+export const ApiProviderProfileSchema = z.object({
+  baseUrl: z.string().url(),
+  apiKey: z.string(),
+  models: z.array(z.string()).default([]),
+  enabled: z.boolean().default(true),
+  isDefault: z.boolean().default(false),
+  createdAt: z.string().optional(),
+});
+
+export type ApiProviderProfile = z.infer<typeof ApiProviderProfileSchema>;
+
+export const ApiProviderConfigSchema = z.object({
+  providers: z.record(z.string(), ApiProviderProfileSchema),
+});
+
+export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>;
+
+export const EMPTY_API_PROVIDER_CONFIG: ApiProviderConfig = { providers: {} };
