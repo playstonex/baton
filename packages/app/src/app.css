@@ -1,57 +1,72 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
 @import '@heroui/styles';
 
 /* ============================================
-   Baton Design System — Notion-inspired
+   Baton Design System — Geist-inspired
+   Clean, minimal, functional
    ============================================ */
 
-/* Fonts */
-
 @theme {
-  /* Notion-inspired color palette */
+  /* Grayscale (Geist-inspired neutral tones) */
+  --color-gray-0: #ffffff;
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e5e5e5;
+  --color-gray-300: #d4d4d4;
+  --color-gray-400: #a3a3a3;
+  --color-gray-500: #737373;
+  --color-gray-600: #525252;
+  --color-gray-700: #404040;
+  --color-gray-800: #262626;
+  --color-gray-900: #171717;
+  --color-gray-950: #0a0a0a;
 
-  /* Surface levels (light) */
-  --color-surface-0: #ffffff;
-  --color-surface-50: #fafaf9;
-  --color-surface-100: #f5f5f4;
-  --color-surface-200: #e7e5e4;
-  --color-surface-300: #d6d3d1;
-  --color-surface-400: #a8a29e;
-  --color-surface-500: #78716c;
-  --color-surface-600: #57534e;
-  --color-surface-700: #44403c;
-  --color-surface-800: #292524;
-  --color-surface-900: #1c1917;
-  --color-surface-950: #0c0a09;
+  /* Legacy surface aliases (backward compat) */
+  --color-surface-0: var(--color-gray-0);
+  --color-surface-50: var(--color-gray-50);
+  --color-surface-100: var(--color-gray-100);
+  --color-surface-200: var(--color-gray-200);
+  --color-surface-300: var(--color-gray-300);
+  --color-surface-400: var(--color-gray-400);
+  --color-surface-500: var(--color-gray-500);
+  --color-surface-600: var(--color-gray-600);
+  --color-surface-700: var(--color-gray-700);
+  --color-surface-800: var(--color-gray-800);
+  --color-surface-900: var(--color-gray-900);
+  --color-surface-950: var(--color-gray-950);
 
-  /* Primary (Notion blue) */
+  /* Primary (Geist blue) */
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
   --color-primary-200: #bfdbfe;
   --color-primary-300: #93c5fd;
   --color-primary-400: #60a5fa;
-  --color-primary-500: #2383e2;
-  --color-primary-600: #1d4ed8;
-  --color-primary-700: #1e40af;
-  --color-primary-800: #1e3a8a;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
   --color-primary-900: #1e3a8a;
 
   /* Semantic colors */
   --color-success-50: #f0fdf4;
   --color-success-100: #dcfce7;
-  --color-success-400: #22c55e;
-  --color-success-500: #16a34a;
-  --color-success-600: #15803d;
+  --color-success-200: #bbf7d0;
+  --color-success-400: #4ade80;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
 
   --color-warning-50: #fffbeb;
   --color-warning-100: #fef3c7;
-  --color-warning-400: #f59e0b;
-  --color-warning-500: #d97706;
-  --color-warning-600: #b45309;
+  --color-warning-200: #fde68a;
+  --color-warning-400: #facc15;
+  --color-warning-500: #eab308;
+  --color-warning-600: #ca8a04;
 
   --color-danger-50: #fef2f2;
   --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
   --color-danger-400: #f87171;
   --color-danger-500: #ef4444;
   --color-danger-600: #dc2626;
@@ -61,17 +76,13 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 
-  /* Spacing */
-  --spacing-sidebar: 240px;
-
-  /* Border radius (Notion uses subtle rounding) */
+  /* Border radius — Geist uses 6px as base */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
 }
 
-/* Dark mode support */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
@@ -82,32 +93,27 @@
   .dark {
     color-scheme: dark;
   }
-}
 
-/* ============================================
-   Base styles — Notion minimal aesthetic
-   ============================================ */
-
-@layer base {
   html {
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-surface-50 text-surface-900 antialiased;
+    @apply bg-gray-50 text-gray-900;
     font-family: var(--font-sans);
-    line-height: 1.6;
   }
 
   .dark body,
   .dark {
-    @apply bg-surface-950 text-surface-100;
+    @apply bg-gray-950 text-gray-100;
   }
 
   /* Minimal scrollbar */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -115,94 +121,30 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-300 rounded;
+    @apply bg-gray-300 rounded-full;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
 
   .dark ::-webkit-scrollbar-thumb {
-    @apply bg-surface-700;
+    @apply bg-gray-700;
   }
 
-  /* Links */
   a {
-    @apply text-primary-500 hover:text-primary-600;
+    @apply text-blue-600 hover:text-blue-700;
   }
 
   .dark a {
-    @apply text-primary-400 hover:text-primary-300;
+    @apply text-blue-400 hover:text-blue-300;
   }
 
-  /* Code blocks */
   code, pre {
     font-family: var(--font-mono);
   }
 }
 
 /* ============================================
-   Notion-style components
-   ============================================ */
-
-@layer components {
-  .notion-card-hover:hover {
-    @apply border-surface-300 dark:border-surface-700;
-  }
-}
-
-/* ============================================
-   Terminal themes (light/dark)
-   ============================================ */
-
-/* Light terminal (Notion-inspired) */
-:root {
-  --terminal-bg: #fafaf9;
-  --terminal-fg: #1c1917;
-  --terminal-cursor: #2383e2;
-  --terminal-selection: rgba(35, 131, 226, 0.2);
-  --terminal-ansi-black: #78716c;
-  --terminal-ansi-red: #dc2626;
-  --terminal-ansi-green: #16a34a;
-  --terminal-ansi-yellow: #ca8a04;
-  --terminal-ansi-blue: #2383e2;
-  --terminal-ansi-magenta: #9333ea;
-  --terminal-ansi-cyan: #0891b2;
-  --terminal-ansi-white: #292524;
-  --terminal-ansi-bright-black: #a8a29e;
-  --terminal-ansi-bright-red: #ef4444;
-  --terminal-ansi-bright-green: #22c55e;
-  --terminal-ansi-bright-yellow: #eab308;
-  --terminal-ansi-bright-blue: #3b82f6;
-  --terminal-ansi-bright-magenta: #a855f7;
-  --terminal-ansi-bright-cyan: #06b6d4;
-  --terminal-ansi-bright-white: #1c1917;
-}
-
-/* Dark terminal */
-.dark {
-  --terminal-bg: #191919;
-  --terminal-fg: #e8e8e8;
-  --terminal-cursor: #4193ef;
-  --terminal-selection: rgba(65, 147, 239, 0.3);
-  --terminal-ansi-black: #383838;
-  --terminal-ansi-red: #f87171;
-  --terminal-ansi-green: #4ade80;
-  --terminal-ansi-yellow: #fbbf24;
-  --terminal-ansi-blue: #60a5fa;
-  --terminal-ansi-magenta: #c084fc;
-  --terminal-ansi-cyan: #22d3ee;
-  --terminal-ansi-white: #e8e8e8;
-  --terminal-ansi-bright-black: #6b6b6b;
-  --terminal-ansi-bright-red: #fca5a5;
-  --terminal-ansi-bright-green: #86efac;
-  --terminal-ansi-bright-yellow: #fcd34d;
-  --terminal-ansi-bright-blue: #93c5fd;
-  --terminal-ansi-bright-magenta: #d8b4fe;
-  --terminal-ansi-bright-cyan: #a5f3fc;
-  --terminal-ansi-bright-white: #ffffff;
-}
-
-/* ============================================
-   Animations — minimal, Notion-like
+   Animations
    ============================================ */
 
 @keyframes fade-in {
@@ -231,3 +173,36 @@
 @utility animate-pulse-dot {
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
+
+/* ============================================
+   Terminal themes
+   ============================================ */
+
+:root {
+  --terminal-bg: #fafafa;
+  --terminal-fg: #171717;
+  --terminal-cursor: #3b82f6;
+  --terminal-selection: rgba(59, 130, 246, 0.2);
+}
+
+.dark {
+  --terminal-bg: #191919;
+  --terminal-fg: #e8e8e8;
+  --terminal-cursor: #4193ef;
+  --terminal-selection: rgba(65, 147, 239, 0.3);
+}
+
+/* ============================================
+   HeroUI overrides — minimal styling
+   ============================================ */
+
+[data-slot="input-wrapper"] {
+  @apply bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700;
+}
+
+/* ============================================
+   Main content layout — unlayered to prevent
+   any reset that sets padding: 0
+   (Tailwind px-8 py-10 md:px-12 lg:px-16 on
+    the element handles responsive padding)
+   ============================================ */

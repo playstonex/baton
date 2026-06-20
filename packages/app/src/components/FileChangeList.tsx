@@ -15,15 +15,15 @@ export function FileChangeList({ fileChanges }: FileChangeListProps) {
 
   return (
     <div className="mb-5 space-y-2">
-      <h3 className="text-sm font-semibold text-surface-900 dark:text-white">File Changes</h3>
-      <div className="space-y-1">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">File Changes</h3>
+      <div className="space-y-1.5">
         {fileChanges.map((change, i) => (
           <Card key={i}>
-            <CardContent className="flex items-center gap-2 px-3 py-1.5">
+            <CardContent className="flex items-center gap-2.5 px-4 py-2">
               <Chip size="sm" variant="soft" color={CHANGE_COLOR[change.changeType] ?? 'accent'}>
                 {change.changeType}
               </Chip>
-              <span className="truncate font-mono text-[13px] text-surface-700 dark:text-surface-300">{change.path}</span>
+              <span className="truncate font-mono text-[13px] text-gray-700 dark:text-gray-300">{change.path}</span>
             </CardContent>
           </Card>
         ))}

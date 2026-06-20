@@ -28,11 +28,11 @@ const TYPE_DOT: Record<string, string> = {
   tool_call_start: 'bg-blue-500',
   tool_call_end: 'bg-success-500',
   permission_request: 'bg-warning-500',
-  permission_response: 'bg-surface-400',
+  permission_response: 'bg-gray-400',
   turn_boundary: 'bg-primary-300',
   thinking: 'bg-warning-500',
   error: 'bg-danger-500',
-  raw_output: 'bg-surface-400',
+  raw_output: 'bg-gray-400',
 };
 
 export function EventTimeline({ events, maxHeight = 400, sessionId }: EventTimelineProps) {
@@ -42,9 +42,9 @@ export function EventTimeline({ events, maxHeight = 400, sessionId }: EventTimel
 
   return (
     <Card style={{ maxHeight }}>
-      <CardContent className="overflow-auto p-2">
+      <CardContent className="overflow-auto p-4">
         {events.length === 0 ? (
-          <div className="py-8 text-center text-sm text-surface-400">Waiting for events...</div>
+          <div className="py-8 text-center text-sm text-gray-400">Waiting for events...</div>
         ) : (
           sorted.map((event, idx) => (
             <TimelineEventRow
@@ -61,7 +61,7 @@ export function EventTimeline({ events, maxHeight = 400, sessionId }: EventTimel
 
 function TimelineEventRow({ event, sessionId }: { event: ParsedEvent; sessionId?: string }) {
   const color = TYPE_COLORS[event.type] ?? 'default';
-  const dot = TYPE_DOT[event.type] ?? 'bg-surface-400';
+  const dot = TYPE_DOT[event.type] ?? 'bg-gray-400';
   const time = new Date(event.timestamp).toLocaleTimeString();
 
   const renderContent = () => {
@@ -83,7 +83,7 @@ function TimelineEventRow({ event, sessionId }: { event: ParsedEvent; sessionId?
           <span>
             <strong>{event.tool}</strong>
             {event.title ? ` — ${event.title}` : ''}
-            <span className="ml-2 text-[10px] text-surface-400">{event.callId}</span>
+            <span className="ml-2 text-[10px] text-gray-400">{event.callId}</span>
           </span>
         );
       case 'tool_call_end': {
@@ -91,7 +91,7 @@ function TimelineEventRow({ event, sessionId }: { event: ParsedEvent; sessionId?
         return (
           <span className={event.success ? 'text-success-600 dark:text-success-400' : 'text-danger-600 dark:text-danger-400'}>
             {event.success ? '✓' : '✗'} Tool completed
-            {duration && <span className="ml-1 text-surface-400">{duration}</span>}
+            {duration && <span className="ml-1 text-gray-400">{duration}</span>}
           </span>
         );
       }
@@ -105,7 +105,7 @@ function TimelineEventRow({ event, sessionId }: { event: ParsedEvent; sessionId?
         );
       case 'turn_boundary':
         return (
-          <span className="text-surface-400">
+          <span className="text-gray-400">
             Turn {event.direction} <span className="text-[10px]">{event.turnId}</span>
             {event.status ? ` (${event.status})` : ''}
           </span>
@@ -115,21 +115,21 @@ function TimelineEventRow({ event, sessionId }: { event: ParsedEvent; sessionId?
       case 'error':
         return <span className="text-danger-600 dark:text-danger-400">{event.message}</span>;
       case 'raw_output':
-        return <span className="text-surface-500 dark:text-surface-400">{event.content?.slice(0, 50)}</span>;
+        return <span className="text-gray-500 dark:text-gray-400">{event.content?.slice(0, 50)}</span>;
       default:
         return null;
     }
   };
 
   return (
-    <div className="mb-1 flex items-start gap-2 rounded-lg px-2 py-1.5">
+    <div className="mb-2 flex items-start gap-3 rounded-lg px-4 py-2.5">
       <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${dot}`} />
       <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <Chip size="sm" variant="soft" color={color}>{event.type.replace(/_/g, ' ')}</Chip>
-          <span className="text-[10px] text-surface-400">{time}</span>
+          <span className="text-[10px] text-gray-400">{time}</span>
         </div>
-        <div className="text-xs text-surface-700 dark:text-surface-300">{renderContent()}</div>
+        <div className="text-xs text-gray-700 dark:text-gray-300">{renderContent()}</div>
       </div>
     </div>
   );
@@ -159,7 +159,7 @@ function PermissionInline({
   );
 
   if (responded) {
-    return <span className="text-surface-400">Responded</span>;
+    return <span className="text-gray-400">Responded</span>;
   }
 
   return (
@@ -211,14 +211,14 @@ export function PermissionDialog({
       {isOpen && (
         <>
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl dark:bg-surface-900">
-            <h3 className="text-lg font-semibold text-surface-900 dark:text-white">
+          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl dark:bg-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Permission Request
             </h3>
-            <p className="mt-1 text-sm text-surface-500">
+            <p className="mt-1 text-sm text-gray-500">
               {event.tool}: {event.action}
             </p>
-            <p className="mt-3 text-sm text-surface-700 dark:text-surface-300">
+            <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
               {event.description}
             </p>
             <div className="mt-5 flex justify-end gap-2">

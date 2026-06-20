@@ -60,27 +60,27 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
                   : ''
             }`}
           >
-            <div className="w-10 shrink-0 select-none bg-black/20 px-2 py-0.5 text-right text-surface-500">
+            <div className="w-10 shrink-0 select-none bg-black/20 px-2 py-1 text-right text-gray-500">
               {line.lineNumber}
             </div>
             <div
-              className={`w-5 shrink-0 select-none bg-black/20 px-1 py-0.5 text-center ${
+              className={`w-5 shrink-0 select-none bg-black/20 px-1 py-1 text-center ${
                 line.type === 'add'
                   ? 'text-green-400'
                   : line.type === 'remove'
                     ? 'text-red-400'
-                    : 'text-surface-500'
+                    : 'text-gray-500'
               }`}
             >
               {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
             </div>
             <pre
-              className={`whitespace-pre-wrap break-all px-2 py-0.5 ${
+              className={`whitespace-pre-wrap break-all px-2.5 py-1 ${
                 line.type === 'add'
                   ? 'text-green-300'
                   : line.type === 'remove'
                     ? 'text-red-300'
-                    : 'text-surface-300'
+                    : 'text-gray-300'
               }`}
             >
               {line.content}

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Button, Chip } from '@heroui/react';
+import { Button } from '@heroui/react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { wsService } from '../services/websocket.js';
+import { StatusBadge, StatusDot } from '../lib/ui.js';
+import { IconFile, IconGitBranch, IconActivity, IconStop } from '../lib/icons.js';
 import '@xterm/xterm/css/xterm.css';
 
 const LIGHT_THEME = {
@@ -221,25 +223,25 @@ export function TerminalScreen() {
     wsService.send({ type: 'control', action: 'release_session', sessionId });
   }
 
-  const statusDotColor = status === 'running' ? 'bg-success-500' : status === 'thinking' ? 'bg-primary-500' : status === 'stopped' ? 'bg-danger-500' : 'bg-surface-300';
-
   return (
-    <div className="flex h-full flex-col gap-2">
-      <div className="flex items-center justify-between rounded border border-surface-200 bg-white px-3 py-2 dark:border-surface-800 dark:bg-surface-900">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${statusDotColor}`} />
-          <span className="text-sm font-medium text-surface-700 dark:text-surface-300">Agent</span>
-          <span className="font-mono text-xs text-surface-400">{sessionId?.slice(0, 8)}</span>
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white px-5 py-3.5 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex items-center gap-2.5">
+          <StatusDot status={status} />
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Agent</span>
+          <span className="font-mono text-xs text-gray-400">{sessionId?.slice(0, 8)}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           {sessionOwner && (
-            <Chip
-              size="sm"
-              variant="soft"
-              color={sessionOwner === 'local' ? 'success' : 'warning'}
-            >
+            <StatusBadge
+              status={sessionOwner === 'local' ? 'connected' : 'waiting_input'}
+              dot={false}
+            />
+          )}
+          {sessionOwner && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {sessionOwner === 'local' ? 'You control' : 'Remote control'}
-            </Chip>
+            </span>
           )}
           {sessionOwner === 'remote' && (
             <Button size="sm" variant="primary" onPress={claimSession}>
@@ -251,19 +253,21 @@ export function TerminalScreen() {
               Release
             </Button>
           )}
-          <Chip size="sm" variant="soft" color={connected ? 'success' : 'danger'}>
-            {connected ? 'Connected' : 'Disconnected'}
-          </Chip>
+          <StatusBadge status={connected ? 'connected' : 'disconnected'} dot={false} />
           <Button size="sm" variant="outline" onPress={() => navigate(`/files/${sessionId}`)}>
+            <IconFile className="mr-1.5 h-3.5 w-3.5" />
             Files
           </Button>
           <Button size="sm" variant="outline" onPress={() => navigate(`/git/${sessionId}`)}>
+            <IconGitBranch className="mr-1.5 h-3.5 w-3.5" />
             Git
           </Button>
           <Button size="sm" variant="outline" onPress={() => navigate(`/agent/${sessionId}`)}>
+            <IconActivity className="mr-1.5 h-3.5 w-3.5" />
             Events
           </Button>
           <Button size="sm" variant="danger" onPress={stopAgent}>
+            <IconStop className="mr-1.5 h-3.5 w-3.5" />
             Stop
           </Button>
         </div>
@@ -271,7 +275,7 @@ export function TerminalScreen() {
 
       <div
         ref={termContainerRef}
-        className="flex-1 overflow-hidden rounded border border-surface-200 dark:border-surface-800"
+        className="flex-1 overflow-hidden rounded border border-gray-200 dark:border-gray-800"
       />
     </div>
   );
