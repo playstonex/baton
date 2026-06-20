@@ -1,12 +1,20 @@
 import { ActionSheetIOS, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { View, Text } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { BlurView } from 'expo-blur';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import {
+  GlassCard,
+  GlassSectionHeader,
+  GlassButton,
+  GlassPill,
+  GlassDivider,
+} from '../../src/components/GlassKit';
 import {
   Typography,
   Spacing,
   Colors,
-  iOSGroupedRadius,
+  Glass,
 } from '../../src/constants/theme';
 import {
   useTerminalSettingsStore,
@@ -81,75 +89,73 @@ export default function TerminalSettingsScreen() {
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={s.content}
     >
-      <Text style={s.header}>APPEARANCE</Text>
-      <View style={[s.group, { backgroundColor: c.card }]}>
-        <View style={s.groupInner}>
-          <Pressable onPress={showThemePicker} style={s.row}>
-            <Text style={[Typography.subhead, { color: c.textPrimary }]}>Theme</Text>
-            <View style={s.spacer} />
-            <View style={s.valueWrap}>
-              <View style={[s.swatch, { backgroundColor: getSwatchBg(theme) }]}>
-                <Text style={[Typography.caption2, { color: getSwatchFg(theme), fontWeight: '600', fontSize: 9 }]}>
-                  Aa
-                </Text>
-              </View>
-              <Text style={[Typography.subhead, { color: c.textSecondary }]}>{themeLabel}</Text>
+      {/* Appearance section */}
+      <GlassSectionHeader c={c} title="Appearance" />
+      <GlassCard c={c}>
+        <Pressable onPress={showThemePicker} style={s.row}>
+          <Text style={[Typography.subhead, { color: c.textPrimary }]}>Theme</Text>
+          <View style={s.spacer} />
+          <View style={s.valueWrap}>
+            <View style={[s.swatch, { backgroundColor: getSwatchBg(theme) }]}>
+              <Text style={[Typography.caption2, { color: getSwatchFg(theme), fontWeight: '600', fontSize: 9 }]}>
+                Aa
+              </Text>
             </View>
-            <Ionicons name="chevron-forward" size={14} color={c.textTertiary} style={s.chevron} />
-          </Pressable>
-
-          <View style={[s.divider, { borderColor: c.separator }]} />
-
-          <Pressable onPress={showFontPicker} style={s.row}>
-            <Text style={[Typography.subhead, { color: c.textPrimary }]}>Font</Text>
-            <View style={s.spacer} />
-            <Text style={[Typography.subhead, { color: c.textSecondary, fontFamily: fontFamily }]}>
-              {fontFamily}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={c.textTertiary} style={s.chevron} />
-          </Pressable>
-
-          <View style={[s.divider, { borderColor: c.separator }]} />
-
-          <View style={s.row}>
-            <Text style={[Typography.subhead, { color: c.textPrimary }]}>Font Size</Text>
-            <View style={s.spacer} />
-            <Pressable onPress={() => fontSize > 8 && setFontSize(fontSize - 1)} hitSlop={{ top: 8, bottom: 8, left: 12, right: 4 }}>
-              <Ionicons name="remove-circle-outline" size={24} color={fontSize <= 8 ? c.textTertiary : Colors.primary[500]} />
-            </Pressable>
-            <Text style={[Typography.body, { color: c.textPrimary, width: 32, textAlign: 'center', fontFamily: 'monospace' }]}>
-              {fontSize}
-            </Text>
-            <Pressable onPress={() => fontSize < 28 && setFontSize(fontSize + 1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 12 }}>
-              <Ionicons name="add-circle-outline" size={24} color={fontSize >= 28 ? c.textTertiary : Colors.primary[500]} />
-            </Pressable>
+            <Text style={[Typography.subhead, { color: c.textSecondary }]}>{themeLabel}</Text>
           </View>
-        </View>
-      </View>
+          <Ionicons name="chevron-forward" size={14} color={c.textTertiary} style={s.chevron} />
+        </Pressable>
 
-      <Text style={s.header}>BEHAVIOR</Text>
-      <View style={[s.group, { backgroundColor: c.card }]}>
-        <View style={s.groupInner}>
-          <Pressable onPress={showScrollbackPicker} style={s.row}>
-            <Text style={[Typography.subhead, { color: c.textPrimary }]}>Scrollback</Text>
-            <View style={s.spacer} />
-            <Text style={[Typography.subhead, { color: c.textSecondary }]}>{scrollbackLabel}</Text>
-            <Ionicons name="chevron-forward" size={14} color={c.textTertiary} style={s.chevron} />
+        <GlassDivider c={c} />
+
+        <Pressable onPress={showFontPicker} style={s.row}>
+          <Text style={[Typography.subhead, { color: c.textPrimary }]}>Font</Text>
+          <View style={s.spacer} />
+          <Text style={[Typography.subhead, { color: c.textSecondary, fontFamily }]}>
+            {fontFamily}
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={c.textTertiary} style={s.chevron} />
+        </Pressable>
+
+        <GlassDivider c={c} />
+
+        <View style={s.row}>
+          <Text style={[Typography.subhead, { color: c.textPrimary }]}>Font Size</Text>
+          <View style={s.spacer} />
+          <Pressable onPress={() => fontSize > 8 && setFontSize(fontSize - 1)} hitSlop={{ top: 8, bottom: 8, left: 12, right: 4 }}>
+            <Ionicons name="remove-circle-outline" size={24} color={fontSize <= 8 ? c.textTertiary : Colors.primary[500]} />
           </Pressable>
-
-          <View style={[s.divider, { borderColor: c.separator }]} />
-
-          <Pressable onPress={() => setCursorBlink(!cursorBlink)} style={s.row}>
-            <Text style={[Typography.subhead, { color: c.textPrimary }]}>Cursor Blink</Text>
-            <View style={s.spacer} />
-            <Ionicons
-              name={cursorBlink ? 'toggle' : 'toggle-outline'}
-              size={28}
-              color={cursorBlink ? Colors.primary[500] : c.textTertiary}
-            />
+          <Text style={[Typography.body, { color: c.textPrimary, width: 32, textAlign: 'center', fontFamily: 'monospace' }]}>
+            {fontSize}
+          </Text>
+          <Pressable onPress={() => fontSize < 28 && setFontSize(fontSize + 1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 12 }}>
+            <Ionicons name="add-circle-outline" size={24} color={fontSize >= 28 ? c.textTertiary : Colors.primary[500]} />
           </Pressable>
         </View>
-      </View>
+      </GlassCard>
+
+      {/* Behavior section */}
+      <GlassSectionHeader c={c} title="Behavior" />
+      <GlassCard c={c}>
+        <Pressable onPress={showScrollbackPicker} style={s.row}>
+          <Text style={[Typography.subhead, { color: c.textPrimary }]}>Scrollback</Text>
+          <View style={s.spacer} />
+          <Text style={[Typography.subhead, { color: c.textSecondary }]}>{scrollbackLabel}</Text>
+          <Ionicons name="chevron-forward" size={14} color={c.textTertiary} style={s.chevron} />
+        </Pressable>
+
+        <GlassDivider c={c} />
+
+        <Pressable onPress={() => setCursorBlink(!cursorBlink)} style={s.row}>
+          <Text style={[Typography.subhead, { color: c.textPrimary }]}>Cursor Blink</Text>
+          <View style={s.spacer} />
+          <Ionicons
+            name={cursorBlink ? 'toggle' : 'toggle-outline'}
+            size={28}
+            color={cursorBlink ? Colors.primary[500] : c.textTertiary}
+          />
+        </Pressable>
+      </GlassCard>
     </ScrollView>
   );
 }
@@ -183,29 +189,12 @@ function getSwatchFg(t: TerminalTheme): string {
 const s = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingBottom: 40 },
-  header: {
-    ...Typography.footnote,
-    fontWeight: '600',
-    color: '#8e8e93',
-    letterSpacing: 0.5,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
-  },
-  group: {
-    marginHorizontal: Spacing.lg,
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-  },
-  groupInner: { paddingHorizontal: Spacing.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 44,
   },
   spacer: { flex: 1 },
-  divider: { height: StyleSheet.hairlineWidth },
   valueWrap: {
     flexDirection: 'row',
     alignItems: 'center',

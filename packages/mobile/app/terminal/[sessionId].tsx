@@ -10,13 +10,13 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useLocalSearchParams, useRouter, Stack, type Href } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { BlurView } from 'expo-blur';
 import { wsService } from '../../src/services/websocket';
 import {
   STATUS_COLORS,
   Colors,
   Typography,
   CornerRadius,
-  iOSGroupedRadius,
   Spacing,
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
@@ -24,6 +24,11 @@ import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWe
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTerminalSettingsStore } from '../../src/stores/terminal-settings';
+import {
+  GlassCard,
+  GlassButton,
+  GlassPill,
+} from '../../src/components/GlassKit';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '\u2191', data: '\x1b[A' },
@@ -82,7 +87,7 @@ function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attac
   });
 
   return (
-    <View style={[waitingStyles.overlay, { backgroundColor: c.bg }]} pointerEvents="none">
+    <View style={[waitingStyles.overlay]} pointerEvents="none">
       <Animated.View style={{ transform: [{ rotate: rotation }] }}>
         <Ionicons name="sync-outline" size={28} color={c.textTertiary} />
       </Animated.View>
@@ -119,41 +124,6 @@ const waitingStyles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: '500',
     width: 24,
-  },
-});
-
-const errorStyles = StyleSheet.create({
-  card: {
-    borderRadius: iOSGroupedRadius,
-    borderWidth: 1,
-    padding: Spacing['2xl'],
-    alignItems: 'center',
-    gap: Spacing.md,
-    maxWidth: 320,
-    width: '85%',
-  },
-  title: {
-    ...Typography.headline,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  message: {
-    ...Typography.subhead,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  btn: {
-    borderRadius: CornerRadius.medium,
-    paddingHorizontal: Spacing['2xl'],
-    paddingVertical: Spacing.md,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  btnText: {
-    ...Typography.subhead,
-    fontWeight: '600',
   },
 });
 
@@ -267,7 +237,12 @@ export default function TerminalScreen() {
         msg.sessionId === sessionId &&
         'status' in msg
       ) {
-        setStatus(msg.status as string);
+        const next = msg.status as string;
+        setStatus(next);
+        if (next === 'running' || next === 'idle' || next === 'thinking' ||
+            next === 'executing' || next === 'waiting_input') {
+          setHasReceivedOutput(true);
+        }
       }
     });
 
@@ -355,44 +330,22 @@ export default function TerminalScreen() {
   const topPad = fullscreen ? insets.top : Math.max(headerHeight, insets.top);
   const bottomSafePad = insets.bottom;
 
-  const renderShortcutKeys = () =>
-    SHORTCUT_KEYS.map((key) => (
-      <Pressable
-        key={key.label}
-        onPress={() => handleInput(key.data)}
-        style={({ pressed }) => [
-          styles.shortcutKey,
-          {
-            backgroundColor: pressed ? c.elevated : c.subtle,
-            borderColor: c.cardBorder,
-          },
-        ]}
-      >
-        <Text style={[styles.shortcutKeyLabel, { color: c.textSecondary }]}>
-          {key.label}
-        </Text>
-      </Pressable>
-    ));
-
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ flex: 1, backgroundColor: c.card }}>
-        <View style={{ height: topPad, backgroundColor: c.card }} />
+        <View style={{ height: topPad }} />
         <KeyboardAvoidingView
-          style={[styles.container, { backgroundColor: c.bg }]}
+          style={{ flex: 1, overflow: 'hidden' }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+
       {/* Compact nav bar with status + actions */}
       {!fullscreen && (
-        <View
-          style={[
-            styles.navBar,
-            {
-              backgroundColor: c.card,
-              borderBottomColor: c.separator,
-            },
-          ]}
+        <BlurView
+          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+          intensity={80}
+          style={styles.navBar}
         >
           <Pressable
             onPress={() => router.back()}
@@ -447,7 +400,7 @@ export default function TerminalScreen() {
               <Ionicons name="expand-outline" size={16} color={Colors.primary[500]} />
             </Pressable>
           </View>
-        </View>
+        </BlurView>
       )}
 
       <XtermWebView
@@ -469,50 +422,36 @@ export default function TerminalScreen() {
       )}
 
       {!!sessionError && (
-        <View style={[waitingStyles.overlay, { backgroundColor: c.bg }]} pointerEvents="auto">
-          <View style={[errorStyles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+        <View style={[waitingStyles.overlay]} pointerEvents="auto">
+          <GlassCard c={c} style={{ alignItems: 'center', gap: Spacing.md, maxWidth: 320, width: '85%' }}>
             <Ionicons name="alert-circle-outline" size={36} color={Colors.danger[400]} />
-            <Text style={[errorStyles.title, { color: c.textPrimary }]}>
+            <Text style={[Typography.headline, { color: c.textPrimary, fontWeight: '700', textAlign: 'center' }]}>
               Session Unavailable
             </Text>
-            <Text style={[errorStyles.message, { color: c.textTertiary }]}>
+            <Text style={[Typography.subhead, { color: c.textTertiary, textAlign: 'center', lineHeight: 22 }]}>
               {sessionError}
             </Text>
-            <Pressable
-              onPress={() => router.back()}
-              style={[errorStyles.btn, { backgroundColor: c.subtle }]}
-            >
-              <Text style={[errorStyles.btnText, { color: c.textPrimary }]}>Go Back</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.replace('/(tabs)')}
-              style={[errorStyles.btn, { backgroundColor: Colors.primary[500] }]}
-            >
-              <Text style={[errorStyles.btnText, { color: '#FFFFFF' }]}>Dashboard</Text>
-            </Pressable>
-          </View>
+            <GlassButton c={c} label="Go Back" onPress={() => router.back()} variant="secondary" />
+            <GlassButton c={c} label="Dashboard" onPress={() => router.replace('/(tabs)')} variant="primary" />
+          </GlassCard>
         </View>
       )}
 
-      <View
-        style={[
-          styles.inputBar,
-          {
-            backgroundColor: c.card,
-            borderTopColor: c.separator,
-          },
-        ]}
-      >
+      <View style={[styles.inputBar, { borderTopColor: c.separator }]}>
         <TextInput
           ref={textInputRef}
-          style={[
-            styles.textInput,
-            {
-              backgroundColor: c.inputBg,
-              borderColor: c.inputBorder,
-              color: c.textPrimary,
-            },
-          ]}
+          style={{
+            flex: 1,
+            height: 40,
+            paddingHorizontal: 12,
+            borderRadius: CornerRadius.medium,
+            borderWidth: 1,
+            backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+            borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+            color: c.textPrimary,
+            ...Typography.subhead,
+            fontFamily: 'monospace',
+          }}
           value={inputText}
           onChangeText={setInputText}
           onSubmitEditing={handleSubmitEditing}
@@ -524,66 +463,71 @@ export default function TerminalScreen() {
         />
         {inputText.length > 0 && (
           <>
-            <Pressable
+            <GlassButton
+              c={c}
+              label="Send"
               onPress={handleTextInput}
-              style={[
-                styles.sendBtn,
-                { backgroundColor: c.elevated },
-              ]}
-            >
-              <Text
-                style={[styles.sendBtnText, { color: c.textSecondary }]}
-              >
-                Send
-              </Text>
-            </Pressable>
+              variant="secondary"
+            />
             <Pressable
               onPress={handleTextInputSend}
-              style={[styles.enterBtn, { backgroundColor: Colors.primary[500] }]}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: CornerRadius.small,
+                justifyContent: 'center',
+                alignItems: 'center',
+                backgroundColor: Colors.primary[500],
+              }}
             >
-              <Text style={styles.enterBtnText}>{'\u21B5'}</Text>
+              <Text style={{ ...Typography.subhead, fontWeight: '700', color: '#FFFFFF' }}>{'\u21B5'}</Text>
             </Pressable>
           </>
         )}
       </View>
 
-      <View
-        style={[
-          styles.shortcutBar,
-          {
-            backgroundColor: c.card,
-            borderTopColor: c.separator,
-            paddingBottom: 6 + bottomSafePad,
-          },
-        ]}
+      <BlurView
+        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+        intensity={80}
+        style={[styles.shortcutBar, { paddingBottom: 6 + bottomSafePad }]}
       >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.shortcutScroll}
         >
-          {renderShortcutKeys()}
-          <Pressable
+          {SHORTCUT_KEYS.map((key) => (
+            <GlassPill
+              key={key.label}
+              c={c}
+              label={key.label}
+              onPress={() => handleInput(key.data)}
+            />
+          ))}
+          <GlassPill
+            c={c}
+            label={fullscreen ? '\u2715' : '\u26F6'}
+            color={Colors.primary[500]}
             onPress={() => setFullscreen((f) => !f)}
-            style={({ pressed }) => [
-              styles.shortcutKey,
-              {
-                backgroundColor: pressed ? c.elevated : c.subtle,
-                borderColor: c.cardBorder,
-              },
-            ]}
-          >
-            <Text style={[styles.shortcutKeyLabel, { color: Colors.primary[500] }]}>
-              {fullscreen ? '\u2715' : '\u26F6'}
-            </Text>
-          </Pressable>
+          />
         </ScrollView>
-      </View>
+      </BlurView>
 
       {fullscreen && (
         <Pressable
           onPress={() => setFullscreen(false)}
-          style={[styles.exitFullscreenBtn, { backgroundColor: c.card, top: insets.top + Spacing.md }]}
+          style={{
+            position: 'absolute',
+            right: Spacing.lg,
+            top: insets.top + Spacing.md,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: CornerRadius.medium,
+            borderCurve: 'continuous',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: 'rgba(255,255,255,0.1)',
+            backgroundColor: c.card,
+          }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={[Typography.caption1, { color: c.textSecondary, fontWeight: '600' }]}>
@@ -593,35 +537,26 @@ export default function TerminalScreen() {
       )}
 
       {!wsConnected && (
-        <View
-          style={[
-            styles.disconnectBanner,
-            {
-              backgroundColor: c.dangerBg,
-              borderColor: Colors.danger[400],
-              bottom: bottomSafePad + 16,
-            },
-          ]}
-        >
-          <View style={styles.disconnectContent}>
-            <Text style={styles.disconnectIcon}>{'\u26A0'}</Text>
-            <View style={styles.disconnectTextWrap}>
-              <Text style={[styles.disconnectTitle, { color: Colors.danger[400] }]}>
-                Not Connected
-              </Text>
-              <Text
-                style={[styles.disconnectDesc, { color: Colors.danger[400] }]}
-              >
-                Go to Settings and configure your daemon connection
-              </Text>
+        <View style={{ position: 'absolute', left: 16, right: 16, bottom: bottomSafePad + 16 }}>
+          <GlassCard c={c}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={Typography.subhead}>{'\u26A0'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '700' }]}>
+                  Not Connected
+                </Text>
+                <Text style={[Typography.caption1, { color: Colors.danger[400], opacity: 0.75, marginTop: 2 }]}>
+                  Go to Settings and configure your daemon connection
+                </Text>
+              </View>
+              <GlassButton
+                c={c}
+                label="Settings"
+                onPress={() => router.push('/(tabs)/settings')}
+                variant="danger"
+              />
             </View>
-            <Pressable
-              onPress={() => router.push('/(tabs)/settings')}
-              style={styles.disconnectBtn}
-            >
-              <Text style={styles.disconnectBtnText}>Settings</Text>
-            </Pressable>
-          </View>
+          </GlassCard>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -631,16 +566,11 @@ export default function TerminalScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    overflow: 'hidden',
-  },
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
   },
   navBack: {
@@ -672,6 +602,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    borderColor: 'transparent',
   },
   statusDotPulse: {
     position: 'absolute',
@@ -702,117 +633,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  textInput: {
-    flex: 1,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    ...Typography.subhead,
-    fontFamily: 'monospace',
-  },
-  sendBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  sendBtnText: {
-    ...Typography.caption1,
-    fontWeight: '600',
-  },
-  enterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  enterBtnText: {
-    ...Typography.subhead,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
   shortcutBar: {
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'transparent',
     paddingVertical: 6,
     paddingHorizontal: 6,
   },
   shortcutScroll: {
     gap: 6,
     paddingRight: 8,
-  },
-  shortcutKey: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 34,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shortcutKeyLabel: {
-    ...Typography.caption1,
-    fontWeight: '600',
-  },
-  exitFullscreenBtn: {
-    position: 'absolute',
-    right: Spacing.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  disconnectBanner: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  disconnectContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-  },
-  disconnectIcon: {
-    ...Typography.subhead,
-  },
-  disconnectTextWrap: {
-    flex: 1,
-  },
-  disconnectTitle: {
-    ...Typography.subhead,
-    fontWeight: '700',
-  },
-  disconnectDesc: {
-    ...Typography.caption1,
-    opacity: 0.75,
-    marginTop: 2,
-  },
-  disconnectBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    backgroundColor: 'rgba(255,59,48,0.2)',
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  disconnectBtnText: {
-    ...Typography.caption1,
-    fontWeight: '600',
-    color: Colors.danger[400],
   },
 });

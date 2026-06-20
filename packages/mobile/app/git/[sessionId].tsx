@@ -8,13 +8,13 @@ import {
   Text,
   TextInput,
   ActivityIndicator,
-  FlatList,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import type {
   GitStatusResult,
   GitLogEntry,
@@ -32,10 +32,14 @@ import {
   Typography,
   Spacing,
   CornerRadius,
-  iOSGroupedRadius,
   Colors,
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import {
+  GlassCard,
+  GlassSectionHeader,
+  GlassButton,
+} from '../../src/components/GlassKit';
 
 type Tab = 'changes' | 'history' | 'branches';
 
@@ -255,12 +259,14 @@ export default function GitScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View
+      {/* Glass branch header */}
+      <BlurView
+        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+        intensity={80}
         style={{
           paddingTop: headerHeight,
           paddingHorizontal: Spacing.lg,
           paddingBottom: Spacing.sm,
-          backgroundColor: c.bg,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
@@ -327,7 +333,7 @@ export default function GitScreen() {
             {status.tracking}
           </Text>
         )}
-      </View>
+      </BlurView>
 
       <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm }}>
         <SegmentedControl
@@ -380,7 +386,9 @@ export default function GitScreen() {
       </ScrollView>
 
       {projectPath && status && (
-        <View
+        <BlurView
+          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+          intensity={80}
           style={{
             position: 'absolute',
             bottom: 0,
@@ -390,9 +398,6 @@ export default function GitScreen() {
             paddingHorizontal: Spacing.lg,
             paddingTop: Spacing.sm,
             paddingBottom: insets.bottom + Spacing.sm,
-            backgroundColor: c.card,
-            borderTopWidth: 1,
-            borderTopColor: c.separator,
             gap: Spacing.sm,
           }}
         >
@@ -419,7 +424,7 @@ export default function GitScreen() {
             onPress={showMoreActions}
             disabled={busy !== null}
           />
-        </View>
+        </BlurView>
       )}
 
       <DiffModal state={diffModal} onClose={() => setDiffModal(null)} />
@@ -590,9 +595,9 @@ function Badge({ icon, text, color }: { icon: string; text: string; color: strin
 function EmptyCard({ text }: { text: string }) {
   const c = useThemeColors();
   return (
-    <View style={{ backgroundColor: c.card, borderRadius: iOSGroupedRadius, padding: Spacing.lg }}>
+    <GlassCard c={c}>
       <Text style={[Typography.footnote, { color: c.textSecondary }]}>{text}</Text>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -636,22 +641,15 @@ function ChangesTab({
 
   return (
     <View style={{ gap: Spacing.md }}>
-      <View
-        style={{
-          backgroundColor: c.card,
-          borderRadius: iOSGroupedRadius,
-          padding: Spacing.md,
-          gap: Spacing.sm,
-        }}
-      >
+      <GlassCard c={c}>
         <Text style={[Typography.caption1, { color: c.textTertiary, textTransform: 'uppercase' }]}>
           Commit
         </Text>
         <TextInput
           style={{
-            backgroundColor: c.inputBg,
+            backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
             borderWidth: 1,
-            borderColor: c.inputBorder,
+            borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
             borderRadius: CornerRadius.medium,
             paddingHorizontal: Spacing.md,
             paddingVertical: Spacing.sm,
@@ -666,56 +664,26 @@ function ChangesTab({
           onChangeText={setCommitMsg}
           returnKeyType="done"
         />
-        <Pressable
+        <GlassButton
+          c={c}
+          label={busy ? '' : `Commit ${status.files.length} file${status.files.length !== 1 ? 's' : ''}`}
           onPress={onCommit}
           disabled={disabled || !status.dirty || busy}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            paddingVertical: 11,
-            borderRadius: CornerRadius.medium,
-            backgroundColor:
-              disabled || !status.dirty || busy
-                ? c.subtle
-                : pressed
-                  ? Colors.primary[600]
-                  : Colors.primary[500],
-            minHeight: 44,
-          })}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="checkmark" size={18} color="#fff" />
-              <Text style={[Typography.subhead, { color: '#fff', fontWeight: '600' }]}>
-                Commit {status.files.length} file{status.files.length !== 1 ? 's' : ''}
-              </Text>
-            </>
-          )}
-        </Pressable>
-      </View>
+          loading={busy}
+          variant="primary"
+        />
+      </GlassCard>
 
       {unstaged.length > 0 && <FileSection title="Unstaged" files={unstaged} onPress={onFilePress} />}
       {staged.length > 0 && <FileSection title="Staged" files={staged} onPress={onFilePress} />}
 
       {status.files.length === 0 && (
-        <View
-          style={{
-            backgroundColor: c.card,
-            borderRadius: iOSGroupedRadius,
-            padding: Spacing.xl,
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
+        <GlassCard c={c} style={{ alignItems: 'center', gap: 8 }}>
           <Ionicons name="checkmark-done-circle" size={36} color={Colors.success[400]} />
           <Text style={[Typography.subhead, { color: c.textSecondary }]}>
             Working tree clean
           </Text>
-        </View>
+        </GlassCard>
       )}
     </View>
   );
@@ -732,7 +700,7 @@ function FileSection({
 }) {
   const c = useThemeColors();
   return (
-    <View style={{ backgroundColor: c.card, borderRadius: iOSGroupedRadius, overflow: 'hidden' }}>
+    <GlassCard c={c} style={{ padding: 0, overflow: 'hidden' }}>
       <View
         style={{
           flexDirection: 'row',
@@ -756,7 +724,7 @@ function FileSection({
           onPress={() => onPress(file)}
         />
       ))}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -784,8 +752,8 @@ function FileRow({
         paddingHorizontal: Spacing.md,
         paddingVertical: 10,
         gap: Spacing.sm,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: c.separator,
+        borderBottomWidth: last ? 0 : 0.5,
+        borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
         minHeight: 44,
         backgroundColor: pressed ? c.subtle : 'transparent',
       })}
@@ -864,7 +832,7 @@ function HistoryTab({
   if (graphRows.length === 0) return <EmptyCard text="No commits yet" />;
 
   return (
-    <View style={{ backgroundColor: c.card, borderRadius: iOSGroupedRadius, overflow: 'hidden' }}>
+    <GlassCard c={c} style={{ padding: 0, overflow: 'hidden' }}>
       {graphRows.map((row, idx) => (
         <CommitRow
           key={row.commit.hash}
@@ -877,7 +845,7 @@ function HistoryTab({
           isLastRow={row.isLast}
         />
       ))}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -908,8 +876,8 @@ function CommitRow({
         flexDirection: 'row',
         minHeight: ROW_HEIGHT,
         backgroundColor: pressed ? c.subtle : 'transparent',
-        borderBottomWidth: isLast ? 0 : 1,
-        borderBottomColor: c.separator,
+        borderBottomWidth: isLast ? 0 : 0.5,
+        borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
       })}
     >
       <View style={{ width: graphWidth, height: ROW_HEIGHT }}>
@@ -1048,7 +1016,7 @@ function BranchesTab({
   if (!branches) return <EmptyCard text="No branches loaded" />;
 
   return (
-    <View style={{ backgroundColor: c.card, borderRadius: iOSGroupedRadius, overflow: 'hidden' }}>
+    <GlassCard c={c} style={{ padding: 0, overflow: 'hidden' }}>
       {branches.branches.map((branch, i) => (
         <BranchRow
           key={branch.name}
@@ -1058,7 +1026,7 @@ function BranchesTab({
           last={i === branches.branches.length - 1}
         />
       ))}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -1085,8 +1053,8 @@ function BranchRow({
         paddingVertical: 12,
         gap: Spacing.sm,
         backgroundColor: pressed ? c.subtle : isCurrent ? c.accentBg : 'transparent',
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: c.separator,
+        borderBottomWidth: last ? 0 : 0.5,
+        borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
         minHeight: 44,
       })}
     >
@@ -1283,7 +1251,7 @@ function FileDiffBlock({ file }: { file: GitFileDiff }) {
           paddingHorizontal: Spacing.md,
           paddingVertical: 10,
           gap: Spacing.sm,
-          backgroundColor: c.elevated,
+          backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
         }}
       >
         <Ionicons

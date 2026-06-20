@@ -1,4 +1,49 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
+
+// ── Liquid Glass Design Tokens ─────────────────────────────────
+export const Glass = {
+  /** BlurView intensity tiers for different UI layers */
+  blur: {
+    nav: 65,
+    tabBar: 72,
+    card: 55,
+    sheet: 80,
+    modal: 90,
+    tooltip: 75,
+  } as const,
+
+  /** Morph transition durations (ms) for reanimated animations */
+  morph: {
+    fast: 200,
+    normal: 350,
+    slow: 500,
+    spring: { damping: 18, stiffness: 200, mass: 1 },
+    bouncy: { damping: 12, stiffness: 180, mass: 1 },
+  } as const,
+
+  /** Glass layer opacity tiers for light/dark adaptive glass */
+  opacity: {
+    dark: {
+      surface: 'rgba(28,28,30,0.72)',
+      elevated: 'rgba(44,44,46,0.65)',
+      subtle: 'rgba(58,58,60,0.55)',
+      border: 'rgba(255,255,255,0.06)',
+      borderActive: 'rgba(10,132,255,0.35)',
+      glow: 'rgba(10,132,255,0.12)',
+    },
+    light: {
+      surface: 'rgba(249,249,250,0.78)',
+      elevated: 'rgba(255,255,255,0.72)',
+      subtle: 'rgba(242,242,247,0.65)',
+      border: 'rgba(60,60,67,0.04)',
+      borderActive: 'rgba(0,122,255,0.25)',
+      glow: 'rgba(0,122,255,0.08)',
+    },
+  } as const,
+
+  /** Whether platform supports continuous corner curves */
+  supportsContinuous: Platform.OS === 'ios',
+} as const;
 
 export const Colors = {
   primary: {
@@ -92,6 +137,21 @@ export const Colors = {
     accentBorder: 'rgba(0,122,255,0.18)',
     successBg: 'rgba(52,199,89,0.08)',
     dangerBg: 'rgba(255,59,48,0.08)',
+  },
+
+  glassGradient: {
+    dark: {
+      from: 'rgba(28,28,30,0.45)',
+      to: 'rgba(44,44,46,0.25)',
+      accentFrom: 'rgba(10,132,255,0.18)',
+      accentTo: 'rgba(10,132,255,0.05)',
+    },
+    light: {
+      from: 'rgba(255,255,255,0.55)',
+      to: 'rgba(249,249,250,0.25)',
+      accentFrom: 'rgba(0,122,255,0.10)',
+      accentTo: 'rgba(0,122,255,0.02)',
+    },
   },
 
   terminal: {

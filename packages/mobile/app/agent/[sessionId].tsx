@@ -1,4 +1,3 @@
-import { StyleSheet } from 'react-native';
 import { View, Text, FlatList, Pressable } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
@@ -7,9 +6,16 @@ import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../../src/stores/events';
 import { wsService } from '../../src/services/websocket';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Typography, CornerRadius, iOSGroupedRadius, Spacing, Colors } from '../../src/constants/theme';
+import { Typography, CornerRadius, Spacing, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  GlassCard,
+  GlassStatCard,
+  GlassButton,
+  GlassSectionHeader,
+} from '../../src/components/GlassKit';
+import { BlurView } from 'expo-blur';
 
 const CHANGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   create: { bg: Colors.success[50], text: Colors.success[600], border: Colors.success[400] },
@@ -75,11 +81,23 @@ export default function AgentDetailScreen() {
   const time = (ts: number) => new Date(ts).toLocaleTimeString();
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}>
-      <View style={[styles.toolbar, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
-        <View style={styles.toolbarLeft}>
-          <View style={[styles.toolbarIcon, { backgroundColor: c.accentBg }]}>
-            <Text style={styles.toolbarIconText}>{'\u{1F916}'}</Text>
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+
+      {/* Glass toolbar */}
+      <BlurView
+        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+        intensity={80}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: Spacing.lg,
+          paddingVertical: Spacing.md,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+          <View style={{ width: 36, height: 36, borderRadius: CornerRadius.medium, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentBg }}>
+            <Text style={{ fontSize: 16 }}>{'\u{1F916}'}</Text>
           </View>
           <View>
             <Text style={[Typography.headline, { color: c.textPrimary }]}>Agent Detail</Text>
@@ -91,62 +109,67 @@ export default function AgentDetailScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
           <Pressable
             onPress={() => router.push(`/files/${sessionId}` as Href)}
-            style={styles.navButton}
+            style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'center', borderRadius: CornerRadius.small }}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
             <Ionicons name="folder-outline" size={20} color={c.textSecondary} />
           </Pressable>
           <Pressable
             onPress={() => router.push(`/git/${sessionId}` as Href)}
-            style={styles.navButton}
+            style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'center', borderRadius: CornerRadius.small }}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
             <Ionicons name="git-branch-outline" size={20} color={c.textSecondary} />
           </Pressable>
           <Pressable
             onPress={() => router.push(`/terminal/${sessionId}`)}
-            style={[styles.terminalButton, { backgroundColor: c.accentBg }]}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.xs,
+              paddingHorizontal: Spacing.md,
+              paddingVertical: Spacing.sm,
+              borderRadius: CornerRadius.medium,
+              minHeight: 36,
+              backgroundColor: c.accentBg,
+            }}
           >
             <Text style={[Typography.footnote, { color: Colors.primary[500], fontWeight: '600' }]}>Terminal</Text>
             <Text style={[Typography.footnote, { color: Colors.primary[500] }]}>{'\u{2192}'}</Text>
           </Pressable>
         </View>
+      </BlurView>
+
+      {/* Stats row */}
+      <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md }}>
+        <GlassStatCard c={c} value={fileChanges.length} label="Files Changed" icon="document-text-outline" color={Colors.primary[500]} />
+        <GlassStatCard c={c} value={toolUses.length} label="Tool Calls" icon="construct-outline" color="#AF52DE" />
+        <GlassStatCard c={c} value={events.length} label="Total Events" icon="flash-outline" color={Colors.success[400]} />
       </View>
 
-      <View style={styles.statsRow}>
-        {[
-          { label: 'FILES CHANGED', value: fileChanges.length, color: Colors.primary[500], icon: '\u{1F4C4}' },
-          { label: 'TOOL CALLS', value: toolUses.length, color: '#AF52DE', icon: '\u{1F527}' },
-          { label: 'TOTAL EVENTS', value: events.length, color: Colors.success[400], icon: '\u{26A1}' },
-        ].map((s) => (
-          <View key={s.label} style={[styles.statCard, { backgroundColor: c.card }]}>
-            <Text style={styles.statIcon}>{s.icon}</Text>
-            <Text style={[Typography.title1, { color: s.color }]}>{s.value}</Text>
-            <Text style={[Typography.caption1, { color: c.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: '600' }]}>
-              {s.label}
-            </Text>
-          </View>
-        ))}
-      </View>
-
+      {/* File Changes */}
       {fileChanges.length > 0 && (
-        <View style={styles.fileChangesSection}>
-          <Text style={[Typography.footnote, { color: c.textTertiary, textTransform: 'uppercase', fontWeight: '600', letterSpacing: 0.5, marginBottom: Spacing.sm }]}>
-            File Changes
-          </Text>
-          <View style={[styles.fileChangesList, { backgroundColor: c.card }]}>
+        <View style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm }}>
+          <GlassSectionHeader c={c} title="File Changes" />
+          <GlassCard c={c} style={{ padding: 0 }}>
             {fileChanges.slice(0, 10).map((e, i) => {
               if (e.type !== 'file_change') return null;
               const colors = CHANGE_COLORS[e.changeType] ?? { bg: c.elevated, text: c.textSecondary, border: c.cardBorder };
               return (
                 <View
                   key={i}
-                  style={[
-                    styles.fileChangeRow,
-                    { borderLeftColor: colors.border, borderBottomColor: i < Math.min(fileChanges.length, 10) - 1 ? c.separator : 'transparent' },
-                  ]}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: Spacing.sm,
+                    paddingVertical: Spacing.sm,
+                    paddingHorizontal: Spacing.md,
+                    borderLeftWidth: 3,
+                    borderLeftColor: colors.border,
+                    borderBottomWidth: i < Math.min(fileChanges.length, 10) - 1 ? 0 : 0,
+                  }}
                 >
-                  <View style={[styles.changeTypeChip, { backgroundColor: colors.bg }]}>
+                  <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: CornerRadius.small, backgroundColor: colors.bg }}>
                     <Text style={[Typography.caption2, { color: colors.text, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }]}>
                       {e.changeType}
                     </Text>
@@ -157,40 +180,42 @@ export default function AgentDetailScreen() {
                 </View>
               );
             })}
-          </View>
+          </GlassCard>
         </View>
       )}
 
-      <View style={styles.timelineHeader}>
+      {/* Event Timeline */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.xs }}>
         <Text style={[Typography.footnote, { color: c.textPrimary, fontWeight: '600' }]}>Event Timeline</Text>
-        <View style={[styles.timelineCount, { backgroundColor: c.elevated }]}>
+        <View style={{ paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: CornerRadius.small, backgroundColor: c.subtle, minWidth: 24, alignItems: 'center' }}>
           <Text style={[Typography.caption2, { color: c.textTertiary, fontWeight: '600' }]}>{allEvents.length}</Text>
         </View>
       </View>
+
       <FlatList
         data={allEvents}
         keyExtractor={(_, i) => String(i)}
-        contentContainerStyle={styles.timelineList}
+        contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing['3xl'], paddingTop: Spacing.xs }}
         ListEmptyComponent={
-          <View style={[styles.emptyState, { backgroundColor: c.card }]}>
+          <GlassCard c={c} style={{ alignItems: 'center', padding: Spacing['4xl'], marginTop: Spacing.xs }}>
             <Text style={[Typography.subhead, { color: c.textSecondary }]}>Waiting for events...</Text>
             <Text style={[Typography.caption1, { color: c.textTertiary, marginTop: Spacing.xs }]}>
               Events will appear as the agent runs
             </Text>
-          </View>
+          </GlassCard>
         }
         renderItem={({ item: event, index }) => {
           const desc = eventDescription(event);
           const icon = EVENT_TYPE_ICON[event.type] ?? '\u{25CF}';
           return (
-            <View style={styles.timelineRow}>
-              <View style={styles.timelineTrack}>
-                <View style={[styles.timelineDot, { backgroundColor: c.elevated }]}>
-                  <Text style={styles.timelineDotText}>{icon}</Text>
+            <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+              <View style={{ width: 24, alignItems: 'center' }}>
+                <View style={{ width: 24, height: 24, borderRadius: CornerRadius.medium, alignItems: 'center', justifyContent: 'center', backgroundColor: c.subtle }}>
+                  <Text style={{ fontSize: 10 }}>{icon}</Text>
                 </View>
-                {index < allEvents.length - 1 && <View style={[styles.timelineLine, { backgroundColor: c.separator }]} />}
+                {index < allEvents.length - 1 && <View style={{ width: 1.5, flex: 1, minHeight: Spacing.md, backgroundColor: c.separator }} />}
               </View>
-              <View style={styles.timelineContent}>
+              <View style={{ flex: 1, paddingVertical: 3, paddingBottom: Spacing.md }}>
                 <Text style={[Typography.caption2, { color: c.textTertiary, fontWeight: '500', fontVariant: ['tabular-nums'] as const }]}>
                   {time(event.timestamp)}
                 </Text>
@@ -215,142 +240,3 @@ function eventDescription(event: ParsedEvent): string {
     default: return '';
   }
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  toolbarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  toolbarIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toolbarIconText: { fontSize: 16 },
-  navButton: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-  },
-  terminalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    minHeight: 36,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    padding: Spacing.lg,
-    alignItems: 'center',
-    gap: 2,
-  },
-  statIcon: { fontSize: 18, marginBottom: Spacing.xs },
-  fileChangesSection: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-  },
-  fileChangesList: {
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-  },
-  fileChangeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderLeftWidth: 3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  changeTypeChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-  },
-  timelineHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
-  },
-  timelineCount: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-    minWidth: 24,
-    alignItems: 'center',
-  },
-  timelineList: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing['3xl'],
-    paddingTop: Spacing.xs,
-  },
-  emptyState: {
-    padding: Spacing['4xl'],
-    alignItems: 'center',
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    marginTop: Spacing.xs,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  timelineTrack: {
-    width: 24,
-    alignItems: 'center',
-  },
-  timelineDot: {
-    width: 24,
-    height: 24,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timelineDotText: { fontSize: 10 },
-  timelineLine: {
-    width: 1.5,
-    flex: 1,
-    minHeight: Spacing.md,
-  },
-  timelineContent: {
-    flex: 1,
-    paddingVertical: 3,
-    paddingBottom: Spacing.md,
-  },
-});

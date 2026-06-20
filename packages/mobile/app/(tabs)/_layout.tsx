@@ -7,8 +7,8 @@ import {
   Typography,
   Spacing,
   Colors,
+  Glass,
   CornerRadius,
-  iOSGroupedRadius,
 } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { useLayoutStore } from '../../src/stores/layout';
@@ -36,7 +36,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     >
       <BlurView
         tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
-        intensity={c.isDark ? 60 : 75}
+        intensity={Glass.blur.tabBar}
         style={{
           flexDirection: 'row',
           justifyContent: 'space-around',
@@ -47,9 +47,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           overflow: 'hidden',
           backgroundColor: c.glassTabBar,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.isDark
-            ? 'rgba(255,255,255,0.06)'
-            : 'rgba(0,0,0,0.04)',
+          borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
         }}
       >
         {state.routes.map((route: any, index: number) => {
@@ -128,7 +126,7 @@ export default function TabLayout() {
         headerBackground: () => (
           <BlurView
             tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
-            intensity={c.isDark ? 60 : 75}
+            intensity={Glass.blur.nav}
             style={{
               position: 'absolute',
               top: 0,

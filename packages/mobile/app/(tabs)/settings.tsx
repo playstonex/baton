@@ -1,9 +1,9 @@
-import { KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
-import { Button, Input, Spinner } from 'heroui-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AccessMode } from '@baton/shared';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useRecentStore } from '../../src/stores/recent';
 import { wsService } from '../../src/services/websocket';
@@ -12,10 +12,15 @@ import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { useLayoutStore } from '../../src/stores/layout';
 import {
+  GlassCard,
+  GlassSectionHeader,
+  GlassButton,
+  GlassDivider,
+  GlassPill,
+} from '../../src/components/GlassKit';
+import {
   Typography,
   Spacing,
-  CornerRadius,
-  iOSGroupedRadius,
   Colors,
 } from '../../src/constants/theme';
 
@@ -152,120 +157,40 @@ export default function SettingsScreen() {
           Settings
         </Text>
 
-        <Text
-          style={[
-            Typography.caption1,
-            { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
-          ]}
-        >
-          Appearance
-        </Text>
-        <View
-          style={{
-            backgroundColor: c.card,
-            borderRadius: iOSGroupedRadius,
-            padding: Spacing.lg,
-            gap: Spacing.md,
-          }}
-        >
+        <GlassSectionHeader c={c} title="Appearance" />
+        <GlassCard c={c}>
           <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-            {THEME_OPTIONS.map((opt) => {
-              const active = themeMode === opt.key;
-              return (
-                <Pressable
-                  key={opt.key}
-                  onPress={() => setThemeMode(opt.key)}
-                  style={{
-                    flex: 1,
-                    minHeight: 44,
-                    borderRadius: CornerRadius.medium,
-                    borderWidth: 1,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: active ? c.accentBg : c.elevated,
-                    borderColor: active ? c.accentBorder : c.cardBorder,
-                  }}
-                >
-                  <Text
-                    style={[
-                      Typography.subhead,
-                      { color: active ? Colors.primary[500] : c.textSecondary },
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {THEME_OPTIONS.map((opt) => (
+              <GlassPill
+                key={opt.key}
+                c={c}
+                label={opt.label}
+                active={themeMode === opt.key}
+                onPress={() => setThemeMode(opt.key)}
+              />
+            ))}
           </View>
-        </View>
+        </GlassCard>
 
-        <Text
-          style={[
-            Typography.caption1,
-            { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
-          ]}
-        >
-          Connection
-        </Text>
-        <View
-          style={{
-            backgroundColor: c.card,
-            borderRadius: iOSGroupedRadius,
-            padding: Spacing.lg,
-            gap: Spacing.md,
-          }}
-        >
+        <GlassSectionHeader c={c} title="Connection" />
+        <GlassCard c={c}>
           <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-            {(['local', 'remote'] as const).map((m) => {
-              const active = mode === m;
-              return (
-                <Pressable
-                  key={m}
-                  onPress={() => setMode(m)}
-                  style={{
-                    flex: 1,
-                    minHeight: 44,
-                    borderRadius: CornerRadius.medium,
-                    borderWidth: 1,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: active ? c.accentBg : c.elevated,
-                    borderColor: active ? c.accentBorder : c.cardBorder,
-                  }}
-                >
-                  <Text
-                    style={[
-                      Typography.subhead,
-                      { color: active ? Colors.primary[500] : c.textSecondary },
-                    ]}
-                  >
-                    {m === 'remote' ? 'Remote' : 'Local'}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {(['local', 'remote'] as const).map((m) => (
+              <GlassPill
+                key={m}
+                c={c}
+                label={m === 'remote' ? 'Remote' : 'Local'}
+                active={mode === m}
+                onPress={() => setMode(m)}
+              />
+            ))}
           </View>
-        </View>
+        </GlassCard>
 
         {connected && (
           <>
-            <Text
-              style={[
-                Typography.caption1,
-                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
-              ]}
-            >
-              Access Control
-            </Text>
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: iOSGroupedRadius,
-                padding: Spacing.lg,
-                gap: Spacing.sm,
-              }}
-            >
+            <GlassSectionHeader c={c} title="Access Control" />
+            <GlassCard c={c}>
               <Text style={[Typography.footnote, { color: c.textSecondary }]}>
                 How agents handle permission requests
               </Text>
@@ -282,21 +207,18 @@ export default function SettingsScreen() {
                       style={{
                         flex: 1,
                         minHeight: 60,
-                        borderRadius: CornerRadius.medium,
+                        borderRadius: 12,
                         borderWidth: 1,
                         paddingVertical: Spacing.md,
                         paddingHorizontal: Spacing.sm,
-                        backgroundColor: active ? c.accentBg : c.elevated,
+                        backgroundColor: active ? c.accentBg : c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
                         borderColor: active ? c.accentBorder : c.cardBorder,
                       }}
                     >
                       <Text
                         style={[
                           Typography.subhead,
-                          {
-                            color: active ? Colors.primary[500] : c.textPrimary,
-                            fontWeight: '600',
-                          },
+                          { color: active ? Colors.primary[500] : c.textPrimary, fontWeight: '600' },
                         ]}
                       >
                         {opt.label}
@@ -312,7 +234,7 @@ export default function SettingsScreen() {
                 <View
                   style={{
                     backgroundColor: c.dangerBg,
-                    borderRadius: CornerRadius.medium,
+                    borderRadius: 10,
                     padding: Spacing.sm,
                     marginTop: Spacing.xs,
                   }}
@@ -322,27 +244,14 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               )}
-            </View>
+            </GlassCard>
           </>
         )}
 
         {recentConnections.length > 0 && (
           <>
-            <Text
-              style={[
-                Typography.caption1,
-                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
-              ]}
-            >
-              Recent Connections
-            </Text>
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: iOSGroupedRadius,
-                overflow: 'hidden',
-              }}
-            >
+            <GlassSectionHeader c={c} title="Recent Connections" />
+            <GlassCard c={c} style={{ padding: 0 }}>
               {recentConnections.map((conn, i) => (
                 <View key={i}>
                   <Pressable
@@ -362,17 +271,14 @@ export default function SettingsScreen() {
                       paddingVertical: 10,
                       paddingHorizontal: Spacing.lg,
                       gap: Spacing.sm,
-                      backgroundColor: pressed ? c.subtle : c.card,
+                      opacity: pressed ? 0.7 : 1,
                     })}
                   >
                     <Text style={{ fontSize: 18 }}>
-                      {conn.mode === 'local' ? '🏠' : '🌐'}
+                      {conn.mode === 'local' ? '\u{1F3E0}' : '\u{1F310}'}
                     </Text>
                     <View style={{ flex: 1 }}>
-                      <Text
-                        style={[Typography.subhead, { color: c.textPrimary }]}
-                        numberOfLines={1}
-                      >
+                      <Text style={[Typography.subhead, { color: c.textPrimary }]} numberOfLines={1}>
                         {conn.label}
                       </Text>
                       <Text style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}>
@@ -383,246 +289,179 @@ export default function SettingsScreen() {
                       onPress={() => removeRecentConnection(i)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: CornerRadius.medium,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        width: 28, height: 28, borderRadius: 12,
+                        alignItems: 'center', justifyContent: 'center',
                       }}
                     >
-                      <Text style={[Typography.footnote, { color: c.textTertiary }]}>✕</Text>
+                      <Ionicons name="close" size={14} color={c.textTertiary} />
                     </Pressable>
                   </Pressable>
-                  {i < recentConnections.length - 1 && (
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: c.separator,
-                        marginLeft: Spacing.lg + 28 + Spacing.sm,
-                      }}
-                    />
-                  )}
+                  {i < recentConnections.length - 1 && <GlassDivider c={c} />}
                 </View>
               ))}
-            </View>
+            </GlassCard>
           </>
         )}
 
         {mode === 'remote' ? (
           <>
-            <Text
-              style={[
-                Typography.caption1,
-                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
-              ]}
-            >
-              Remote Setup
-            </Text>
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: iOSGroupedRadius,
-                padding: Spacing.lg,
-                gap: Spacing.md,
-              }}
-            >
+            <GlassSectionHeader c={c} title="Remote Setup" />
+            <GlassCard c={c}>
               <View style={{ gap: 6 }}>
                 <Text style={[Typography.footnote, { color: c.textSecondary }]}>Relay URL</Text>
-                <Input
+                <TextInput
                   placeholder="ws://host:3230"
                   value={inputRelayUrl}
                   onChangeText={setInputRelayUrl}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  variant="secondary"
                   readOnly={connected}
+                  placeholderTextColor={c.textTertiary}
+                  style={{
+                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                    borderWidth: 1,
+                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                    borderRadius: 12,
+                    paddingVertical: Spacing.md,
+                    paddingHorizontal: Spacing.md,
+                    color: c.textPrimary,
+                    ...Typography.subhead,
+                    fontWeight: '500',
+                  }}
                 />
               </View>
               <View style={{ gap: 6 }}>
                 <Text style={[Typography.footnote, { color: c.textSecondary }]}>
                   Pairing Code ({inputPairingCode.length}/6)
                 </Text>
-                <Input
+                <TextInput
                   placeholder="000000"
                   value={inputPairingCode}
                   onChangeText={setInputPairingCode}
                   keyboardType="number-pad"
                   maxLength={6}
-                  variant="secondary"
                   readOnly={connected}
+                  placeholderTextColor={c.textTertiary}
+                  style={{
+                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                    borderWidth: 1,
+                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                    borderRadius: 12,
+                    paddingVertical: Spacing.md,
+                    paddingHorizontal: Spacing.md,
+                    color: c.textPrimary,
+                    ...Typography.subhead,
+                    fontWeight: '500',
+                  }}
                 />
               </View>
               {!connected && (
-              <Pressable
-                onPress={pairAndConnect}
-                disabled={loading || !inputRelayUrl.trim() || inputPairingCode.length < 6}
-                style={{
-                  minHeight: 44,
-                  borderRadius: CornerRadius.medium,
-                  backgroundColor:
-                    loading || !inputRelayUrl.trim() || inputPairingCode.length < 6
-                      ? Colors.primary[500] + '40'
-                      : Colors.primary[500],
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {loading ? (
-                  <Spinner size="sm" color="#fff" />
-                ) : (
-                  <Text
-                    style={[
-                      Typography.subhead,
-                      { color: '#FFFFFF', fontWeight: '600' },
-                    ]}
-                  >
-                    Pair &amp; Connect
-                  </Text>
-                )}
-              </Pressable>
+                <GlassButton
+                  c={c}
+                  label={loading ? '' : 'Pair & Connect'}
+                  onPress={pairAndConnect}
+                  loading={loading}
+                  disabled={loading || !inputRelayUrl.trim() || inputPairingCode.length < 6}
+                  variant="primary"
+                />
               )}
-            </View>
+            </GlassCard>
           </>
         ) : (
           <>
-            <Text
-              style={[
-                Typography.caption1,
-                { color: c.textTertiary, textTransform: 'uppercase', marginTop: Spacing.sm },
-              ]}
-            >
-              Local Setup
-            </Text>
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: iOSGroupedRadius,
-                padding: Spacing.lg,
-                gap: Spacing.md,
-              }}
-            >
+            <GlassSectionHeader c={c} title="Local Setup" />
+            <GlassCard c={c}>
               <View style={{ gap: 6 }}>
                 <Text style={[Typography.footnote, { color: c.textSecondary }]}>HTTP URL</Text>
-                <Input
+                <TextInput
                   placeholder="http://localhost:3210"
                   value={inputLocalHttp}
                   onChangeText={setInputLocalHttp}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  variant="secondary"
                   readOnly={connected}
+                  placeholderTextColor={c.textTertiary}
+                  style={{
+                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                    borderWidth: 1,
+                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                    borderRadius: 12,
+                    paddingVertical: Spacing.md,
+                    paddingHorizontal: Spacing.md,
+                    color: c.textPrimary,
+                    ...Typography.subhead,
+                    fontWeight: '500',
+                  }}
                 />
               </View>
               <View style={{ gap: 6 }}>
                 <Text style={[Typography.footnote, { color: c.textSecondary }]}>
                   WebSocket URL (optional)
                 </Text>
-                <Input
+                <TextInput
                   placeholder="Auto-derived"
                   value={inputLocalWs}
                   onChangeText={setInputLocalWs}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  variant="secondary"
                   readOnly={connected}
+                  placeholderTextColor={c.textTertiary}
+                  style={{
+                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                    borderWidth: 1,
+                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                    borderRadius: 12,
+                    paddingVertical: Spacing.md,
+                    paddingHorizontal: Spacing.md,
+                    color: c.textPrimary,
+                    ...Typography.subhead,
+                    fontWeight: '500',
+                  }}
                 />
               </View>
               {!connected && (
-              <Pressable
-                onPress={connectLocal}
-                disabled={loading || !inputLocalHttp.trim()}
-                style={{
-                  minHeight: 44,
-                  borderRadius: CornerRadius.medium,
-                  backgroundColor:
-                    loading || !inputLocalHttp.trim()
-                      ? Colors.primary[500] + '40'
-                      : Colors.primary[500],
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {loading ? (
-                  <Spinner size="sm" color="#fff" />
-                ) : (
-                  <Text
-                    style={[
-                      Typography.subhead,
-                      { color: '#FFFFFF', fontWeight: '600' },
-                    ]}
-                  >
-                    Connect
-                  </Text>
-                )}
-              </Pressable>
+                <GlassButton
+                  c={c}
+                  label={loading ? '' : 'Connect'}
+                  onPress={connectLocal}
+                  loading={loading}
+                  disabled={loading || !inputLocalHttp.trim()}
+                  variant="primary"
+                />
               )}
-            </View>
+            </GlassCard>
           </>
         )}
 
         {error ? (
-          <View
-            style={{
-              backgroundColor: c.dangerBg,
-              borderRadius: CornerRadius.medium,
-              padding: Spacing.md,
-            }}
-          >
+          <GlassCard c={c}>
             <Text style={[Typography.footnote, { color: Colors.danger[400] }]}>{error}</Text>
-          </View>
+          </GlassCard>
         ) : null}
 
         {connected && hostId ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: Spacing.sm,
-              backgroundColor: c.successBg,
-              borderRadius: CornerRadius.medium,
-              paddingVertical: 10,
-              paddingHorizontal: Spacing.md,
-            }}
-          >
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: Colors.success[400],
-              }}
-            />
-            <View>
-              <Text style={[Typography.subhead, { color: Colors.success[400], fontWeight: '600' }]}>
-                Connected
-              </Text>
-              <Text
-                style={[
-                  Typography.caption1,
-                  { color: Colors.success[400], fontFamily: 'Courier' },
-                ]}
-              >
-                {hostId.slice(0, 8)}...
-              </Text>
+          <GlassCard c={c}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success[400] }} />
+              <View>
+                <Text style={[Typography.subhead, { color: Colors.success[400], fontWeight: '600' }]}>
+                  Connected
+                </Text>
+                <Text style={[Typography.caption1, { color: Colors.success[400], fontFamily: 'Courier' }]}>
+                  {hostId.slice(0, 8)}...
+                </Text>
+              </View>
             </View>
-          </View>
+          </GlassCard>
         ) : null}
 
         {connected && (
-          <Pressable
+          <GlassButton
+            c={c}
+            label="Disconnect"
             onPress={disconnect}
-            style={{
-              minHeight: 44,
-              borderRadius: CornerRadius.medium,
-              backgroundColor: c.dangerBg,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '600' }]}>
-              Disconnect
-            </Text>
-          </Pressable>
+            variant="danger"
+          />
         )}
 
         <View style={{ height: 40 }} />

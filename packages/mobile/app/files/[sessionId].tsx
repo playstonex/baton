@@ -1,16 +1,20 @@
-import { StyleSheet } from 'react-native';
-import { View, Text, FlatList, Pressable } from 'react-native';
+import { View, Text, FlatList, Pressable, Image } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { BlurView } from 'expo-blur';
 import { Spinner } from 'heroui-native';
 import { useAgentStore } from '../../src/stores/agents';
-import { apiFetch } from '../../src/services/api';
+import { apiFetch, getDaemonUrl } from '../../src/services/api';
 import { FilePreview } from '../../src/components/FilePreview';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Colors, Typography, Spacing, CornerRadius, Radius } from '../../src/constants/theme';
+import { Colors, Typography, Spacing, CornerRadius } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  GlassCard,
+  GlassButton,
+} from '../../src/components/GlassKit';
 
 interface FileEntry {
   name: string;
@@ -60,6 +64,18 @@ function getExtension(filename: string): string {
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
 }
 
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
+
+function isImageFile(filename: string): boolean {
+  return IMAGE_EXTENSIONS.has(getExtension(filename));
+}
+
+function fmt(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1048576).toFixed(1)} MB`;
+}
+
 export default function FilesScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
@@ -70,6 +86,7 @@ export default function FilesScreen() {
   const [items, setItems] = useState<FileEntry[]>([]);
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
+  const [imagePath, setImagePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
@@ -86,27 +103,84 @@ export default function FilesScreen() {
       setItems(data.items ?? []);
       setCurrentPath(path);
       setFileContent(null);
+      setImagePath(null);
     } catch {
     } finally {
       setLoading(false);
     }
   }, []);
 
-  async function openFile(path: string) {
+  async function openFile(path: string, name: string) {
+    if (isImageFile(name)) {
+      setFileName(name);
+      setImagePath(path);
+      setFileContent(null);
+      return;
+    }
     try {
       const data = await apiFetch<{ content: string; name: string }>(`/api/files/content?path=${encodeURIComponent(path)}`);
       setFileContent(data.content);
       setFileName(data.name);
+      setImagePath(null);
     } catch {
     }
   }
 
   const pathParts = currentPath.split('/').filter(Boolean);
 
+  if (imagePath !== null) {
+    const uri = `${getDaemonUrl()}/api/files/raw?path=${encodeURIComponent(imagePath)}`;
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+        <BlurView
+          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+          intensity={80}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: Spacing.lg,
+            paddingVertical: Spacing.md,
+            gap: Spacing.md,
+          }}
+        >
+          <Text
+            style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: 'monospace' }]}
+            numberOfLines={1}
+          >
+            {fileName}
+          </Text>
+          <Pressable onPress={() => setImagePath(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: c.elevated }}
+          >
+            <Ionicons name="close" size={16} color={c.textSecondary} />
+          </Pressable>
+        </BlurView>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.md }}>
+          <Image
+            source={{ uri }}
+            style={{ width: '100%', height: '100%', borderRadius: CornerRadius.medium }}
+            resizeMode="contain"
+            accessibilityLabel={fileName}
+          />
+        </View>
+      </View>
+    );
+  }
+
   if (fileContent !== null) {
     return (
-      <View style={[s.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}>
-        <View style={[s.previewHeader, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
+      <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+        <BlurView
+          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+          intensity={80}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: Spacing.lg,
+            paddingVertical: Spacing.md,
+            gap: Spacing.md,
+          }}
+        >
           <Text
             style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: 'monospace' }]}
             numberOfLines={1}
@@ -114,19 +188,31 @@ export default function FilesScreen() {
             {fileName}
           </Text>
           <Pressable onPress={() => setFileContent(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={[s.closeBtn, { backgroundColor: c.elevated }]}
+            style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: c.elevated }}
           >
             <Ionicons name="close" size={16} color={c.textSecondary} />
           </Pressable>
-        </View>
+        </BlurView>
         <FilePreview fileName={fileName} content={fileContent} />
       </View>
     );
   }
 
   return (
-    <View style={[s.container, { backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }]}>
-      <View style={[s.breadcrumb, { backgroundColor: c.card, borderBottomColor: c.separator }]}>
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+      {/* Glass breadcrumb */}
+      <BlurView
+        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+        intensity={80}
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          paddingHorizontal: Spacing.lg,
+          paddingVertical: Spacing.sm + 2,
+          alignItems: 'center',
+          gap: Spacing.xs,
+        }}
+      >
         <Pressable onPress={() => fetchDir(projectPath)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
           <Ionicons name="home-outline" size={14} color={c.textSecondary} />
         </Pressable>
@@ -134,7 +220,7 @@ export default function FilesScreen() {
           const path = '/' + pathParts.slice(0, i + 1).join('/');
           const isLast = i === pathParts.length - 1;
           return (
-            <View key={path} style={s.bcSegment}>
+            <View key={path} style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={[Typography.footnote, { color: c.separator, marginHorizontal: Spacing.xs }]}>/</Text>
               <Pressable onPress={() => fetchDir(path)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
                 <Text
@@ -149,19 +235,19 @@ export default function FilesScreen() {
             </View>
           );
         })}
-      </View>
+      </BlurView>
 
       {loading ? (
-        <View style={s.loading}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Spinner size="lg" />
         </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.path}
-          contentContainerStyle={[s.list, (!items || items.length === 0) && s.listEmpty, { paddingBottom: insets.bottom }]}
+          contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: insets.bottom, flexGrow: items.length === 0 ? 1 : undefined }}
           ListEmptyComponent={
-            <View style={s.empty}>
+            <View style={{ alignItems: 'center', paddingVertical: Spacing['4xl'] }}>
               <Text style={[Typography.subhead, { color: c.textSecondary }]}>No files</Text>
             </View>
           }
@@ -170,20 +256,25 @@ export default function FilesScreen() {
             const iconInfo = getFileIconInfo(ext);
             return (
               <Pressable
-                onPress={() => (item.isDir ? fetchDir(item.path) : openFile(item.path))}
-                style={({ pressed }) => [
-                  s.row,
-                  {
-                    borderBottomColor: c.separator,
-                    backgroundColor: pressed
-                      ? c.isDark
-                        ? 'rgba(255,255,255,0.04)'
-                        : 'rgba(0,0,0,0.04)'
-                      : 'transparent',
-                  },
-                ]}
+                onPress={() => (item.isDir ? fetchDir(item.path) : openFile(item.path, item.name))}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: Spacing.md,
+                  paddingVertical: Spacing.sm + 2,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                  minHeight: 44,
+                  backgroundColor: pressed
+                    ? c.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'
+                    : 'transparent',
+                })}
               >
-                <View style={[s.iconBox, { backgroundColor: item.isDir ? c.accentBg : c.elevated }]}>
+                <View style={{
+                  width: 32, height: 32, borderRadius: CornerRadius.small,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: item.isDir ? c.accentBg : c.elevated,
+                }}>
                   {item.isDir ? (
                     <Ionicons name="folder" size={18} color={Colors.primary[500]} />
                   ) : (
@@ -191,14 +282,12 @@ export default function FilesScreen() {
                   )}
                 </View>
                 <Text
-                  style={[
-                    Typography.subhead,
-                    {
-                      color: item.isDir ? c.textPrimary : c.textSecondary,
-                      fontWeight: item.isDir ? '600' : '400',
-                      flex: 1,
-                    },
-                  ]}
+                  style={{
+                    ...Typography.subhead,
+                    color: item.isDir ? c.textPrimary : c.textSecondary,
+                    fontWeight: item.isDir ? '600' : '400',
+                    flex: 1,
+                  }}
                   numberOfLines={1}
                 >
                   {item.name}
@@ -219,73 +308,3 @@ export default function FilesScreen() {
     </View>
   );
 }
-
-function fmt(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / 1048576).toFixed(1)} MB`;
-}
-
-const s = StyleSheet.create({
-  container: { flex: 1 },
-  previewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.md,
-  },
-  breadcrumb: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  bcSegment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  list: {
-    paddingHorizontal: Spacing.lg,
-  },
-  listEmpty: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: Spacing['4xl'],
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
-  iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

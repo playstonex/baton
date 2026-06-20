@@ -1,13 +1,18 @@
-import { StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { View, Text, TextInput, FlatList, Pressable } from 'react-native';
+import { View, Text, TextInput, FlatList, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import type { AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Typography, Spacing, CornerRadius, iOSGroupedRadius, Colors } from '../../src/constants/theme';
+import { Typography, Spacing, CornerRadius, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLayoutStore } from '../../src/stores/layout';
+import {
+  GlassCard,
+  GlassSectionHeader,
+  GlassButton,
+  GlassPill,
+} from '../../src/components/GlassKit';
 
 function generateUUID(): string {
   const hex = '0123456789abcdef';
@@ -41,7 +46,7 @@ interface Pipeline {
   results: PipelineStepResult[];
 }
 
-const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode', 'kiro-cli'];
+const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode', 'kiro-cli', 'kiro-cli-acp'];
 
 const STEP_STATUS_COLOR: Record<string, string> = {
   pending: '#71717a',
@@ -121,81 +126,74 @@ export default function PipelinesScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg }]}>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
       <FlatList
         data={pipelines}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + tabBarHeight + Spacing.lg }]}
+        contentContainerStyle={{
+          paddingHorizontal: Spacing.lg,
+          paddingTop: headerHeight + Spacing.lg,
+          paddingBottom: insets.bottom + tabBarHeight + Spacing.lg,
+        }}
         ListHeaderComponent={
-          <View style={styles.header}>
+          <View style={{ marginBottom: Spacing.md }}>
             <Text style={[Typography.largeTitle, { color: c.textPrimary }]}>Pipelines</Text>
             <Text style={[Typography.footnote, { color: c.textTertiary, marginTop: Spacing.xs }]}>
               Chain multiple agents in sequence
             </Text>
 
-            <View
-              style={[
-                styles.formCard,
-                { backgroundColor: c.card, borderColor: c.cardBorder, marginTop: Spacing.lg },
-              ]}
-            >
+            <GlassCard c={c} style={{ marginTop: Spacing.lg }}>
               <TextInput
                 placeholder="Pipeline name"
                 value={name}
                 onChangeText={setName}
                 placeholderTextColor={c.textTertiary}
-                style={[
-                  styles.nameInput,
-                  {
-                    backgroundColor: c.inputBg,
-                    borderColor: c.inputBorder,
-                    color: c.textPrimary,
-                  },
-                ]}
+                style={{
+                  backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                  borderWidth: 1,
+                  borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                  borderRadius: CornerRadius.medium,
+                  paddingVertical: Spacing.md,
+                  paddingHorizontal: Spacing.md,
+                  color: c.textPrimary,
+                  ...Typography.subhead,
+                  fontWeight: '500',
+                }}
               />
 
-              <View style={styles.stepsContainer}>
+              <View style={{ gap: Spacing.xs }}>
                 {steps.map((step, i) => (
                   <View key={step.id}>
-                    <View style={styles.stepRow}>
+                    <View style={{ flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start' }}>
                       <View
-                        style={[
-                          styles.stepNumberCircle,
-                          { backgroundColor: c.accentBg, borderColor: c.accentBorder },
-                        ]}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginTop: Spacing.xs,
+                          backgroundColor: c.accentBg,
+                          borderColor: c.accentBorder,
+                        }}
                       >
                         <Text style={[Typography.caption1, { color: Colors.primary[500], fontWeight: '700' }]}>
                           {i + 1}
                         </Text>
                       </View>
-                      <View style={styles.stepContent}>
-                        <View style={styles.stepTypeRow}>
+                      <View style={{ flex: 1, gap: Spacing.sm }}>
+                        <View style={{ flexDirection: 'row', gap: Spacing.xs }}>
                           {AGENT_TYPES.map((t) => {
                             const active = step.agentType === t;
                             return (
-                              <Pressable
+                              <GlassPill
                                 key={t}
+                                c={c}
+                                label={AGENT_LABELS[t] ?? t.split('-')[0]}
+                                active={active}
                                 onPress={() => updateStep(i, { agentType: t })}
-                                style={[
-                                  styles.stepTypePill,
-                                  {
-                                    backgroundColor: active ? c.accentBg : c.elevated,
-                                    borderColor: active ? c.accentBorder : 'transparent',
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    Typography.caption1,
-                                    {
-                                      color: active ? Colors.primary[500] : c.textTertiary,
-                                      fontWeight: active ? '600' : '400',
-                                    },
-                                  ]}
-                                >
-                                  {AGENT_LABELS[t] ?? t.split('-')[0]}
-                                </Text>
-                              </Pressable>
+                              />
                             );
                           })}
                         </View>
@@ -204,20 +202,32 @@ export default function PipelinesScreen() {
                           value={step.projectPath}
                           onChangeText={(v) => updateStep(i, { projectPath: v })}
                           placeholderTextColor={c.textTertiary}
-                          style={[
-                            styles.pathInput,
-                            {
-                              backgroundColor: c.inputBg,
-                              borderColor: c.inputBorder,
-                              color: c.textSecondary,
-                            },
-                          ]}
+                          style={{
+                            backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                            borderWidth: 1,
+                            borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                            borderRadius: CornerRadius.medium,
+                            paddingVertical: Spacing.sm + 2,
+                            paddingHorizontal: Spacing.md,
+                            color: c.textSecondary,
+                            ...Typography.footnote,
+                            fontFamily: 'monospace',
+                            fontWeight: '500',
+                          }}
                         />
                       </View>
                       {steps.length > 1 && (
                         <Pressable
                           onPress={() => removeStep(i)}
-                          style={[styles.removeStepButton, { backgroundColor: c.dangerBg }]}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: CornerRadius.small,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginTop: Spacing.xs,
+                            backgroundColor: c.dangerBg,
+                          }}
                         >
                           <Text style={[Typography.caption1, { color: Colors.danger[400], fontWeight: '600' }]}>
                             {'\u{2715}'}
@@ -226,8 +236,8 @@ export default function PipelinesScreen() {
                       )}
                     </View>
                     {i < steps.length - 1 && (
-                      <View style={styles.stepConnector}>
-                        <View style={[styles.stepConnectorLine, { backgroundColor: c.separator }]} />
+                      <View style={{ alignItems: 'center', paddingVertical: Spacing.xs, paddingLeft: 10 }}>
+                        <View style={{ width: 1, height: Spacing.sm, backgroundColor: c.separator }} />
                         <Text style={[Typography.caption2, { color: c.textTertiary }]}>
                           {'\u{25BC}'}
                         </Text>
@@ -237,54 +247,32 @@ export default function PipelinesScreen() {
                 ))}
               </View>
 
-              <View style={styles.formActions}>
-                <Pressable
+              <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.xs }}>
+                <GlassButton
+                  c={c}
+                  label="+ Add Step"
                   onPress={addStep}
-                  style={[
-                    styles.addStepButton,
-                    { backgroundColor: c.elevated, borderColor: c.cardBorder },
-                  ]}
-                >
-                  <Text style={[Typography.subhead, { color: c.textSecondary, fontWeight: '500' }]}>
-                    + Add Step
-                  </Text>
-                </Pressable>
-                <Pressable
+                  variant="secondary"
+                />
+                <GlassButton
+                  c={c}
+                  label={creating ? '' : 'Create & Run'}
                   onPress={createAndRun}
-                  style={[
-                    styles.createButton,
-                    {
-                      backgroundColor: creating || !name.trim() ? Colors.primary[500] + '40' : Colors.primary[500],
-                    },
-                  ]}
                   disabled={creating || !name.trim()}
-                >
-                  {creating ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={[Typography.subhead, { color: '#fff', fontWeight: '600' }]}>
-                      Create & Run
-                    </Text>
-                  )}
-                </Pressable>
+                  loading={creating}
+                  variant="primary"
+                />
               </View>
-            </View>
+            </GlassCard>
 
             {pipelines.length > 0 && (
-              <Text
-                style={[
-                  Typography.headline,
-                  { color: c.textPrimary, marginTop: Spacing.xl, marginBottom: Spacing.sm },
-                ]}
-              >
-                History
-              </Text>
+              <GlassSectionHeader c={c} title="History" />
             )}
           </View>
         }
         ListEmptyComponent={
           pipelines.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View style={{ paddingVertical: Spacing['3xl'], alignItems: 'center' }}>
               <Text style={[Typography.subhead, { color: c.textSecondary }]}>No pipelines</Text>
               <Text style={[Typography.footnote, { color: c.textTertiary, marginTop: Spacing.xs }]}>
                 Create one above to get started
@@ -295,24 +283,24 @@ export default function PipelinesScreen() {
         renderItem={({ item: p }) => {
           const statusColor = STEP_STATUS_COLOR[p.status] ?? c.textTertiary;
           return (
-            <View
-              style={[
-                styles.pipelineCard,
-                { backgroundColor: c.card, borderColor: c.cardBorder },
-              ]}
-            >
-              <View style={styles.pipelineHeader}>
-                <View style={styles.pipelineTitleRow}>
+            <GlassCard c={c} style={{ marginBottom: Spacing.sm }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 }}>
                   <Text style={[Typography.headline, { color: c.textPrimary, flexShrink: 1 }]} numberOfLines={1}>
                     {p.name}
                   </Text>
                   <View
-                    style={[
-                      styles.pipelineStatusChip,
-                      { backgroundColor: statusColor + '18' },
-                    ]}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: Spacing.xs,
+                      paddingHorizontal: Spacing.sm,
+                      paddingVertical: 3,
+                      borderRadius: CornerRadius.small,
+                      backgroundColor: statusColor + '18',
+                    }}
                   >
-                    <View style={[styles.pipelineStatusDot, { backgroundColor: statusColor }]} />
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
                     <Text style={[Typography.caption1, { color: statusColor, fontWeight: '600' }]}>
                       {p.status}
                     </Text>
@@ -321,7 +309,15 @@ export default function PipelinesScreen() {
                 {p.status === 'pending' && (
                   <Pressable
                     onPress={() => runPipeline(p.id)}
-                    style={[styles.runButton, { backgroundColor: Colors.primary[500] }]}
+                    style={{
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.xs + 2,
+                      borderRadius: CornerRadius.small,
+                      backgroundColor: Colors.primary[500],
+                      minHeight: 32,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
                   >
                     <Text style={[Typography.footnote, { color: '#fff', fontWeight: '600' }]}>
                       Run
@@ -330,22 +326,22 @@ export default function PipelinesScreen() {
                 )}
               </View>
 
-              <View style={styles.stepFlow}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 {p.steps.map((step, i) => {
                   const result = p.results[i];
                   const color = STEP_STATUS_COLOR[result?.status ?? 'pending'] ?? c.textTertiary;
                   return (
-                    <View key={step.id} style={styles.stepFlowItem}>
+                    <View key={step.id} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
                       {i > 0 && (
-                        <View style={styles.flowConnector}>
-                          <View style={[styles.flowLine, { backgroundColor: c.separator }]} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginHorizontal: Spacing.xs, height: 24 }}>
+                          <View style={{ width: Spacing.md, height: 1, backgroundColor: c.separator }} />
                           <Text style={[Typography.caption2, { color: c.textTertiary }]}>
                             {'\u{2192}'}
                           </Text>
                         </View>
                       )}
-                      <View style={styles.flowStepColumn}>
-                        <View style={[styles.flowStepCircle, { borderColor: color }]}>
+                      <View style={{ alignItems: 'center' }}>
+                        <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: color, alignItems: 'center', justifyContent: 'center' }}>
                           <Text style={[Typography.caption2, { color, fontWeight: '700' }]}>
                             {i + 1}
                           </Text>
@@ -358,198 +354,10 @@ export default function PipelinesScreen() {
                   );
                 })}
               </View>
-            </View>
+            </GlassCard>
           );
         }}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  listContent: {
-    paddingHorizontal: Spacing.lg,
-  },
-  header: {
-    marginBottom: Spacing.md,
-  },
-  formCard: {
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  nameInput: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    ...Typography.subhead,
-    fontWeight: '500',
-  },
-  stepsContainer: {
-    gap: Spacing.xs,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    alignItems: 'flex-start',
-  },
-  stepNumberCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.xs,
-  },
-  stepContent: {
-    flex: 1,
-    gap: Spacing.sm,
-  },
-  stepTypeRow: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-  },
-  stepTypePill: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs + 1,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    minHeight: 28,
-    justifyContent: 'center',
-  },
-  pathInput: {
-    paddingVertical: Spacing.sm + 2,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    ...Typography.footnote,
-    fontFamily: 'monospace',
-    fontWeight: '500',
-  },
-  removeStepButton: {
-    width: 28,
-    height: 28,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.xs,
-  },
-  stepConnector: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xs,
-    paddingLeft: 10,
-  },
-  stepConnectorLine: {
-    width: 1,
-    height: Spacing.sm,
-  },
-  formActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  addStepButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  createButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyState: {
-    paddingVertical: Spacing['3xl'],
-    alignItems: 'center',
-  },
-  pipelineCard: {
-    borderRadius: iOSGroupedRadius,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    padding: Spacing.lg,
-    marginBottom: Spacing.sm,
-    gap: Spacing.md,
-  },
-  pipelineHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pipelineTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    flex: 1,
-  },
-  pipelineStatusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-  },
-  pipelineStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  runButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: CornerRadius.small,
-    borderCurve: 'continuous',
-    minHeight: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepFlow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-  },
-  stepFlowItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  flowConnector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginHorizontal: Spacing.xs,
-    height: 24,
-  },
-  flowLine: {
-    width: Spacing.md,
-    height: 1,
-  },
-  flowStepColumn: {
-    alignItems: 'center',
-  },
-  flowStepCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

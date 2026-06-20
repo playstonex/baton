@@ -154,7 +154,27 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
 
   useImperativeHandle(ref, () => ({
     write: (data: string) => {
-      webViewRef.current?.injectJavaScript(`window._termWrite(${JSON.stringify(data)}); true;`);
+      const CHUNK_SIZE = 8192;
+      if (data.length <= CHUNK_SIZE) {
+        webViewRef.current?.injectJavaScript(
+          `window._termWrite(${JSON.stringify(data)}); true;`,
+        );
+        return;
+      }
+
+      let offset = 0;
+      const writeNext = () => {
+        if (offset >= data.length) return;
+        const chunk = data.slice(offset, offset + CHUNK_SIZE);
+        webViewRef.current?.injectJavaScript(
+          `window._termWrite(${JSON.stringify(chunk)}); true;`,
+        );
+        offset += CHUNK_SIZE;
+        if (offset < data.length) {
+          setTimeout(writeNext, 16);
+        }
+      };
+      writeNext();
     },
   }));
 
