@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from 'heroui-native';
@@ -106,6 +106,7 @@ export default function DashboardScreen() {
   const { sessions, addSession } = useRecentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
+  const [chatMode, setChatMode] = useState<'chat' | 'terminal'>('chat');
   const [loading, setLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -202,7 +203,8 @@ export default function DashboardScreen() {
         projectPath: projectPath.trim(),
         lastActivity: Date.now(),
       });
-      router.push(`/terminal/${data.sessionId}`);
+      const route = agentType === 'codex' && chatMode === 'chat' ? 'chat' : 'terminal';
+      router.push(`/${route}/${data.sessionId}` as Href);
     } catch (err) {
       Alert.alert('Error', `Failed: ${err}`);
     } finally {
@@ -428,6 +430,63 @@ export default function DashboardScreen() {
 
               <Text style={[Typography.caption1, { color: c.textTertiary }]}>{selectedAgent.desc}</Text>
 
+              {/* Interaction mode — only Codex supports chat */}
+              {agentType === 'codex' && (
+                <View style={styles.modeRow}>
+                  <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>
+                    Mode
+                  </Text>
+                  <View
+                    style={[
+                      styles.modeSegmented,
+                      {
+                        backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
+                        borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                      },
+                    ]}
+                  >
+                    {([
+                      { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
+                      { key: 'terminal', label: 'Terminal', icon: 'terminal-outline' },
+                    ] as const).map((opt) => {
+                      const active = chatMode === opt.key;
+                      return (
+                        <Pressable
+                          key={opt.key}
+                          onPress={() => setChatMode(opt.key)}
+                          style={[
+                            styles.modeSegment,
+                            active && { backgroundColor: Colors.primary[500] + '20' },
+                          ]}
+                        >
+                          <Ionicons
+                            name={opt.icon as any}
+                            size={13}
+                            color={active ? Colors.primary[500] : c.textTertiary}
+                          />
+                          <Text
+                            style={[
+                              Typography.caption1,
+                              {
+                                color: active ? Colors.primary[500] : c.textTertiary,
+                                fontWeight: active ? '600' : '500',
+                              },
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+                    {chatMode === 'chat'
+                      ? 'Structured chat with tool calls & approvals'
+                      : 'Raw PTY terminal'}
+                  </Text>
+                </View>
+              )}
+
               <GlassButton
                 c={c}
                 label={`Launch ${selectedAgent.label}`}
@@ -597,6 +656,24 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+
+  modeRow: { gap: Spacing.xs },
+  modeSegmented: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 3,
+    gap: 2,
+  },
+  modeSegment: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: 8,
+  },
   pathInput: {
     flex: 1,
     borderRadius: 10,
