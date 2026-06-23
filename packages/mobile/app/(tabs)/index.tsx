@@ -1,15 +1,6 @@
-import {
-  Alert,
-  FlatList,
-  Modal,
-  Pressable,
-  TextInput,
-  View,
-  Text,
-  StyleSheet,
-} from 'react-native';
+import { Alert, FlatList, Modal, Pressable, TextInput, View, Text, StyleSheet } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from 'heroui-native';
@@ -43,11 +34,29 @@ const AGENT_OPTIONS: {
   icon: string;
   color: string;
 }[] = [
-  { type: 'claude-code', label: 'Claude Code', desc: 'Deep code work', icon: 'sparkles', color: '#D97757' },
+  {
+    type: 'claude-code',
+    label: 'Claude Code',
+    desc: 'Deep code work',
+    icon: 'sparkles',
+    color: '#D97757',
+  },
   { type: 'codex', label: 'Codex', desc: 'Fast execution', icon: 'terminal', color: '#10A37F' },
   { type: 'opencode', label: 'OpenCode', desc: 'Open stack', icon: 'code-slash', color: '#6366F1' },
-  { type: 'kiro-cli', label: 'Kiro CLI', desc: 'Amazon Kiro agent', icon: 'rocket', color: '#FF9900' },
-  { type: 'kiro-cli-acp', label: 'Kiro ACP', desc: 'Structured ACP mode', icon: 'rocket', color: '#FF9900' },
+  {
+    type: 'kiro-cli',
+    label: 'Kiro CLI',
+    desc: 'Amazon Kiro agent',
+    icon: 'rocket',
+    color: '#FF9900',
+  },
+  {
+    type: 'kiro-cli-acp',
+    label: 'Kiro ACP',
+    desc: 'Structured ACP mode',
+    icon: 'rocket',
+    color: '#FF9900',
+  },
 ];
 
 function formatTime(ts: number): string {
@@ -103,7 +112,7 @@ export default function DashboardScreen() {
   const addAgent = useAgentStore((s) => s.addAgent);
   const removeAgent = useAgentStore((s) => s.removeAgent);
   const connected = useConnectionStore((s) => s.connected);
-  const { sessions, addSession } = useRecentStore();
+  const { sessions, addSession, removeSession } = useRecentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [chatMode, setChatMode] = useState<'chat' | 'terminal'>('chat');
@@ -161,6 +170,15 @@ export default function DashboardScreen() {
     };
   }, [fetchAgents, setAgents, updateAgentStatus]);
 
+  // Refresh the agent list whenever this tab gains focus. Covers the
+  // return-from-background resume case: after a reconnect the local store may
+  // be stale, and the WS agent_list push only fires on connect.
+  useFocusEffect(
+    useCallback(() => {
+      fetchAgents();
+    }, [fetchAgents]),
+  );
+
   const runningCount = useMemo(() => agents.filter((a) => a.status !== 'stopped').length, [agents]);
   const activeSessionIds = useMemo(() => new Set(agents.map((a) => a.id)), [agents]);
 
@@ -177,8 +195,25 @@ export default function DashboardScreen() {
   const selectedAgent = AGENT_OPTIONS.find((o) => o.type === agentType) ?? AGENT_OPTIONS[0];
 
   function togglePin(id: string) {
-    setPinnedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    setPinnedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function deleteSession(session: RecentSession) {
+    const label = AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type;
+    Alert.alert(
+      'Remove Session',
+      `Remove "${label}" from history?${session.projectPath ? `\n\n${session.projectPath}` : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            removeSession(session.id);
+            setPinnedIds((prev) => prev.filter((x) => x !== session.id));
+          },
+        },
+      ],
     );
   }
 
@@ -188,7 +223,14 @@ export default function DashboardScreen() {
     try {
       const data = await apiFetch<{ sessionId: string }>('/api/agents/start', {
         method: 'POST',
-        body: JSON.stringify({ agentType, projectPath: projectPath.trim() }),
+        body: JSON.stringify({
+          agentType,
+          projectPath: projectPath.trim(),
+          // Codex must run via the SDK adapter (codex app-server / JSON-RPC).
+          // The default PTY path spawns the interactive `codex` TUI, whose render
+          // frames flood the daemon and freeze the event loop. Chat mode requires SDK.
+          mode: agentType === 'codex' ? 'sdk' : 'pty',
+        }),
       });
       addAgent({
         id: data.sessionId,
@@ -202,6 +244,9 @@ export default function DashboardScreen() {
         type: agentType,
         projectPath: projectPath.trim(),
         lastActivity: Date.now(),
+        // codex chat sessions remember their mode so re-entry reopens the chat
+        // view instead of falling back to the terminal.
+        chatMode: agentType === 'codex' ? chatMode : undefined,
       });
       const route = agentType === 'codex' && chatMode === 'chat' ? 'chat' : 'terminal';
       router.push(`/${route}/${data.sessionId}` as Href);
@@ -221,9 +266,23 @@ export default function DashboardScreen() {
     }
   }
 
-  function openTerminal(sessionId: string) {
-    addSession({ id: sessionId, type: 'claude-code', projectPath: '', lastActivity: Date.now() });
-    router.push(`/terminal/${sessionId}`);
+  /**
+   * Open a session, routing to chat vs terminal based on the stored mode.
+   * codex sessions created in chat mode reopen in chat; everything else
+   * (and codex terminal sessions) opens in the terminal.
+   */
+  function openSession(sessionId: string, agentType: AgentType) {
+    const stored = sessions.find((s) => s.id === sessionId);
+    const isChat = agentType === 'codex' && stored?.chatMode === 'chat';
+    const route = isChat ? 'chat' : 'terminal';
+    addSession({
+      id: sessionId,
+      type: agentType,
+      projectPath: stored?.projectPath ?? '',
+      lastActivity: Date.now(),
+      chatMode: stored?.chatMode,
+    });
+    router.push(`/${route}/${sessionId}` as Href);
   }
 
   const renderAgentRow = (agent: AgentProcess) => {
@@ -235,30 +294,49 @@ export default function DashboardScreen() {
         key={agent.id}
         onPress={() => {
           if (!isStopped) {
-            addSession({ id: agent.id, type: agent.type, projectPath: agent.projectPath, lastActivity: Date.now() });
-            router.push(`/terminal/${agent.id}`);
+            openSession(agent.id, agent.type);
           }
         }}
-        style={({ pressed }) => [{ opacity: isStopped ? 0.5 : pressed ? 0.9 : 1 }, { marginBottom: Spacing.sm }]}
+        style={({ pressed }) => [
+          { opacity: isStopped ? 0.5 : pressed ? 0.9 : 1 },
+          { marginBottom: Spacing.sm },
+        ]}
       >
         <GlassCard c={c} blurIntensity={Glass.blur.card - 10}>
           <View style={styles.agentRow}>
             <View style={styles.agentLeft}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <View style={{ flex: 1 }}>
-                <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>{label}</Text>
-                <Text style={[Typography.caption1, { color: c.textTertiary, fontFamily: 'Menlo' }]} numberOfLines={1}>
+                <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
+                  {label}
+                </Text>
+                <Text
+                  style={[Typography.caption1, { color: c.textTertiary, fontFamily: 'Menlo' }]}
+                  numberOfLines={1}
+                >
                   {agent.projectPath}
                 </Text>
               </View>
             </View>
             <View style={styles.agentRight}>
-              <Text style={[Typography.caption2, { color: statusColor, fontWeight: '600', textTransform: 'capitalize' }]}>
+              <Text
+                style={[
+                  Typography.caption2,
+                  { color: statusColor, fontWeight: '600', textTransform: 'capitalize' },
+                ]}
+              >
                 {agent.status.replace('_', ' ')}
               </Text>
               {!isStopped && (
-                <Pressable onPress={() => stopAgent(agent.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '600' }]}>Stop</Text>
+                <Pressable
+                  onPress={() => stopAgent(agent.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text
+                    style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '600' }]}
+                  >
+                    Stop
+                  </Text>
                 </Pressable>
               )}
             </View>
@@ -273,29 +351,47 @@ export default function DashboardScreen() {
     return (
       <Pressable
         key={session.id}
-        onPress={() => openTerminal(session.id)}
+        onPress={() => openSession(session.id, session.type)}
         style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }, { marginBottom: Spacing.xs }]}
       >
         <GlassCard c={c} blurIntensity={Glass.blur.card - 15}>
           <View style={styles.sessionRow}>
             <View style={{ flex: 1 }}>
               <View style={styles.sessionTop}>
-                <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600', flex: 1 }]} numberOfLines={1}>
+                <Text
+                  style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600', flex: 1 }]}
+                  numberOfLines={1}
+                >
                   {agentOption?.label ?? session.type}
                 </Text>
-                <Pressable onPress={() => togglePin(session.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Pressable
+                  onPress={() => togglePin(session.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <Ionicons
                     name={isPinned ? 'pin' : 'pin-outline'}
                     size={14}
                     color={isPinned ? Colors.primary[500] : c.textTertiary}
                   />
                 </Pressable>
+                <Pressable
+                  onPress={() => deleteSession(session)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginLeft: Spacing.sm }}
+                >
+                  <Ionicons name="trash-outline" size={14} color={Colors.danger[400]} />
+                </Pressable>
               </View>
-              <Text style={[Typography.caption1, { color: c.textTertiary, marginTop: 2 }]} numberOfLines={1}>
+              <Text
+                style={[Typography.caption1, { color: c.textTertiary, marginTop: 2 }]}
+                numberOfLines={1}
+              >
                 {session.projectPath || 'terminal session'}
               </Text>
             </View>
-            <Text style={[Typography.caption2, { color: c.textTertiary }]}>{formatTime(session.lastActivity)}</Text>
+            <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+              {formatTime(session.lastActivity)}
+            </Text>
           </View>
         </GlassCard>
       </Pressable>
@@ -310,13 +406,18 @@ export default function DashboardScreen() {
         style={styles.list}
         contentContainerStyle={[
           styles.listContent,
-          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + tabBarHeight + Spacing.lg },
+          {
+            paddingTop: headerHeight + Spacing.lg,
+            paddingBottom: insets.bottom + tabBarHeight + Spacing.lg,
+          },
         ]}
         ListHeaderComponent={
           <View style={{ gap: Spacing.md }}>
             {/* Header */}
             <View style={styles.headerRow}>
-              <Text style={[Typography.largeTitle, { color: c.textPrimary, fontWeight: '700' }]}>Baton</Text>
+              <Text style={[Typography.largeTitle, { color: c.textPrimary, fontWeight: '700' }]}>
+                Baton
+              </Text>
               <View style={styles.headerRight}>
                 <Pressable
                   onPress={() => setShowSearch(!showSearch)}
@@ -343,7 +444,10 @@ export default function DashboardScreen() {
                   <Text
                     style={[
                       Typography.caption1,
-                      { color: connected ? Colors.success[400] : Colors.danger[400], fontWeight: '600' },
+                      {
+                        color: connected ? Colors.success[400] : Colors.danger[400],
+                        fontWeight: '600',
+                      },
                     ]}
                   >
                     {connected ? 'Online' : 'Offline'}
@@ -364,7 +468,13 @@ export default function DashboardScreen() {
 
             {/* Stats row */}
             <View style={styles.statsRow}>
-              <GlassStatCard c={c} value={runningCount} label="Running" icon="play" color={Colors.success[400]} />
+              <GlassStatCard
+                c={c}
+                value={runningCount}
+                label="Running"
+                icon="play"
+                color={Colors.success[400]}
+              />
               <GlassStatCard c={c} value={agents.length} label="Total agents" icon="grid" />
               <GlassStatCard c={c} value={recentSessionList.length} label="History" icon="time" />
             </View>
@@ -377,7 +487,9 @@ export default function DashboardScreen() {
             {/* Launch Session */}
             <GlassSectionHeader c={c} title="Launch Session" />
             <GlassCard c={c}>
-              <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>Agent</Text>
+              <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>
+                Agent
+              </Text>
               <Pressable
                 onPress={() => setMenuOpen(true)}
                 style={({ pressed }) => [
@@ -389,20 +501,28 @@ export default function DashboardScreen() {
                 ]}
               >
                 <Ionicons name={selectedAgent.icon as any} size={18} color={selectedAgent.color} />
-                <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600', flex: 1 }]}>
+                <Text
+                  style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600', flex: 1 }]}
+                >
                   {selectedAgent.label}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={c.textTertiary} />
               </Pressable>
 
-              <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>Project Path</Text>
+              <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>
+                Project Path
+              </Text>
               <View style={styles.inputRow}>
                 <TextInput
                   style={[
                     styles.pathInput,
                     {
-                      backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
-                      borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                      backgroundColor: c.isDark
+                        ? Glass.opacity.dark.subtle
+                        : Glass.opacity.light.subtle,
+                      borderColor: c.isDark
+                        ? Glass.opacity.dark.border
+                        : Glass.opacity.light.border,
                       color: c.textPrimary,
                     },
                   ]}
@@ -419,36 +539,52 @@ export default function DashboardScreen() {
                   style={[
                     styles.browseBtn,
                     {
-                      backgroundColor: connected ? c.subtle : c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
+                      backgroundColor: connected
+                        ? c.subtle
+                        : c.isDark
+                          ? Glass.opacity.dark.subtle
+                          : Glass.opacity.light.subtle,
                       opacity: connected ? 1 : 0.5,
                     },
                   ]}
                 >
-                  <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>Browse</Text>
+                  <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
+                    Browse
+                  </Text>
                 </Pressable>
               </View>
 
-              <Text style={[Typography.caption1, { color: c.textTertiary }]}>{selectedAgent.desc}</Text>
+              <Text style={[Typography.caption1, { color: c.textTertiary }]}>
+                {selectedAgent.desc}
+              </Text>
 
               {/* Interaction mode — only Codex supports chat */}
               {agentType === 'codex' && (
                 <View style={styles.modeRow}>
-                  <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>
+                  <Text
+                    style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}
+                  >
                     Mode
                   </Text>
                   <View
                     style={[
                       styles.modeSegmented,
                       {
-                        backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
-                        borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                        backgroundColor: c.isDark
+                          ? Glass.opacity.dark.subtle
+                          : Glass.opacity.light.subtle,
+                        borderColor: c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
                       },
                     ]}
                   >
-                    {([
-                      { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
-                      { key: 'terminal', label: 'Terminal', icon: 'terminal-outline' },
-                    ] as const).map((opt) => {
+                    {(
+                      [
+                        { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
+                        { key: 'terminal', label: 'Terminal', icon: 'terminal-outline' },
+                      ] as const
+                    ).map((opt) => {
                       const active = chatMode === opt.key;
                       return (
                         <Pressable
@@ -499,11 +635,29 @@ export default function DashboardScreen() {
             </GlassCard>
 
             {/* Agent selector modal */}
-            <Modal visible={menuOpen} animationType="fade" transparent onRequestClose={() => setMenuOpen(false)}>
+            <Modal
+              visible={menuOpen}
+              animationType="fade"
+              transparent
+              onRequestClose={() => setMenuOpen(false)}
+            >
               <Pressable style={styles.menuOverlay} onPress={() => setMenuOpen(false)}>
-                <Pressable style={{ marginHorizontal: Spacing.xl }} onPress={(e) => e.stopPropagation()}>
+                <Pressable
+                  style={{ marginHorizontal: Spacing.xl }}
+                  onPress={(e) => e.stopPropagation()}
+                >
                   <GlassCard c={c} blurIntensity={Glass.blur.sheet}>
-                    <Text style={[Typography.caption1, { color: c.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }]}>
+                    <Text
+                      style={[
+                        Typography.caption1,
+                        {
+                          color: c.textTertiary,
+                          fontWeight: '600',
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5,
+                        },
+                      ]}
+                    >
                       Select Agent
                     </Text>
                     {AGENT_OPTIONS.map((option) => {
@@ -526,16 +680,27 @@ export default function DashboardScreen() {
                             },
                           ]}
                         >
-                          <View style={[styles.menuIconWrap, { backgroundColor: option.color + '18' }]}>
+                          <View
+                            style={[styles.menuIconWrap, { backgroundColor: option.color + '18' }]}
+                          >
                             <Ionicons name={option.icon as any} size={20} color={option.color} />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
+                            <Text
+                              style={[
+                                Typography.subhead,
+                                { color: c.textPrimary, fontWeight: '600' },
+                              ]}
+                            >
                               {option.label}
                             </Text>
-                            <Text style={[Typography.caption1, { color: c.textTertiary }]}>{option.desc}</Text>
+                            <Text style={[Typography.caption1, { color: c.textTertiary }]}>
+                              {option.desc}
+                            </Text>
                           </View>
-                          {active && <Ionicons name="checkmark" size={20} color={Colors.primary[500]} />}
+                          {active && (
+                            <Ionicons name="checkmark" size={20} color={Colors.primary[500]} />
+                          )}
                         </Pressable>
                       );
                     })}
@@ -558,7 +723,9 @@ export default function DashboardScreen() {
             <GlassSectionHeader c={c} title="Active Sessions" count={agents.length} />
             {agents.length === 0 && (
               <GlassCard c={c}>
-                <View style={{ alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.sm }}>
+                <View
+                  style={{ alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.sm }}
+                >
                   <Ionicons name="cube-outline" size={32} color={c.textTertiary} />
                   <Text style={[Typography.subhead, { color: c.textSecondary, fontWeight: '500' }]}>
                     No active sessions
@@ -575,10 +742,26 @@ export default function DashboardScreen() {
         ListFooterComponent={
           groups.length > 0 || pinned.length > 0 ? (
             <View style={{ marginTop: Spacing.lg }}>
-              <GlassSectionHeader c={c} title="Session History" count={pinned.length + groups.reduce((n, g) => n + g.sessions.length, 0)} />
+              <GlassSectionHeader
+                c={c}
+                title="Session History"
+                count={pinned.length + groups.reduce((n, g) => n + g.sessions.length, 0)}
+              />
               {pinned.length > 0 && (
                 <View style={{ marginBottom: Spacing.md }}>
-                  <Text style={[Typography.caption2, { color: Colors.primary[500], fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Spacing.sm, paddingHorizontal: 2 }]}>
+                  <Text
+                    style={[
+                      Typography.caption2,
+                      {
+                        color: Colors.primary[500],
+                        fontWeight: '600',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                        marginBottom: Spacing.sm,
+                        paddingHorizontal: 2,
+                      },
+                    ]}
+                  >
                     Pinned
                   </Text>
                   {pinned.map((s) => renderSessionRow(s, true))}
@@ -586,12 +769,24 @@ export default function DashboardScreen() {
               )}
               {groups.map((group) => (
                 <View key={group.project} style={{ marginBottom: Spacing.md }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm, paddingHorizontal: 2 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: Spacing.sm,
+                      marginBottom: Spacing.sm,
+                      paddingHorizontal: 2,
+                    }}
+                  >
                     <Ionicons name="folder-outline" size={12} color={c.textTertiary} />
-                    <Text style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}>
+                    <Text
+                      style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}
+                    >
                       {group.project}
                     </Text>
-                    <Text style={[Typography.caption2, { color: c.textTertiary }]}>{group.sessions.length}</Text>
+                    <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+                      {group.sessions.length}
+                    </Text>
                   </View>
                   {group.sessions.map((s) => renderSessionRow(s, false))}
                 </View>

@@ -1,6 +1,7 @@
 import { convertRequest } from './request-converter.js';
 import { convertResponse } from './response-converter.js';
 import { convertStream } from './stream-converter.js';
+import { ApiModeSchema, type ApiMode } from '@baton/shared';
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -12,10 +13,17 @@ export { convertResponse } from './response-converter.js';
 export { convertStream } from './stream-converter.js';
 export { ApiProviderRegistry } from './registry.js';
 export type * from './types.js';
+export { ApiModeSchema, type ApiMode };
 
 export interface ConverterConfig {
   apiKey: string;
   baseUrl: string; // e.g. https://api.openai.com/v1
+  /**
+   * How to address the upstream endpoint.
+   * - `responses`: convert Chat Completions ↔ Responses (default).
+   * - `chat-completions`: forward the request unchanged (passthrough).
+   */
+  apiMode?: ApiMode;
 }
 
 export interface ProxyResult {
@@ -30,8 +38,14 @@ export interface ProxyResult {
 }
 
 /**
- * Core proxy handler: takes a Chat Completions request, converts it to the
- * Responses API, forwards it to OpenAI, and converts the response back.
+ * Core proxy handler.
+ *
+ * `config.apiMode` selects the upstream endpoint shape:
+ * - `responses` (default): the request is a Chat Completions payload; it is
+ *   converted to a Responses API request, forwarded to `${baseUrl}/responses`,
+ *   and the reply is converted back to Chat Completions.
+ * - `chat-completions`: the request is forwarded unchanged to
+ *   `${baseUrl}/chat/completions` and the reply is passed through as-is.
  *
  * Handles both streaming and non-streaming modes transparently.
  */
@@ -39,6 +53,10 @@ export async function proxyChatCompletion(
   chatReq: ChatCompletionRequest,
   config: ConverterConfig,
 ): Promise<ProxyResult> {
+  // Note: providers are now consumed directly by the Codex CLI (via the
+  // config.toml sync in codex-sync.ts) rather than proxied by the daemon.
+  // This converter is retained for completeness / future reuse.
+
   // Step 1: Convert Chat Completions → Responses API request
   const responsesReq = convertRequest(chatReq);
 

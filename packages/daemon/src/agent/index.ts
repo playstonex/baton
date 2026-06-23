@@ -33,6 +33,11 @@ const adapters: Record<string, new () => BaseAgentAdapter> = {
 const sdkAdapters: Partial<Record<AgentType, SdkAgentAdapter>> = {
   'claude-code-sdk': claudeSdkAdapter,
   'codex-sdk': codexSdkAdapter,
+  // Also register under the plain agent type so `createSdkAdapter('codex')`
+  // resolves. Without this, a `mode: "sdk"` start for agentType 'codex' falls
+  // back to the PTY path, which spawns `codex` (the interactive TUI) and floods
+  // the daemon with render frames — freezing the event loop.
+  codex: codexSdkAdapter,
   opencode: opencodeSdkAdapter,
 };
 

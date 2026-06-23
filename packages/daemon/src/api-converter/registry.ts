@@ -6,6 +6,7 @@ import {
   type ApiProviderConfig,
   type ApiProviderProfile,
 } from '@baton/shared';
+import { syncProvidersToCodex } from './codex-sync.js';
 
 function getBatonHome(): string {
   return process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
@@ -20,6 +21,13 @@ async function getConfigPath(): Promise<string> {
 export class ApiProviderRegistry {
   private config: ApiProviderConfig = EMPTY_API_PROVIDER_CONFIG;
   private loaded = false;
+  /** Daemon HTTP port — used for the localhost base_url written to Codex. */
+  private port = 3210;
+
+  /** Set the daemon port so Codex sync writes the correct localhost URL. */
+  setPort(port: number): void {
+    this.port = port;
+  }
 
   async load(): Promise<void> {
     try {
@@ -35,6 +43,18 @@ export class ApiProviderRegistry {
   async save(): Promise<void> {
     const path = await getConfigPath();
     await writeFile(path, JSON.stringify(this.config, null, 2));
+
+    // Best-effort: mirror providers into Codex's config.toml so that the
+    // Codex CLI picks them up as `[model_providers.<id>]`. Failures here must
+    // never invalidate the Baton-side write that just succeeded.
+    try {
+      await syncProvidersToCodex(this.config, this.port);
+    } catch (err) {
+      console.warn(
+        `[baton] codex-sync failed (Baton config was still saved):`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   list(): Array<{ name: string } & ApiProviderProfile> {

@@ -92,6 +92,8 @@ export interface ChatCompletionStreamChunk {
   created: number;
   model: string;
   choices: ChatStreamChoice[];
+  /** Present on the final chunk when stream_options.include_usage is set. */
+  usage?: ChatUsage;
 }
 
 export interface ChatStreamChoice {

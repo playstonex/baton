@@ -122,3 +122,89 @@ function mapUsage(usage: NonNullable<ResponsesApiResponse['usage']>): ChatUsage 
     total_tokens: usage.total_tokens,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reverse direction: Chat Completions → Responses API
+// Used when the upstream speaks Chat Completions but the caller (Codex) expects
+// a Responses-API response.
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a Chat Completions response into a Responses API response.
+ *
+ * Reverse of `convertResponse`:
+ *   choices[0].message (text)   → output[] message item with output_text
+ *   choices[0].message.tool_calls → output[] function_call items
+ *   choices[0].finish_reason    → status
+ *   usage (prompt_tokens etc.)  → usage (input_tokens etc.)
+ */
+export function convertChatToResponse(
+  chat: ChatCompletionResponse,
+  model: string,
+): ResponsesApiResponse {
+  const output: ResponsesOutputItem[] = [];
+  const choice = chat.choices?.[0];
+  let outputText = '';
+
+  if (choice?.message) {
+    const msg = choice.message;
+    // Text content → a message output item carrying output_text.
+    if (typeof msg.content === 'string' && msg.content.length > 0) {
+      outputText = msg.content;
+      output.push({
+        type: 'message',
+        id: `msg_${chat.id}`,
+        status: 'completed',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: msg.content, annotations: [] }],
+      });
+    }
+    // Tool calls → function_call output items.
+    if (msg.tool_calls) {
+      for (const tc of msg.tool_calls) {
+        output.push({
+          type: 'function_call',
+          id: `fc_${tc.id}`,
+          status: 'completed',
+          call_id: tc.id,
+          name: tc.function.name,
+          arguments: tc.function.arguments,
+        });
+      }
+    }
+  }
+
+  return {
+    id: chat.id,
+    object: 'response',
+    created_at: chat.created,
+    status: mapStatusFromFinishReason(choice?.finish_reason ?? null),
+    model: model || chat.model,
+    output,
+    output_text: outputText || undefined,
+    usage: chat.usage
+      ? {
+          input_tokens: chat.usage.prompt_tokens,
+          output_tokens: chat.usage.completion_tokens,
+          total_tokens: chat.usage.total_tokens,
+        }
+      : undefined,
+  };
+}
+
+function mapStatusFromFinishReason(
+  reason: ChatChoice['finish_reason'],
+): ResponsesApiResponse['status'] {
+  switch (reason) {
+    case 'stop':
+      return 'completed';
+    case 'length':
+      return 'incomplete';
+    case 'content_filter':
+      return 'incomplete';
+    case 'tool_calls':
+      return 'completed';
+    default:
+      return 'completed';
+  }
+}

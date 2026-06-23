@@ -12,6 +12,7 @@ import { GitScreen } from './screens/Git.js';
 import { PipelinesScreen } from './screens/Pipelines.js';
 import { AnalyticsScreen } from './screens/Analytics.js';
 import { OrchestrationScreen } from './screens/Orchestration.js';
+import { ApiProvidersScreen } from './screens/ApiProviders.js';
 import '@xterm/xterm/css/xterm.css';
 import './app.css';
 
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="pipelines" element={<PipelinesScreen />} />
           <Route path="analytics" element={<AnalyticsScreen />} />
           <Route path="orchestration" element={<OrchestrationScreen />} />
+          <Route path="api-providers" element={<ApiProvidersScreen />} />
           <Route path="settings" element={<SettingsScreen />} />
         </Route>
       </Routes>
