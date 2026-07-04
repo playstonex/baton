@@ -1,13 +1,30 @@
-import { KeyboardAvoidingView, Platform, View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  TextInput,
+  ActivityIndicator,
+  Linking,
+  Share,
+} from 'react-native';
 import { useState } from 'react';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AccessMode } from '@baton/shared';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useConnectionStore } from '../../src/stores/connection';
+import type { HostProfile } from '../../src/services/secure-storage';
 import { useRecentStore } from '../../src/stores/recent';
 import { wsService } from '../../src/services/websocket';
-import { saveCredentials, clearCredentials } from '../../src/services/secure-storage';
+import {
+  addHost as persistHost,
+  removeHost as persistRemoveHost,
+  hostToConnection,
+  clearCredentials,
+} from '../../src/services/secure-storage';
 import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { useLayoutStore } from '../../src/stores/layout';
@@ -18,17 +35,43 @@ import {
   GlassDivider,
   GlassPill,
 } from '../../src/components/GlassKit';
-import {
-  Typography,
-  Spacing,
-  Colors,
-} from '../../src/constants/theme';
+import { Typography, Spacing, Colors } from '../../src/constants/theme';
 
 const THEME_OPTIONS: { key: ThemeMode; label: string }[] = [
   { key: 'system', label: 'System' },
   { key: 'light', label: 'Light' },
   { key: 'dark', label: 'Dark' },
 ];
+
+/**
+ * App Store identifiers for Baton (com.playstone.baton).
+ * Used to build App Store review / share / manage-subscription deep links.
+ */
+const APP_STORE_ID = '6763741376';
+const BUNDLE_ID = 'com.playstone.baton';
+const APP_STORE_WEB_URL = `https://apps.apple.com/app/id${APP_STORE_ID}`;
+const APP_STORE_REVIEW_URL =
+  Platform.OS === 'ios'
+    ? `itms-apps://itunes.apple.com/app/id${APP_STORE_ID}?action=write-review`
+    : `market://details?id=${BUNDLE_ID}`;
+
+function openAppStoreReview() {
+  Linking.openURL(APP_STORE_REVIEW_URL).catch(() => {
+    Linking.openURL(APP_STORE_WEB_URL).catch(() => {});
+  });
+}
+
+/** Deep-link to the system subscription management page (App Store → subscriptions). */
+function openManageSubscriptions() {
+  if (Platform.OS !== 'ios') return;
+  Linking.openURL('itms-apps://apps.apple.com/account/subscriptions').catch(() => {});
+}
+
+/** Open the native share sheet to share the app link. */
+function shareApp() {
+  const message = 'Check out Baton — control coding agents from your phone.\n' + APP_STORE_WEB_URL;
+  Share.share({ message }).catch(() => {});
+}
 
 function formatTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -48,10 +91,13 @@ export default function SettingsScreen() {
   const connected = useConnectionStore((s) => s.connected);
   const setCredentials = useConnectionStore((s) => s.setCredentials);
   const setConnected = useConnectionStore((s) => s.setConnected);
+  const hosts = useConnectionStore((s) => s.hosts);
+  const activeHostId = useConnectionStore((s) => s.activeHostId);
+  const addHost = useConnectionStore((s) => s.addHost);
+  const removeHost = useConnectionStore((s) => s.removeHost);
 
   const recentConnections = useRecentStore((s) => s.connections);
   const addRecentConnection = useRecentStore((s) => s.addConnection);
-  const removeRecentConnection = useRecentStore((s) => s.removeConnection);
 
   const themeMode = useThemeStore((s) => s.theme);
   const setThemeMode = useThemeStore((s) => s.setTheme);
@@ -73,9 +119,7 @@ export default function SettingsScreen() {
     setLoading(true);
     setError('');
     try {
-      const gatewayUrl = inputRelayUrl
-        .replace(/^wss?/, 'http')
-        .replace(/:\d+/, ':3220');
+      const gatewayUrl = inputRelayUrl.replace(/^wss?/, 'http').replace(/:\d+/, ':3220');
       const res = await fetch(`${gatewayUrl}/api/v1/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,8 +140,8 @@ export default function SettingsScreen() {
         hostId: data.hostId,
         token: data.token,
       };
-      setCredentials(config);
-      await saveCredentials(config);
+      const host = await persistHost(config);
+      addHost(host);
       addRecentConnection(config);
       wsService.configure(config);
       wsService.connect();
@@ -120,12 +164,33 @@ export default function SettingsScreen() {
         inputLocalWs.trim() ||
         inputLocalHttp.trim().replace(/^http/, 'ws').replace(/:\d+/, ':3211'),
     };
-    setCredentials(config);
-    await saveCredentials(config);
+    const host = await persistHost(config);
+    addHost(host);
     addRecentConnection(config);
     wsService.configure(config);
     wsService.connect();
     setLoading(false);
+  }
+
+  /** Switch to an already-paired host: configure WS and reconnect. */
+  function switchToHost(host: HostProfile) {
+    const config = hostToConnection(host);
+    setCredentials(config);
+    wsService.configure(config);
+    wsService.connect();
+  }
+
+  async function deleteHost(host: HostProfile) {
+    await persistRemoveHost(host.id);
+    removeHost(host.id);
+    // If we just removed the active host, clear the connection.
+    if (activeHostId === host.id) {
+      wsService.disconnect();
+      setConnected(false);
+      if (hosts.length <= 1) {
+        await clearCredentials();
+      }
+    }
   }
 
   async function disconnect() {
@@ -150,7 +215,12 @@ export default function SettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={{ padding: Spacing.lg, paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + tabBarHeight + Spacing.lg, gap: Spacing.md }}
+        contentContainerStyle={{
+          padding: Spacing.lg,
+          paddingTop: headerHeight + Spacing.lg,
+          paddingBottom: insets.bottom + tabBarHeight + Spacing.lg,
+          gap: Spacing.md,
+        }}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[Typography.largeTitle, { color: c.textPrimary, marginBottom: Spacing.lg }]}>
@@ -195,10 +265,12 @@ export default function SettingsScreen() {
                 How agents handle permission requests
               </Text>
               <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                {([
-                  { key: 'on-request' as const, label: 'On Request', desc: 'Ask me each time' },
-                  { key: 'full-access' as const, label: 'Full Access', desc: 'Auto-approve all' },
-                ] as const).map((opt) => {
+                {(
+                  [
+                    { key: 'on-request' as const, label: 'On Request', desc: 'Ask me each time' },
+                    { key: 'full-access' as const, label: 'Full Access', desc: 'Auto-approve all' },
+                  ] as const
+                ).map((opt) => {
                   const active = accessMode === opt.key;
                   return (
                     <Pressable
@@ -211,14 +283,21 @@ export default function SettingsScreen() {
                         borderWidth: 1,
                         paddingVertical: Spacing.md,
                         paddingHorizontal: Spacing.sm,
-                        backgroundColor: active ? c.accentBg : c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                        backgroundColor: active
+                          ? c.accentBg
+                          : c.isDark
+                            ? 'rgba(58,58,60,0.55)'
+                            : c.elevated,
                         borderColor: active ? c.accentBorder : c.cardBorder,
                       }}
                     >
                       <Text
                         style={[
                           Typography.subhead,
-                          { color: active ? Colors.primary[500] : c.textPrimary, fontWeight: '600' },
+                          {
+                            color: active ? Colors.primary[500] : c.textPrimary,
+                            fontWeight: '600',
+                          },
                         ]}
                       >
                         {opt.label}
@@ -248,7 +327,89 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {recentConnections.length > 0 && (
+        {hosts.length > 0 && (
+          <>
+            <GlassSectionHeader c={c} title="Hosts" />
+            <GlassCard c={c} style={{ padding: 0 }}>
+              {hosts.map((host, i) => {
+                const isActive = host.id === activeHostId;
+                return (
+                  <View key={host.id}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 10,
+                        paddingHorizontal: Spacing.lg,
+                        gap: Spacing.sm,
+                      }}
+                    >
+                      <Text style={{ fontSize: 18 }}>
+                        {host.mode === 'local' ? '\u{1F3E0}' : '\u{1F310}'}
+                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[Typography.subhead, { color: c.textPrimary }]}
+                          numberOfLines={1}
+                        >
+                          {host.label}
+                        </Text>
+                        <Text
+                          style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}
+                        >
+                          {isActive && connected
+                            ? 'Connected'
+                            : isActive
+                              ? 'Active'
+                              : formatTime(host.lastUsed)}
+                        </Text>
+                      </View>
+                      {!isActive && (
+                        <Pressable
+                          onPress={() => switchToHost(host)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 12,
+                            backgroundColor: c.accentBg,
+                            borderWidth: 1,
+                            borderColor: c.accentBorder,
+                          }}
+                        >
+                          <Text
+                            style={[
+                              Typography.caption2,
+                              { color: Colors.primary[500], fontWeight: '600' },
+                            ]}
+                          >
+                            Connect
+                          </Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => deleteHost(host)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons name="close" size={14} color={c.textTertiary} />
+                      </Pressable>
+                    </View>
+                    {i < hosts.length - 1 && <GlassDivider c={c} />}
+                  </View>
+                );
+              })}
+            </GlassCard>
+          </>
+        )}
+
+        {recentConnections.length > 0 && hosts.length === 0 && (
           <>
             <GlassSectionHeader c={c} title="Recent Connections" />
             <GlassCard c={c} style={{ padding: 0 }}>
@@ -278,23 +439,16 @@ export default function SettingsScreen() {
                       {conn.mode === 'local' ? '\u{1F3E0}' : '\u{1F310}'}
                     </Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={[Typography.subhead, { color: c.textPrimary }]} numberOfLines={1}>
+                      <Text
+                        style={[Typography.subhead, { color: c.textPrimary }]}
+                        numberOfLines={1}
+                      >
                         {conn.label}
                       </Text>
                       <Text style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}>
                         {formatTime(conn.lastUsed)}
                       </Text>
                     </View>
-                    <Pressable
-                      onPress={() => removeRecentConnection(i)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{
-                        width: 28, height: 28, borderRadius: 12,
-                        alignItems: 'center', justifyContent: 'center',
-                      }}
-                    >
-                      <Ionicons name="close" size={14} color={c.textTertiary} />
-                    </Pressable>
                   </Pressable>
                   {i < recentConnections.length - 1 && <GlassDivider c={c} />}
                 </View>
@@ -442,12 +596,26 @@ export default function SettingsScreen() {
         {connected && hostId ? (
           <GlassCard c={c}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success[400] }} />
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: Colors.success[400],
+                }}
+              />
               <View>
-                <Text style={[Typography.subhead, { color: Colors.success[400], fontWeight: '600' }]}>
+                <Text
+                  style={[Typography.subhead, { color: Colors.success[400], fontWeight: '600' }]}
+                >
                   Connected
                 </Text>
-                <Text style={[Typography.caption1, { color: Colors.success[400], fontFamily: 'Courier' }]}>
+                <Text
+                  style={[
+                    Typography.caption1,
+                    { color: Colors.success[400], fontFamily: 'Courier' },
+                  ]}
+                >
                   {hostId.slice(0, 8)}...
                 </Text>
               </View>
@@ -456,16 +624,86 @@ export default function SettingsScreen() {
         ) : null}
 
         {connected && (
-          <GlassButton
-            c={c}
-            label="Disconnect"
-            onPress={disconnect}
-            variant="danger"
-          />
+          <GlassButton c={c} label="Disconnect" onPress={disconnect} variant="danger" />
         )}
+
+        <GlassSectionHeader c={c} title="About" />
+        <GlassCard c={c} style={{ padding: 0 }}>
+          <Text
+            style={[
+              Typography.caption2,
+              {
+                color: c.textTertiary,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                paddingHorizontal: Spacing.lg,
+                paddingTop: Spacing.md,
+                paddingBottom: Spacing.xs,
+              },
+            ]}
+          >
+            Contact Us
+          </Text>
+
+          <AboutRow icon="star-outline" label="给个好评" onPress={openAppStoreReview} colors={c} />
+          <AboutRow icon="share-outline" label="分享给好友" onPress={shareApp} colors={c} />
+
+          <Text
+            style={[
+              Typography.caption2,
+              {
+                color: c.textTertiary,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                paddingHorizontal: Spacing.lg,
+                paddingTop: Spacing.md,
+                paddingBottom: Spacing.xs,
+              },
+            ]}
+          >
+            Subscriptions
+          </Text>
+
+          <AboutRow
+            icon="card-outline"
+            label="管理订阅"
+            onPress={openManageSubscriptions}
+            colors={c}
+          />
+        </GlassCard>
 
         <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function AboutRow({
+  icon,
+  label,
+  onPress,
+  colors,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  colors: ReturnType<typeof useThemeColors>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: Spacing.lg,
+        gap: Spacing.sm,
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Ionicons name={icon as any} size={20} color={colors.textSecondary} />
+      <Text style={[Typography.subhead, { color: colors.textPrimary, flex: 1 }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+    </Pressable>
   );
 }

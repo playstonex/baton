@@ -17,10 +17,10 @@
     "@baton/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "chokidar": "^5.0.0",
-    "hono": "^4.12.23",
+    "hono": "^4.12.27",
     "pino": "^10.3.1",
     "qrcode": "^1.5.4",
-    "smol-toml": "^1.6.1",
+    "smol-toml": "^1.7.0",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
