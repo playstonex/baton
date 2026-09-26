@@ -7,6 +7,7 @@ import {
   IconPipelines,
   IconAnalytics,
   IconOrchestration,
+  IconGitBranch,
   IconApiProviders,
   IconSettings,
   IconMoon,
@@ -20,6 +21,7 @@ const NAV_ITEMS_MAIN = [
   { to: '/pipelines', label: 'Pipelines', end: false, icon: IconPipelines },
   { to: '/analytics', label: 'Analytics', end: false, icon: IconAnalytics },
   { to: '/orchestration', label: 'Orchestration', end: false, icon: IconOrchestration },
+  { to: '/pull-requests', label: 'Pull Requests', end: false, icon: IconGitBranch },
 ] as const;
 
 const NAV_ITEMS_SYSTEM = [
