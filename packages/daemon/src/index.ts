@@ -19,6 +19,7 @@ import { AnalyticsService } from './system/analytics.js';
 import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
 import { GitService } from './git/index.js';
+import { createDefaultForgeRegistry, parseRepoRef } from './forge/index.js';
 import { ApiProviderRegistry } from './api-converter/index.js';
 import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
 import { previewCodexProviders } from './api-converter/codex-sync.js';
@@ -73,6 +74,7 @@ export function createDaemon(port = DEFAULT_PORT) {
   const pushService = new PushNotificationService();
   const compressor = new ContextCompressor();
   const gitService = new GitService();
+  const forgeRegistry = createDefaultForgeRegistry();
   const transport = new Transport(agentManager, port, {
     onPushTokenRegister: (clientId, token, platform) => {
       pushService.register(clientId, token, platform as 'ios' | 'android' | 'web');
@@ -525,6 +527,68 @@ export function createDaemon(port = DEFAULT_PORT) {
       return c.json(await gitService.commitDiff(projectPath, hash));
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Git commit-diff failed' }, 500);
+    }
+  });
+
+  // Forge API (code-hosting platforms — GitHub, later GitLab/Gitea)
+  // Resolve a `repo` (owner/name, full URL, or scp-ssh remote) to a forge
+  // service via the open registry. Returns null + the caller-facing reason.
+  async function resolveForge(repoParam: string | undefined) {
+    if (!repoParam) return { error: 'Missing repo', status: 400 as const };
+    const ref = parseRepoRef(repoParam);
+    if (!ref) return { error: 'Unrecognized repo (expected owner/name, URL, or ssh remote)', status: 400 as const };
+    const forge = await forgeRegistry.resolveHost(ref.host);
+    if (!forge) return { error: `No forge adapter for host ${ref.host}`, status: 400 as const };
+    const service = forgeRegistry.create(forge);
+    if (!service) return { error: `Forge ${forge} not available`, status: 500 as const };
+    return { ref, service };
+  }
+
+  app.get('/api/forge/prs', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    try {
+      const state = c.req.query('state') || undefined;
+      const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
+      return c.json(await resolved.service.listPullRequests(resolved.ref, { state, limit }));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge list PRs failed' }, 500);
+    }
+  });
+
+  app.get('/api/forge/issues', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    try {
+      const state = c.req.query('state') || undefined;
+      const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
+      return c.json(await resolved.service.listIssues(resolved.ref, { state, limit }));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge list issues failed' }, 500);
+    }
+  });
+
+  app.get('/api/forge/pr/:number/checks', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    const prNumber = parseInt(c.req.param('number'), 10);
+    if (!Number.isFinite(prNumber)) return c.json({ error: 'Invalid PR number' }, 400);
+    try {
+      return c.json(await resolved.service.getChecks(resolved.ref, prNumber));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge checks failed' }, 500);
+    }
+  });
+
+  app.get('/api/forge/pr/:number/checkout-target', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    const prNumber = parseInt(c.req.param('number'), 10);
+    if (!Number.isFinite(prNumber)) return c.json({ error: 'Invalid PR number' }, 400);
+    try {
+      return c.json(await resolved.service.getCheckoutTarget(resolved.ref, prNumber));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge checkout-target failed' }, 500);
     }
   });
 
