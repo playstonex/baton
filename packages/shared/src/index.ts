@@ -7,3 +7,4 @@ export * from './utils/index.js';
 export * from './errors/index.js';
 export * from './retry/index.js';
 export * from './tools/index.js';
+export * from './forge/index.js';
