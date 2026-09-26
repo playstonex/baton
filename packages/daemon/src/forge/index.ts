@@ -1,16 +1,26 @@
 import type { ForgeRepoRef } from '@baton/shared';
 import { ForgeRegistry } from './registry.js';
 import { githubAdapter } from './github/service.js';
+import { gitlabAdapter } from './gitlab/service.js';
+import { giteaAdapter } from './gitea/service.js';
 
 export * from './service.js';
 export * from './registry.js';
+export { checkoutPullRequest, defaultGitRunner } from './checkout.js';
+export type { GitRunner, GitRunResult, CheckoutResult } from './checkout.js';
 export { GitHubForgeService, githubAdapter, defaultGhRunner } from './github/service.js';
 export type { GhResult, GhRunner } from './github/service.js';
+export { GitLabForgeService, gitlabAdapter, defaultGlabRunner } from './gitlab/service.js';
+export type { GlabResult, GlabRunner } from './gitlab/service.js';
+export { GiteaForgeService, giteaAdapter, defaultTeaRunner } from './gitea/service.js';
+export type { TeaResult, TeaRunner } from './gitea/service.js';
 
-/** A registry pre-loaded with the built-in forge adapters (GitHub for now). */
+/** A registry pre-loaded with the built-in forge adapters. */
 export function createDefaultForgeRegistry(): ForgeRegistry {
   const registry = new ForgeRegistry();
   registry.register('github', githubAdapter());
+  registry.register('gitlab', gitlabAdapter());
+  registry.register('gitea', giteaAdapter());
   return registry;
 }
 

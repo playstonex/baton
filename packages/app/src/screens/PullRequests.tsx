@@ -18,19 +18,26 @@ import {
 } from '../lib/icons.js';
 
 const REPO_STORAGE_KEY = 'baton-forge-repo';
+const CHECKOUT_PATH_KEY = 'baton-forge-checkout-path';
 
 export function PullRequestsScreen() {
   const [repo, setRepo] = useState(() => localStorage.getItem(REPO_STORAGE_KEY) ?? '');
+  const [checkoutPath, setCheckoutPath] = useState(
+    () => localStorage.getItem(CHECKOUT_PATH_KEY) ?? '',
+  );
   const [prs, setPrs] = useState<PullRequestSummary[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [checkingOut, setCheckingOut] = useState<number | null>(null);
 
   const load = useCallback(async (repoValue: string) => {
     const trimmed = repoValue.trim();
     if (!trimmed) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch(`/api/forge/prs?repo=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
@@ -48,6 +55,38 @@ export function PullRequestsScreen() {
       setLoading(false);
     }
   }, []);
+
+  const checkout = useCallback(
+    async (prNumber: number) => {
+      const path = checkoutPath.trim();
+      if (!path) {
+        setError('Set a local project path before checking out a PR.');
+        return;
+      }
+      setCheckingOut(prNumber);
+      setError(null);
+      setNotice(null);
+      try {
+        const res = await fetch(`/api/forge/pr/${prNumber}/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo: repo.trim(), projectPath: path }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error ?? `Checkout of PR #${prNumber} failed`);
+        } else {
+          localStorage.setItem(CHECKOUT_PATH_KEY, path);
+          setNotice(`Checked out PR #${prNumber} onto local branch ${data.localBranch}.`);
+        }
+      } catch {
+        setError('Failed to reach the daemon');
+      } finally {
+        setCheckingOut(null);
+      }
+    },
+    [checkoutPath, repo],
+  );
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -89,6 +128,19 @@ export function PullRequestsScreen() {
         </Button>
       </form>
 
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
+          Local project path (for checkout)
+        </label>
+        <Input
+          value={checkoutPath}
+          onChange={(e) => setCheckoutPath(e.target.value)}
+          placeholder="/absolute/path/to/local/clone — required to check out a PR"
+          aria-label="Local project path"
+        />
+      </div>
+
+      {notice && <StatusAlert type="success" message={notice} />}
       {error && <StatusAlert type="error" title="Forge Error" message={error} />}
 
       {loading && !prs && <LoadingSpinner text="Loading pull requests…" />}
@@ -110,6 +162,9 @@ export function PullRequestsScreen() {
               repo={repo.trim()}
               expanded={expanded === pr.number}
               onToggle={() => setExpanded((cur) => (cur === pr.number ? null : pr.number))}
+              onCheckout={() => checkout(pr.number)}
+              checkingOut={checkingOut === pr.number}
+              canCheckout={checkoutPath.trim().length > 0}
             />
           ))}
         </div>
@@ -131,11 +186,17 @@ function PullRequestRow({
   repo,
   expanded,
   onToggle,
+  onCheckout,
+  checkingOut,
+  canCheckout,
 }: {
   pr: PullRequestSummary;
   repo: string;
   expanded: boolean;
   onToggle: () => void;
+  onCheckout: () => void;
+  checkingOut: boolean;
+  canCheckout: boolean;
 }) {
   const [checks, setChecks] = useState<PullRequestCheck[] | null>(null);
   const [checksLoading, setChecksLoading] = useState(false);
@@ -218,6 +279,30 @@ function PullRequestRow({
 
       {expanded && (
         <div className="border-t border-geist-gray-alpha-200 bg-geist-gray-alpha-100 px-5 py-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-geist-gray-800">
+              Checks
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={checkingOut || !canCheckout}
+              title={canCheckout ? 'Fetch this PR into the local project path' : 'Set a local project path first'}
+              onClick={onCheckout}
+            >
+              {checkingOut ? (
+                <>
+                  <IconSpinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Checking out…
+                </>
+              ) : (
+                <>
+                  <IconGitBranch className="mr-1.5 h-3.5 w-3.5" />
+                  Checkout
+                </>
+              )}
+            </Button>
+          </div>
           {checksLoading && (
             <div className="flex items-center gap-2 text-xs text-geist-gray-800">
               <IconSpinner className="h-3.5 w-3.5 animate-spin" />
