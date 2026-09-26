@@ -18,6 +18,7 @@ export async function doctorCommand(): Promise<void> {
   checks.push(await checkDaemonWS());
   checks.push(checkBun());
   checks.push(checkNode());
+  checks.push(checkGh());
   checks.push(await checkPtyBinary());
   checks.push(await checkBatonHome());
 
@@ -85,6 +86,33 @@ function checkNode(): CheckResult {
     return { name: 'Node.js', pass: major >= 22, detail: `${version}${major < 22 ? ' (requires >= 22)' : ''}` };
   } catch {
     return { name: 'Node.js', pass: false, detail: 'Not installed' };
+  }
+}
+
+function checkGh(): CheckResult {
+  // The GitHub CLI is OPTIONAL — only the Forge (Pull Requests) feature needs
+  // it. Absence must not fail the whole doctor, so this check always passes and
+  // encodes presence in the detail line.
+  try {
+    const version = execSync('gh --version', { encoding: 'utf-8' }).trim().split('\n')[0];
+    let authed = false;
+    try {
+      execSync('gh auth status', { encoding: 'utf-8', stdio: 'pipe' });
+      authed = true;
+    } catch {
+      authed = false;
+    }
+    return {
+      name: 'GitHub CLI',
+      pass: true,
+      detail: `${version}${authed ? ' (authenticated)' : " — not authenticated; run 'gh auth login' for Forge features"}`,
+    };
+  } catch {
+    return {
+      name: 'GitHub CLI',
+      pass: true,
+      detail: 'Not installed (optional — required only for Forge / Pull Requests features)',
+    };
   }
 }
 

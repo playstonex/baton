@@ -3,7 +3,10 @@ import { ForgeRegistry } from '../forge/registry.js';
 import type { ForgeService } from '../forge/service.js';
 import { parseRepoRef, createDefaultForgeRegistry } from '../forge/index.js';
 import { GitHubForgeService, githubAdapter, type GhRunner, type GhResult } from '../forge/github/service.js';
-import type { ForgeRepoRef } from '@baton/shared';
+import { GitLabForgeService, gitlabAdapter, type GlabRunner, type GlabResult } from '../forge/gitlab/service.js';
+import { GiteaForgeService, type TeaRunner, type TeaResult } from '../forge/gitea/service.js';
+import { checkoutPullRequest, type GitRunner, type GitRunResult } from '../forge/checkout.js';
+import type { ForgeRepoRef, PullRequestCheckoutTarget } from '@baton/shared';
 
 const stubService = (kind: string): ForgeService =>
   ({
@@ -118,7 +121,7 @@ describe('ForgeRegistry.register / unregister / create', () => {
 
   it('lists registered forges', () => {
     const r = createDefaultForgeRegistry();
-    expect(r.list()).toContain('github');
+    expect(r.list()).toEqual(expect.arrayContaining(['github', 'gitlab', 'gitea']));
   });
 });
 
@@ -273,5 +276,206 @@ describe('githubAdapter', () => {
       throw new Error('spawn gh ENOENT');
     });
     expect(await adapter.probeHost?.('example.com')).toBe(false);
+  });
+});
+
+// ── checkout helper ──
+function makeGitRunner(map: Record<string, GitRunResult>): { run: GitRunner; calls: string[][] } {
+  const calls: string[][] = [];
+  const run: GitRunner = async (_cwd, args) => {
+    calls.push(args);
+    const key = args[0];
+    return map[key] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
+  };
+  return { run, calls };
+}
+
+const sameRepoTarget: PullRequestCheckoutTarget = {
+  number: 12,
+  baseRefName: 'main',
+  headRefName: 'feat/rl',
+  headOwnerLogin: 'alice',
+  headRepositorySshUrl: null,
+  isCrossRepository: false,
+};
+
+const forkTarget: PullRequestCheckoutTarget = {
+  number: 7,
+  baseRefName: 'main',
+  headRefName: 'patch-1',
+  headOwnerLogin: 'contributor',
+  headRepositorySshUrl: 'git@github.com:contributor/repo.git',
+  isCrossRepository: true,
+};
+
+describe('checkoutPullRequest', () => {
+  it('checks a same-repo PR out onto its real head branch name', async () => {
+    const { run, calls } = makeGitRunner({
+      fetch: { stdout: 'fetched', stderr: '', exitCode: 0 },
+      checkout: { stdout: 'Switched', stderr: '', exitCode: 0 },
+    });
+    const res = await checkoutPullRequest('/tmp/x', sameRepoTarget, run);
+    expect(res.success).toBe(true);
+    expect(res.localBranch).toBe('feat/rl');
+    expect(calls[0]).toEqual(['fetch', 'origin', '+refs/pull/12/head:feat/rl']);
+    expect(calls[1]).toEqual(['checkout', 'feat/rl']);
+  });
+
+  it('checks a fork PR out onto a synthetic pr/<n> branch', async () => {
+    const { run, calls } = makeGitRunner({
+      fetch: { stdout: '', stderr: '', exitCode: 0 },
+      checkout: { stdout: '', stderr: '', exitCode: 0 },
+    });
+    const res = await checkoutPullRequest('/tmp/x', forkTarget, run);
+    expect(res.localBranch).toBe('pr/7');
+    expect(calls[0]).toEqual(['fetch', 'origin', '+refs/pull/7/head:pr/7']);
+  });
+
+  it('throws with git stderr when the fetch fails', async () => {
+    const { run } = makeGitRunner({
+      fetch: { stdout: '', stderr: 'couldn\'t find remote ref', exitCode: 1 },
+    });
+    await expect(checkoutPullRequest('/tmp/x', sameRepoTarget, run)).rejects.toThrow('remote ref');
+  });
+});
+
+// ── GitLab (glab) ──
+function makeGlabRunner(map: Record<string, GlabResult>): GlabRunner {
+  return async (args) => map[args.slice(0, 2).join(' ')] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
+}
+
+describe('GitLabForgeService', () => {
+  it('maps glab mr list JSON onto neutral PullRequestSummary (iid->number, source->head)', async () => {
+    const runner = makeGlabRunner({
+      'mr list': {
+        stdout: JSON.stringify([
+          {
+            iid: 5,
+            title: 'Fix pipeline',
+            web_url: 'https://gitlab.com/o/r/-/merge_requests/5',
+            state: 'opened',
+            description: 'd',
+            target_branch: 'main',
+            source_branch: 'fix',
+            labels: ['bug', { name: 'ci' }],
+            updated_at: '2026-09-26T00:00:00Z',
+            author: { username: 'bob' },
+            draft: true,
+          },
+        ]),
+        stderr: '',
+        exitCode: 0,
+      },
+    });
+    const svc = new GitLabForgeService(runner);
+    const prs = await svc.listPullRequests(repo);
+    expect(prs[0]).toMatchObject({
+      number: 5,
+      state: 'opened',
+      baseRefName: 'main',
+      headRefName: 'fix',
+      labels: ['bug', 'ci'],
+      authorLogin: 'bob',
+      isDraft: true,
+    });
+  });
+
+  it('detects a fork MR via differing source/target project ids', async () => {
+    const runner = makeGlabRunner({
+      'mr view': {
+        stdout: JSON.stringify({
+          iid: 9,
+          target_branch: 'main',
+          source_branch: 'feature',
+          source_project_id: 22,
+          target_project_id: 11,
+          author: { username: 'carol' },
+          source_project: { ssh_url_to_repo: 'git@gitlab.com:carol/r.git' },
+        }),
+        stderr: '',
+        exitCode: 0,
+      },
+    });
+    const svc = new GitLabForgeService(runner);
+    const t = await svc.getCheckoutTarget(repo, 9);
+    expect(t.isCrossRepository).toBe(true);
+    expect(t.headRepositorySshUrl).toBe('git@gitlab.com:carol/r.git');
+  });
+});
+
+describe('gitlabAdapter', () => {
+  it('matches gitlab.com and probes it true', async () => {
+    const adapter = gitlabAdapter(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
+    expect(adapter.matchesHost?.('gitlab.com')).toBe(true);
+    expect(adapter.matchesHost?.('github.com')).toBe(false);
+    expect(await adapter.probeHost?.('gitlab.com')).toBe(true);
+  });
+});
+
+// ── Gitea (tea) ──
+function makeTeaRunner(map: Record<string, TeaResult>): TeaRunner {
+  return async (args) => map[args.slice(0, 2).join(' ')] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
+}
+
+describe('GiteaForgeService', () => {
+  it('maps tea pulls list JSON onto neutral PullRequestSummary (index->number)', async () => {
+    const runner = makeTeaRunner({
+      'pulls list': {
+        stdout: JSON.stringify([
+          {
+            index: 3,
+            title: 'Add feature',
+            html_url: 'https://gitea.example.com/o/r/pulls/3',
+            state: 'open',
+            body: 'b',
+            base: { ref: 'main' },
+            head: { ref: 'feat', repo: { full_name: 'o/r' } },
+            labels: [{ name: 'enhancement' }],
+            updated_at: '2026-09-26T00:00:00Z',
+            user: { login: 'dave' },
+          },
+        ]),
+        stderr: '',
+        exitCode: 0,
+      },
+    });
+    const svc = new GiteaForgeService(runner);
+    const prs = await svc.listPullRequests(repo);
+    expect(prs[0]).toMatchObject({
+      number: 3,
+      state: 'open',
+      baseRefName: 'main',
+      headRefName: 'feat',
+      labels: ['enhancement'],
+      authorLogin: 'dave',
+    });
+  });
+
+  it('flags a fork when the head repo full_name differs from the base slug', async () => {
+    const runner = makeTeaRunner({
+      'pulls --repo': {
+        stdout: JSON.stringify({
+          index: 4,
+          base: { ref: 'main' },
+          head: { ref: 'patch', repo: { full_name: 'fork/r', ssh_url: 'git@gitea:fork/r.git' } },
+          user: { login: 'erin' },
+        }),
+        stderr: '',
+        exitCode: 0,
+      },
+    });
+    const svc = new GiteaForgeService(runner);
+    const t = await svc.getCheckoutTarget(repo, 4);
+    expect(t.isCrossRepository).toBe(true);
+    expect(t.headRepositorySshUrl).toBe('git@gitea:fork/r.git');
+  });
+});
+
+// ── default registry resolves each forge by host ──
+describe('createDefaultForgeRegistry host resolution', () => {
+  it('resolves github.com to github and gitlab.com to gitlab synchronously', async () => {
+    const r = createDefaultForgeRegistry();
+    expect(await r.resolveHost('github.com')).toBe('github');
+    expect(await r.resolveHost('gitlab.com')).toBe('gitlab');
   });
 });

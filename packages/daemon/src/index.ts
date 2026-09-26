@@ -19,7 +19,7 @@ import { AnalyticsService } from './system/analytics.js';
 import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
 import { GitService } from './git/index.js';
-import { createDefaultForgeRegistry, parseRepoRef } from './forge/index.js';
+import { createDefaultForgeRegistry, parseRepoRef, checkoutPullRequest } from './forge/index.js';
 import { ApiProviderRegistry } from './api-converter/index.js';
 import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
 import { previewCodexProviders } from './api-converter/codex-sync.js';
@@ -589,6 +589,27 @@ export function createDaemon(port = DEFAULT_PORT) {
       return c.json(await resolved.service.getCheckoutTarget(resolved.ref, prNumber));
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Forge checkout-target failed' }, 500);
+    }
+  });
+
+  // Check out a PR into a local working tree (fork-aware). Writes to the tree,
+  // so the projectPath must be an allowed path.
+  app.post('/api/forge/pr/:number/checkout', async (c) => {
+    const body = await c.req.json<{ repo?: string; projectPath?: string }>().catch(() => ({}) as {
+      repo?: string;
+      projectPath?: string;
+    });
+    if (!body.projectPath) return c.json({ error: 'Missing projectPath' }, 400);
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    const resolved = await resolveForge(body.repo);
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    const prNumber = parseInt(c.req.param('number'), 10);
+    if (!Number.isFinite(prNumber)) return c.json({ error: 'Invalid PR number' }, 400);
+    try {
+      const target = await resolved.service.getCheckoutTarget(resolved.ref, prNumber);
+      return c.json(await checkoutPullRequest(body.projectPath, target));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge checkout failed' }, 500);
     }
   });
 
