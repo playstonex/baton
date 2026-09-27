@@ -12,13 +12,7 @@ import { useLocalSearchParams, useRouter, Stack, type Href } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { BlurView } from 'expo-blur';
 import { wsService } from '../../src/services/websocket';
-import {
-  STATUS_COLORS,
-  Colors,
-  Typography,
-  CornerRadius,
-  Spacing,
-} from '../../src/constants/theme';
+import { FontFamily, STATUS_COLORS, Colors, Typography, CornerRadius, Spacing } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -274,11 +268,7 @@ export default function TerminalScreen() {
   useEffect(() => {
     if (!sessionId || !wsConnected) return;
 
-    wsService.send({
-      type: 'control',
-      action: 'attach_session',
-      sessionId,
-    });
+    wsService.attachOrResume(sessionId);
     attachSent.current = true;
 
     return () => {
@@ -450,7 +440,7 @@ export default function TerminalScreen() {
             borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
             color: c.textPrimary,
             ...Typography.subhead,
-            fontFamily: 'monospace',
+            fontFamily: FontFamily.mono,
           }}
           value={inputText}
           onChangeText={setInputText}

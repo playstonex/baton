@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
+import { FontFamily } from '../../constants/theme';
 
 interface Props {
   content: string;
@@ -180,13 +181,13 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   codeText: {
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     fontSize: 13,
     color: '#e8e8e8',
     lineHeight: 18,
   },
   inlineCode: {
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     fontSize: 13,
     paddingHorizontal: 4,
     paddingVertical: 1,

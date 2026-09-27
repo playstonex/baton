@@ -10,7 +10,13 @@ import {
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from '../hooks/useThemeColors';
-import { Typography, Spacing, Glass, Colors } from '../constants/theme';
+import { Typography, Spacing, Glass, Colors, Shadows } from '../constants/theme';
+
+/**
+ * Shared liquid-glass primitives. Every card/button/pill in the app renders
+ * through here so surface treatment (borders, blur, press feedback, type)
+ * stays consistent across screens.
+ */
 
 export function GlassCard({
   c,
@@ -27,7 +33,7 @@ export function GlassCard({
     <BlurView
       tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
       intensity={blurIntensity ?? Glass.blur.card}
-      style={[styles.glassCard, style]}
+      style={[styles.glassCard, Shadows.card, style]}
     >
       <View
         style={[
@@ -35,6 +41,18 @@ export function GlassCard({
           {
             backgroundColor: c.isDark ? Glass.opacity.dark.surface : Glass.opacity.light.surface,
             borderRadius: 16,
+          },
+        ]}
+        pointerEvents="none"
+      />
+      {/* 1px inner border — gives the glass sheet a visible edge. */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: 16,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
           },
         ]}
         pointerEvents="none"
@@ -59,7 +77,7 @@ export function GlassSectionHeader({
     <View style={styles.sectionHeader}>
       <View style={styles.sectionHeaderLeft}>
         <View style={[styles.sectionAccent, { backgroundColor: Colors.primary[500] }]} />
-        <Text style={[styles.sectionTitle, { color: c.textPrimary }]}>{title}</Text>
+        <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>{title}</Text>
         {count !== undefined && (
           <View style={[styles.countBadge, { backgroundColor: c.subtle }]}>
             <Text style={[styles.countText, { color: c.textTertiary }]}>{count}</Text>
@@ -111,11 +129,25 @@ export function GlassStatCard({
         ]}
         pointerEvents="none"
       />
-      <View style={[styles.statGlow, { backgroundColor: accent + '18' }]} />
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: 14,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+          },
+        ]}
+        pointerEvents="none"
+      />
+      {/* Top accent hairline — quiet color cue tied to the stat's meaning. */}
+      <View style={[styles.statAccent, { backgroundColor: accent + '55' }]} />
       <Text style={[styles.statValue, { color: c.textPrimary }]}>{value}</Text>
       <View style={styles.statBottom}>
-        {icon && <Ionicons name={icon as any} size={12} color={accent} />}
-        <Text style={[styles.statLabel, { color: c.textTertiary }]}>{label}</Text>
+        {icon && <Ionicons name={icon as any} size={11} color={accent} />}
+        <Text style={[styles.statLabel, { color: c.textTertiary }]} numberOfLines={1}>
+          {label}
+        </Text>
       </View>
     </BlurView>
   );
@@ -141,12 +173,17 @@ export function GlassButton({
   style?: StyleProp<ViewStyle>;
 }) {
   const isDisabled = disabled || loading;
-  const accentColor = variant === 'danger' ? '#FF3B30' : variant === 'secondary' ? c.textSecondary : Colors.primary[500];
+  const accentColor =
+    variant === 'danger' ? '#FF3B30' : variant === 'secondary' ? c.textSecondary : Colors.primary[500];
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [styles.btnBase, style, { opacity: isDisabled ? 0.4 : pressed ? 0.9 : 1 }]}
+      style={({ pressed }) => [
+        styles.btnBase,
+        style,
+        { opacity: isDisabled ? 0.4 : pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+      ]}
     >
       <BlurView
         tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
@@ -185,7 +222,12 @@ export function GlassButton({
           style={[
             Typography.subhead,
             {
-              color: variant === 'primary' ? Colors.primary[500] : variant === 'danger' ? '#FF3B30' : c.textPrimary,
+              color:
+                variant === 'primary'
+                  ? Colors.primary[500]
+                  : variant === 'danger'
+                    ? '#FF3B30'
+                    : c.textPrimary,
               fontWeight: '600',
             },
           ]}
@@ -253,9 +295,21 @@ export function GlassPill({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.pill, { backgroundColor: active ? accent + '20' : c.subtle }]}
+      style={({ pressed }) => [
+        styles.pill,
+        {
+          backgroundColor: active ? accent + '20' : c.subtle,
+          opacity: pressed ? 0.7 : 1,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        },
+      ]}
     >
-      <Text style={[styles.pillText, { color: active ? accent : c.textSecondary, fontWeight: active ? '600' : '500' }]}>
+      <Text
+        style={[
+          styles.pillText,
+          { color: active ? accent : c.textSecondary, fontWeight: active ? '600' : '500' },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -268,6 +322,25 @@ export function GlassDivider({ c }: { c: ThemeColors }) {
       style={[
         styles.divider,
         { backgroundColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border },
+      ]}
+    />
+  );
+}
+
+/**
+ * Skeleton block for async list content — matches the glass surface so
+ * loading states keep the layout shape instead of collapsing into a spinner.
+ */
+export function GlassSkeleton({ c, height = 56, radius = 14 }: { c: ThemeColors; height?: number; radius?: number }) {
+  return (
+    <View
+      style={[
+        styles.skeleton,
+        {
+          height,
+          borderRadius: radius,
+          backgroundColor: c.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(60,60,67,0.06)',
+        },
       ]}
     />
   );
@@ -290,10 +363,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
   sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  sectionAccent: { width: 3, height: 18, borderRadius: 2 },
-  sectionTitle: { ...Typography.subhead, fontWeight: '600' },
+  sectionAccent: { width: 3, height: 14, borderRadius: 2 },
+  sectionTitle: { ...Typography.overline },
   countBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  countText: { fontSize: 11, fontWeight: '600' },
+  countText: { ...Typography.caption2, fontWeight: '600', fontVariant: ['tabular-nums'] },
   sectionAction: {},
   sectionActionText: { ...Typography.footnote, fontWeight: '600' },
 
@@ -301,18 +374,37 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     overflow: 'hidden',
-    paddingVertical: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.md,
     gap: 2,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  statGlow: { position: 'absolute', top: -20, right: -20, width: 60, height: 60, borderRadius: 30 },
-  statValue: { ...Typography.title2, fontWeight: '700' },
+  statAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+  },
+  statValue: { ...Typography.statValue, fontWeight: '700' },
   statBottom: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statLabel: { ...Typography.caption2 },
 
-  btnBase: { minHeight: 48, borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  btnContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  btnBase: {
+    minHeight: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
 
   searchBar: {
     flexDirection: 'row',
@@ -329,4 +421,6 @@ const styles = StyleSheet.create({
   pillText: { ...Typography.caption1 },
 
   divider: { height: StyleSheet.hairlineWidth },
+
+  skeleton: { overflow: 'hidden', opacity: 0.8 },
 });

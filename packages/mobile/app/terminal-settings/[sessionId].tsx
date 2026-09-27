@@ -10,12 +10,7 @@ import {
   GlassPill,
   GlassDivider,
 } from '../../src/components/GlassKit';
-import {
-  Typography,
-  Spacing,
-  Colors,
-  Glass,
-} from '../../src/constants/theme';
+import { FontFamily, Typography, Spacing, Colors, Glass } from '../../src/constants/theme';
 import {
   useTerminalSettingsStore,
   TERMINAL_THEMES,
@@ -125,7 +120,7 @@ export default function TerminalSettingsScreen() {
           <Pressable onPress={() => fontSize > 8 && setFontSize(fontSize - 1)} hitSlop={{ top: 8, bottom: 8, left: 12, right: 4 }}>
             <Ionicons name="remove-circle-outline" size={24} color={fontSize <= 8 ? c.textTertiary : Colors.primary[500]} />
           </Pressable>
-          <Text style={[Typography.body, { color: c.textPrimary, width: 32, textAlign: 'center', fontFamily: 'monospace' }]}>
+          <Text style={[Typography.body, { color: c.textPrimary, width: 32, textAlign: 'center', fontFamily: FontFamily.mono }]}>
             {fontSize}
           </Text>
           <Pressable onPress={() => fontSize < 28 && setFontSize(fontSize + 1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 12 }}>

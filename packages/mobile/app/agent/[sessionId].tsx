@@ -6,7 +6,7 @@ import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../../src/stores/events';
 import { wsService } from '../../src/services/websocket';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Typography, CornerRadius, Spacing, Colors } from '../../src/constants/theme';
+import { FontFamily, Typography, CornerRadius, Spacing, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -47,7 +47,7 @@ export default function AgentDetailScreen() {
   useEffect(() => {
     if (!sessionId) return;
     clearEvents();
-    wsService.send({ type: 'control', action: 'attach_session', sessionId });
+    wsService.attachOrResume(sessionId);
 
     const unsubEvent = wsService.on('parsed_event', (msg) => {
       if (msg.type === 'parsed_event' && msg.sessionId === sessionId) {
@@ -101,7 +101,7 @@ export default function AgentDetailScreen() {
           </View>
           <View>
             <Text style={[Typography.headline, { color: c.textPrimary }]}>Agent Detail</Text>
-            <Text style={[Typography.caption1, { color: c.textTertiary, fontFamily: 'monospace', fontWeight: '500' }]}>
+            <Text style={[Typography.caption1, { color: c.textTertiary, fontFamily: FontFamily.mono, fontWeight: '500' }]}>
               {sessionId?.slice(0, 8)}
             </Text>
           </View>
@@ -174,7 +174,7 @@ export default function AgentDetailScreen() {
                       {e.changeType}
                     </Text>
                   </View>
-                  <Text style={[Typography.caption1, { color: c.textSecondary, fontFamily: 'monospace', flex: 1 }]} numberOfLines={1}>
+                  <Text style={[Typography.caption1, { color: c.textSecondary, fontFamily: FontFamily.mono, flex: 1 }]} numberOfLines={1}>
                     {e.path}
                   </Text>
                 </View>

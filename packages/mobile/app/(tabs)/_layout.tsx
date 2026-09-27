@@ -1,17 +1,14 @@
+import { useEffect, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, Platform, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Typography,
-  Spacing,
-  Colors,
-  Glass,
-  CornerRadius,
-} from '../../src/constants/theme';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { Typography, Spacing, Colors, Glass, Shadows } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { useLayoutStore } from '../../src/stores/layout';
+import { OfflineBanner } from '../../src/components/OfflineBanner';
 
 const TAB_ITEMS = [
   { name: 'index', label: 'Agents', icon: 'grid' as const, title: 'Dashboard' },
@@ -19,37 +16,81 @@ const TAB_ITEMS = [
   { name: 'settings', label: 'Settings', icon: 'settings' as const, title: 'Settings' },
 ] as const;
 
+/**
+ * Floating glass tab bar (v1 layout): a rounded island detached from the
+ * bottom edge, every tab always showing icon + label. The active tab is
+ * highlighted by a glass lens that springs across to cover the whole item —
+ * icon and text together. Slot sizes are static, so one measurement pass
+ * positions the lens for good.
+ */
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const setTabBarHeight = useLayoutStore((s) => s.setTabBarHeight);
+
+  const frames = useRef<Map<number, { x: number; width: number }>>(new Map()).current;
+  const [frameVersion, setFrameVersion] = useState(0);
+  const lensX = useSharedValue(0);
+  const lensW = useSharedValue(0);
+
+  const activeIndex = state.index as number;
+
+  useEffect(() => {
+    const frame = frames.get(activeIndex);
+    if (frame) {
+      lensX.value = withSpring(frame.x, Glass.morph.spring);
+      lensW.value = withSpring(frame.width, Glass.morph.spring);
+    }
+  }, [activeIndex, frameVersion, frames, lensX, lensW]);
+
+  const lensStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: lensX.value }],
+    width: lensW.value,
+    opacity: lensW.value > 1 ? 1 : 0,
+  }));
 
   return (
     <View
       onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
       style={{
         position: 'absolute',
-        bottom: insets.bottom + Spacing.md,
-        left: Spacing.lg,
-        right: Spacing.lg,
+        bottom: insets.bottom + Spacing.sm + 2,
+        alignSelf: 'center',
       }}
+      pointerEvents="box-none"
     >
       <BlurView
-        tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
+        tint={c.isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
         intensity={Glass.blur.tabBar}
         style={{
           flexDirection: 'row',
-          justifyContent: 'space-around',
-          alignItems: 'center',
-          borderRadius: CornerRadius.xl,
-          paddingVertical: Spacing.sm + 2,
-          paddingHorizontal: Spacing.md,
+          borderRadius: 999,
+          padding: Spacing.sm,
           overflow: 'hidden',
           backgroundColor: c.glassTabBar,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+          ...Shadows.elevated,
         }}
       >
+        {/* Sliding glass lens — covers the whole active tab, label included. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              top: Spacing.sm,
+              bottom: Spacing.sm,
+              borderRadius: 999,
+              backgroundColor: c.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(120,120,128,0.16)',
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: c.isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.05)',
+              ...Shadows.card,
+            },
+            lensStyle,
+          ]}
+        />
+
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
@@ -71,39 +112,38 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             <Pressable
               key={route.key}
               onPress={onPress}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-              style={{
-                flex: 1,
+              onLayout={(e) => {
+                frames.set(index, {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                });
+                if (index === state.routes.length - 1) {
+                  setFrameVersion((v) => v + 1);
+                }
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: Spacing.lg,
+                paddingVertical: Spacing.sm,
+                borderRadius: 999,
                 alignItems: 'center',
                 justifyContent: 'center',
-                minHeight: 44,
                 gap: 3,
-              }}
+                opacity: pressed ? 0.6 : 1,
+              })}
             >
-              <View
-                style={{
-                  width: 52,
-                  height: 32,
-                  borderRadius: 16,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: isFocused ? c.accentBg : 'transparent',
-                  borderWidth: isFocused ? 1 : 0,
-                  borderColor: isFocused ? c.accentBorder : 'transparent',
-                }}
-              >
-                <Ionicons
-                  name={(isFocused ? iconName : `${iconName}-outline`) as any}
-                  size={isFocused ? 24 : 22}
-                  color={isFocused ? Colors.primary[500] : c.textTertiary}
-                />
-              </View>
+              <Ionicons
+                name={(isFocused ? iconName : `${iconName}-outline`) as any}
+                size={25}
+                color={isFocused ? Colors.primary[500] : c.textPrimary}
+              />
               <Text
                 style={{
-                  ...Typography.caption1,
+                  fontSize: 13,
+                  lineHeight: 16,
                   fontWeight: isFocused ? '600' : '500',
-                  color: isFocused ? Colors.primary[500] : c.textTertiary,
+                  color: isFocused ? Colors.primary[500] : c.textPrimary,
                 }}
+                allowFontScaling={false}
               >
                 {options.tabBarLabel ?? options.title ?? route.name}
               </Text>
@@ -119,43 +159,46 @@ export default function TabLayout() {
   const c = useThemeColors();
 
   return (
-    <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{
-        headerTransparent: true,
-        headerBackground: () => (
-          <BlurView
-            tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
-            intensity={Glass.blur.nav}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: c.glassNav,
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={(props) => <FloatingTabBar {...props} />}
+        screenOptions={{
+          headerTransparent: true,
+          headerBackground: () => (
+            <BlurView
+              tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
+              intensity={Glass.blur.nav}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: c.glassNav,
+              }}
+            />
+          ),
+          headerTitleStyle: {
+            ...Typography.headline,
+            color: c.textPrimary,
+          },
+          headerShadowVisible: false,
+          headerTintColor: c.textPrimary,
+          tabBarAllowFontScaling: false,
+        }}
+      >
+        {TAB_ITEMS.map((tab) => (
+          <Tabs.Screen
+            key={tab.name}
+            name={tab.name}
+            options={{
+              title: tab.title,
+              tabBarLabel: tab.label,
             }}
           />
-        ),
-        headerTitleStyle: {
-          ...Typography.headline,
-          color: c.textPrimary,
-        },
-        headerShadowVisible: false,
-        headerTintColor: c.textPrimary,
-        tabBarAllowFontScaling: false,
-      }}
-    >
-      {TAB_ITEMS.map((tab) => (
-        <Tabs.Screen
-          key={tab.name}
-          name={tab.name}
-          options={{
-            title: tab.title,
-            tabBarLabel: tab.label,
-          }}
-        />
-      ))}
-    </Tabs>
+        ))}
+      </Tabs>
+      <OfflineBanner />
+    </View>
   );
 }

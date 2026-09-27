@@ -54,7 +54,7 @@ function StatRow({ label, value, percentage, color }: { label: string; value: st
     <View style={{ gap: 4 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={[Typography.footnote, { color: c.textSecondary }]}>{label}</Text>
-        <Text style={[Typography.caption1, { color: c.textTertiary, fontFamily: 'Courier' }]}>{value}</Text>
+        <Text style={[Typography.mono, { color: c.textTertiary, fontSize: 12 }]}>{value}</Text>
       </View>
       <View style={{ height: 4, borderRadius: 2, backgroundColor: c.elevated }}>
         <View style={{ height: 4, borderRadius: 2, backgroundColor: color, width: `${Math.min(100, Math.max(0, percentage))}%` }} />
