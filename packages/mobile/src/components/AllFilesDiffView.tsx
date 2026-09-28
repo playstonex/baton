@@ -22,7 +22,7 @@ import type {
 } from '@baton/shared';
 import { gitService } from '../services/git';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { FontFamily, Typography, Spacing, CornerRadius, Colors } from '../constants/theme';
+import { FontFamily, Typography, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
 
 export interface AllFilesDiffViewProps {
   visible: boolean;
@@ -192,7 +192,9 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
           style={[
             styles.statsBar,
             {
-              backgroundColor: c.isDark ? 'rgba(58,58,60,0.35)' : c.elevated,
+              backgroundColor: c.isDark
+                ? Glass.opacity.dark.subtle
+                : Glass.opacity.light.subtle,
               borderBottomColor: c.separator,
             },
           ]}
@@ -304,8 +306,12 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
               style={[
                 styles.commitSheet,
                 {
-                  backgroundColor: c.isDark ? '#242426' : '#fff',
-                  borderColor: c.separator,
+                  backgroundColor: c.isDark
+                    ? Glass.opacity.dark.elevated
+                    : Glass.opacity.light.surface,
+                  borderColor: c.isDark
+                    ? Glass.opacity.dark.border
+                    : Glass.opacity.light.border,
                 },
               ]}
               onPress={() => {}}
@@ -323,8 +329,12 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
                   styles.commitInput,
                   {
                     color: c.textPrimary,
-                    borderColor: c.separator,
-                    backgroundColor: c.isDark ? '#1c1c1e' : '#f5f5f7',
+                    borderColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.subtle
+                      : Glass.opacity.light.subtle,
                   },
                 ]}
                 placeholder="Commit message (e.g. feat: implement autocomplete)"
@@ -403,18 +413,18 @@ function FileAccordionItem({
     <View style={[styles.fileCard, { borderBottomColor: c.separator }]}>
       <Pressable
         onPress={onToggle}
-        style={({ pressed }) => [
-          styles.fileHeader,
-          {
-            backgroundColor: pressed
-              ? c.isDark
-                ? 'rgba(255,255,255,0.08)'
-                : 'rgba(0,0,0,0.04)'
-              : c.isDark
-                ? 'rgba(44,44,46,0.6)'
-                : c.card,
-          },
-        ]}
+          style={({ pressed }) => [
+            styles.fileHeader,
+            {
+              backgroundColor: pressed
+                ? c.isDark
+                  ? Glass.opacity.dark.subtle
+                  : Glass.opacity.light.subtle
+                : c.isDark
+                  ? Glass.opacity.dark.border
+                  : c.card,
+            },
+          ]}
       >
         <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
           <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLetter}</Text>
@@ -447,7 +457,16 @@ function FileAccordionItem({
       </Pressable>
 
       {isExpanded && (
-        <View style={[styles.fileDiffBody, { backgroundColor: c.isDark ? '#151516' : '#fafafa' }]}>
+        <View
+          style={[
+            styles.fileDiffBody,
+            {
+              backgroundColor: c.isDark
+                ? Glass.opacity.dark.subtle
+                : Glass.opacity.light.subtle,
+            },
+          ]}
+        >
           {file.hunks.length === 0 ? (
             <Text style={[styles.emptyHunk, { color: c.textTertiary }]}>No diff contents available</Text>
           ) : (
@@ -457,7 +476,9 @@ function FileAccordionItem({
                   style={[
                     styles.hunkHeaderRow,
                     {
-                      backgroundColor: c.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                      backgroundColor: c.isDark
+                        ? Glass.opacity.dark.border
+                        : Glass.opacity.light.border,
                     },
                   ]}
                 >
@@ -482,9 +503,9 @@ function DiffRow({ line, colors: c }: { line: GitDiffLine; colors: any }) {
   const isDel = line.type === 'remove';
 
   const bg = isAdd
-    ? 'rgba(34,197,94,0.12)'
+    ? Colors.success[400] + '1F'
     : isDel
-      ? 'rgba(239,68,68,0.12)'
+      ? Colors.danger[400] + '1F'
       : 'transparent';
 
   const textColor = isAdd
