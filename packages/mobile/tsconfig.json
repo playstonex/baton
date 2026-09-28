@@ -3,7 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "jsx": "react-jsx",
-    "types": ["node"],
+    "types": ["node", "expo/types"],
     "paths": {
       "@/*": ["./src/*"]
     }
