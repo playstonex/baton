@@ -55,10 +55,10 @@ export class LoopService {
       loop.currentIteration++;
 
       try {
-        const adapter = createAdapter(loop.agentType as 'claude-code' | 'codex' | 'opencode');
+        const adapter = createAdapter(loop.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
         const sessionId = await this.agentManager.start(
           {
-            type: loop.agentType as 'claude-code' | 'codex' | 'opencode',
+            type: loop.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
             projectPath: loop.projectPath,
           },
           adapter,

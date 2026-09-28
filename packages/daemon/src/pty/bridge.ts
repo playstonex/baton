@@ -122,6 +122,9 @@ export async function spawnPty(
                     reject(new Error(event.message));
                   }
                   break;
+                case 'render':
+                  // Render events (cell updates at ~24fps) are not consumed — skip to avoid CPU waste
+                  break;
               }
             } catch {
               // Non-JSON line, ignore

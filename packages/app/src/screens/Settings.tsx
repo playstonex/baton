@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Button, Input } from '@heroui/react';
 import { wsService, type ConnectionMode } from '../services/websocket.js';
+import { PageHeader, Card, StatusAlert, Button, Input } from '../lib/ui.js';
 
 const CONNECTION_MODES = [
   {
@@ -35,7 +35,7 @@ export function SettingsScreen() {
     wsService.disconnect();
     wsService.connect();
     setMode('local');
-    setStatus('Connecting to local daemon...');
+    setStatus('Connecting to local daemon…');
   }
 
   async function applyRemote() {
@@ -64,7 +64,7 @@ export function SettingsScreen() {
         wsService.disconnect();
         wsService.connect();
         setMode('remote');
-        setStatus('Connected to relay!');
+        setStatus('Connected to relay');
       } catch {
         setStatus('Failed to connect to gateway');
       }
@@ -76,24 +76,43 @@ export function SettingsScreen() {
       wsService.disconnect();
       wsService.connect();
       setMode('remote');
-      setStatus('Reconnecting...');
+      setStatus('Reconnecting…');
     }
   }
 
   const isSuccess = status.includes('Connected') || status.includes('Connecting');
 
-return (
-    <div className="space-y-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-surface-900 dark:text-white">
-          Settings
-        </h1>
-        <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-          Tune the way Baton reaches every agent.
-        </p>
-      </div>
+  const [pairingQr, setPairingQr] = useState<{
+    qr: string;
+    fingerprint: string;
+    localHttpUrl?: string;
+    relayUrl?: string;
+    name?: string;
+  } | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
-      <div className="grid gap-3 md:grid-cols-2">
+  async function fetchPairingQr() {
+    setQrLoading(true);
+    try {
+      const res = await fetch(`${localHttpUrl}/api/pair/qr`);
+      if (res.ok) {
+        const data = await res.json();
+        setPairingQr(data);
+      } else {
+        setStatus('Failed to load pairing QR');
+      }
+    } catch {
+      setStatus('Could not reach daemon for pairing QR');
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-8">
+      <PageHeader title="Settings" description="Tune the way Baton reaches every agent." />
+
+      <div className="grid gap-4 md:grid-cols-2">
         {CONNECTION_MODES.map((item) => {
           const active = mode === item.key;
           return (
@@ -101,146 +120,143 @@ return (
               key={item.key}
               type="button"
               onClick={() => setMode(item.key)}
-              className={`rounded-lg border p-4 text-left transition-colors ${
+              className={`rounded-[var(--radius-md)] border p-6 text-left transition-colors ${
                 active
-                  ? 'border-primary-500 bg-primary-50 dark:border-primary-500 dark:bg-primary-950/40'
-                  : 'border-surface-200 bg-white dark:border-surface-700 dark:bg-surface-800/50 hover:border-surface-300 dark:hover:border-surface-600'
+                  ? 'border-geist-gray-1000 bg-geist-gray-alpha-100'
+                  : 'border-geist-gray-alpha-400 bg-geist-background-100 hover:border-geist-gray-alpha-600'
               }`}
             >
-              <div className="text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">
+              <div className="text-xs font-semibold uppercase tracking-wider text-geist-gray-800">
                 {item.label}
               </div>
-              <div className="mt-2 text-base font-medium text-surface-900 dark:text-white">
-                {item.title}
-              </div>
-              <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-                {item.body}
-              </p>
+              <div className="mt-2 text-base font-medium text-geist-gray-1000">{item.title}</div>
+              <p className="mt-1 text-sm text-geist-gray-800">{item.body}</p>
             </button>
           );
         })}
       </div>
 
       {mode === 'local' ? (
-        <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-700 dark:bg-surface-800/50">
-          <div className="text-sm font-semibold text-surface-900 dark:text-white">
-            Local Connection
-          </div>
-          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-            Point Baton at the daemon
-          </p>
-          <div className="mt-4 space-y-4">
-            <FieldBlock
-              label="Daemon HTTP URL"
-              hint="The HTTP endpoint where your Baton daemon is listening."
-            >
+        <Card>
+          <div className="text-sm font-semibold text-geist-gray-1000">Local Connection</div>
+          <p className="mt-1.5 text-sm text-geist-gray-800">Point Baton at the daemon</p>
+          <div className="mt-5 space-y-5">
+            <FieldBlock label="Daemon HTTP URL" hint="The HTTP endpoint where your Baton daemon is listening.">
               <Input
                 value={localHttpUrl}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setLocalHttpUrl(e.target.value)
-                }
-                className="font-mono text-sm"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalHttpUrl(e.target.value)}
+                className="font-mono"
               />
             </FieldBlock>
-            <Button variant="primary" onPress={applyLocal} className="w-full">
+            <Button variant="primary" onClick={applyLocal} className="w-full">
               Connect to Local Daemon
             </Button>
           </div>
-        </div>
+        </Card>
       ) : (
-        <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-700 dark:bg-surface-800/50">
-          <div className="text-sm font-semibold text-surface-900 dark:text-white">
-            Remote Pairing
-          </div>
-          <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-            Pair through the relay
-          </p>
-          <div className="mt-4 space-y-4">
-            <FieldBlock
-              label="Relay WebSocket URL"
-              hint="The public WebSocket address of your Baton relay server."
-            >
+        <Card>
+          <div className="text-sm font-semibold text-geist-gray-1000">Remote Pairing</div>
+          <p className="mt-1.5 text-sm text-geist-gray-800">Pair through the relay</p>
+          <div className="mt-5 space-y-5">
+            <FieldBlock label="Relay WebSocket URL" hint="The public WebSocket address of your Baton relay server.">
               <Input
                 placeholder="ws://relay.example.com:3230"
                 value={relayUrl}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setRelayUrl(e.target.value)
-                }
-                className="font-mono text-sm"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRelayUrl(e.target.value)}
+                className="font-mono"
               />
             </FieldBlock>
 
-            <FieldBlock
-              label="Pairing Code"
-              hint="Use the 6-digit code displayed by the host daemon."
-            >
+            <FieldBlock label="Pairing Code" hint="Use the 6-digit code displayed by the host daemon.">
               <div className="flex gap-3">
                 <div className="flex-1">
                   <Input
                     placeholder="000000"
                     value={pairingCode}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setPairingCode(e.target.value)
-                    }
-                    className="font-mono text-center text-sm tracking-[0.4em]"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPairingCode(e.target.value)}
+                    className="text-center font-mono tracking-[0.4em]"
                     maxLength={6}
                   />
                 </div>
-                <Button variant="primary" onPress={applyRemote} className="px-5">
+                <Button variant="primary" onClick={applyRemote} className="px-5">
                   Pair & Connect
                 </Button>
               </div>
             </FieldBlock>
 
             {hostId && (
-              <div className="rounded border border-success-200 bg-success-50 px-3 py-2 dark:border-success-800 dark:bg-success-950/25">
-                <div className="text-xs font-semibold text-success-700 dark:text-success-400">
-                  Paired host
-                </div>
-                <div className="mt-0.5 font-mono text-xs text-success-700/80 dark:text-success-400/85">
-                  {hostId.slice(0, 8)}...
-                </div>
-              </div>
+              <StatusAlert type="success" title="Paired host" message={`${hostId.slice(0, 8)}…`} />
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {status && (
-        <div
-          className={`rounded border px-3 py-2 ${
-            isSuccess
-              ? 'border-success-200 bg-success-50 text-success-700 dark:border-success-800 dark:bg-success-950/25 dark:text-success-400'
-              : 'border-danger-200 bg-danger-50 text-danger-700 dark:border-danger-800 dark:bg-danger-950/25 dark:text-danger-400'
-          }`}
-        >
-          <div className="text-sm font-medium">
-            {isSuccess ? 'Connection Status' : 'Action Required'}
-          </div>
-          <div className="mt-0.5 text-sm">{status}</div>
-        </div>
+        <StatusAlert
+          type={isSuccess ? 'success' : 'error'}
+          title={isSuccess ? 'Connection Status' : 'Action Required'}
+          message={status}
+        />
       )}
 
-      <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-700 dark:bg-surface-800/50">
-        <div className="text-sm font-semibold text-surface-900 dark:text-white">
-          Environment
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-geist-gray-1000">Pair Mobile Device</div>
+            <p className="mt-1 text-sm text-geist-gray-800">
+              Scan the QR code with the Baton mobile app camera to connect automatically.
+            </p>
+          </div>
+          <Button variant="secondary" onClick={fetchPairingQr} disabled={qrLoading}>
+            {qrLoading ? 'Generating…' : pairingQr ? 'Refresh QR' : 'Show QR Code'}
+          </Button>
         </div>
-        <div className="mt-3 space-y-2">
+        {pairingQr && (
+          <div className="mt-6 flex flex-col items-center gap-4 rounded-[var(--radius-md)] border border-geist-gray-alpha-300 bg-white p-6 dark:bg-geist-background-100">
+            <img
+              src={pairingQr.qr}
+              alt="Baton Pairing QR Code"
+              className="h-56 w-56 rounded-lg border border-geist-gray-alpha-200 shadow-sm"
+            />
+            <div className="w-full space-y-1.5 text-center text-xs text-geist-gray-700">
+              {pairingQr.name && (
+                <div>
+                  Host: <span className="font-mono text-geist-gray-900">{pairingQr.name}</span>
+                </div>
+              )}
+              {pairingQr.localHttpUrl && (
+                <div>
+                  LAN URL:{' '}
+                  <span className="font-mono text-geist-gray-900">{pairingQr.localHttpUrl}</span>
+                </div>
+              )}
+              <div className="truncate">
+                Fingerprint:{' '}
+                <span className="font-mono text-geist-gray-900">{pairingQr.fingerprint.slice(0, 16)}…</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <div className="text-sm font-semibold text-geist-gray-1000">Environment</div>
+        <div className="mt-4 space-y-2.5">
           <InfoRow label="Application" value="Baton" />
           <InfoRow label="Version" value="0.1.0" />
           <InfoRow label="Transport" value="WebSocket + HTTP" />
           <InfoRow label="Encryption" value="NaCl box" />
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-surface-200 bg-surface-50 p-4 dark:border-surface-700 dark:bg-surface-900">
-        <div className="text-xs font-medium uppercase tracking-wider text-surface-500">
+      <div className="rounded-[var(--radius-md)] border border-geist-gray-alpha-400 bg-geist-gray-alpha-100 p-6">
+        <div className="text-xs font-medium uppercase tracking-wider text-geist-gray-800">
           Current Mode
         </div>
-        <div className="mt-1 text-lg font-medium text-surface-900 dark:text-white">
+        <div className="mt-1 text-lg font-medium text-geist-gray-1000">
           {mode === 'local' ? 'Local Network' : 'Remote Relay'}
         </div>
-        <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+        <p className="mt-1 text-sm text-geist-gray-800">
           {mode === 'local'
             ? 'Direct HTTP and WebSocket connectivity for the lowest latency setup.'
             : 'Relay and pairing flow for secure access outside the local environment.'}
@@ -261,20 +277,18 @@ function FieldBlock({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-surface-600 dark:text-surface-400">
-        {label}
-      </label>
+      <label className="text-xs font-medium text-geist-gray-800">{label}</label>
       {children}
-      <p className="text-xs text-surface-400 dark:text-surface-500">{hint}</p>
+      <p className="text-xs text-geist-gray-700">{hint}</p>
     </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-surface-100 py-1.5 last:border-0 dark:border-surface-700">
-      <span className="text-sm text-surface-500 dark:text-surface-400">{label}</span>
-      <span className="font-mono text-sm text-surface-700 dark:text-surface-300">{value}</span>
+    <div className="flex items-center justify-between border-b border-geist-gray-alpha-200 py-2 last:border-0">
+      <span className="text-sm text-geist-gray-800">{label}</span>
+      <span className="font-mono text-sm text-geist-gray-900">{value}</span>
     </div>
   );
 }

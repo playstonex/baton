@@ -1,9 +1,15 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Button, Card, CardContent, Chip } from '@heroui/react';
 import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../stores/events.js';
 import { wsService } from '../services/websocket.js';
+import { Card, EmptyState, StatusBadge, MetricCard, Breadcrumbs, Button } from '../lib/ui.js';
+import {
+  IconTerminal,
+  IconGitBranch,
+  IconFile,
+  IconSpinner,
+} from '../lib/icons.js';
 
 export function AgentDetailScreen() {
   const { sessionId } = useParams();
@@ -21,17 +27,33 @@ export function AgentDetailScreen() {
       }
     });
 
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        for (const event of msg.events) {
+          addEvent(event);
+        }
+      }
+    });
+
     const unsubOutput = wsService.on('terminal_output', (msg) => {
       if (msg.type === 'terminal_output' && msg.sessionId === sessionId) {
         addEvent({ type: 'raw_output', content: msg.data, timestamp: Date.now() });
       }
     });
 
-    wsService.send({ type: 'control', action: 'attach_session', sessionId });
+    const unsubHistory = wsService.on('history_replay', (msg) => {
+      if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        addEvent({ type: 'raw_output', content: msg.output, timestamp: Date.now() });
+      }
+    });
+
+    wsService.attachOrResume(sessionId);
 
     return () => {
       unsubEvent();
+      unsubEventHistory();
       unsubOutput();
+      unsubHistory();
     };
   }, [sessionId, addEvent, clearEvents]);
 
@@ -40,55 +62,46 @@ export function AgentDetailScreen() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onPress={() => navigate(-1)}
-          className="-ml-2 text-surface-500"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 12L6 8l4-4" />
-          </svg>
-        </Button>
-        <div className="flex items-center gap-1.5 text-xs text-surface-400">
-          <button type="button" onClick={() => navigate('/')} className="transition-colors hover:text-primary-500">Dashboard</button>
-          <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 4l4 4-4 4" /></svg>
-          <span className="font-mono text-surface-600 dark:text-surface-300">{sessionId?.slice(0, 8)}</span>
+    <div className="mx-auto max-w-4xl space-y-8">
+      <div className="flex items-center justify-between">
+        <Breadcrumbs
+          items={[
+            { label: 'Dashboard', onClick: () => navigate('/') },
+            { label: sessionId?.slice(0, 8) ?? '' },
+          ]}
+        />
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/files/${sessionId}`)}>
+            <IconFile className="mr-1.5 h-3.5 w-3.5" />
+            Files
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/git/${sessionId}`)}>
+            <IconGitBranch className="mr-1.5 h-3.5 w-3.5" />
+            Git
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate(`/terminal/${sessionId}`)}>
+            <IconTerminal className="mr-1.5 h-3.5 w-3.5" />
+            Terminal
+          </Button>
         </div>
-        <div className="flex-1" />
-        <Button variant="outline" size="sm" onPress={() => navigate(`/chat/${sessionId}`)} className="gap-1.5">
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          Chat
-        </Button>
-        <Button variant="outline" size="sm" onPress={() => navigate(`/terminal/${sessionId}`)} className="gap-1.5">
-          <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
-            <path d="M4 7h2M4 10h5" />
-          </svg>
-          Terminal
-        </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="File Changes" value={fileChanges.length} accent="primary" icon="📄" />
-        <StatCard label="Tool Uses" value={toolUses.length} accent="purple" icon="🔧" />
-        <StatCard label="Total Events" value={events.length} accent="success" icon="📊" />
+        <MetricCard label="File Changes" value={fileChanges.length} />
+        <MetricCard label="Tool Uses" value={toolUses.length} />
+        <MetricCard label="Total Events" value={events.length} />
       </div>
 
       {fileChanges.length > 0 && (
         <div>
-          <div className="mb-3 flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-surface-900 dark:text-white">File Changes</h3>
-            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium tabular-nums text-primary-600 dark:bg-primary-950 dark:text-primary-400">
+          <div className="mb-4 flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-geist-gray-1000">File Changes</h3>
+            <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
               {fileChanges.length}
             </span>
-            <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
+            <div className="h-px flex-1 bg-geist-gray-alpha-200" />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {fileChanges.map((e, i) =>
               e.type === 'file_change' ? (
                 <FileChangeRow key={i} path={e.path} changeType={e.changeType} />
@@ -99,71 +112,38 @@ export function AgentDetailScreen() {
       )}
 
       <div>
-        <div className="mb-3 flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-surface-900 dark:text-white">Event Timeline</h3>
-          <span className="rounded-full bg-surface-100 px-2 py-0.5 text-xs font-medium tabular-nums text-surface-600 dark:bg-surface-800 dark:text-surface-400">
+        <div className="mb-4 flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-geist-gray-1000">Event Timeline</h3>
+          <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
             {[...statusEvents, ...toolUses].length}
           </span>
-          <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
+          <div className="h-px flex-1 bg-geist-gray-alpha-200" />
         </div>
-        <Card className="border border-surface-200 shadow-sm dark:border-surface-700">
-          <CardContent className="max-h-[500px] overflow-auto p-3">
-            {statusEvents.length === 0 && toolUses.length === 0 ? (
-              <div className="flex flex-col items-center py-16 text-center">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-100 dark:bg-surface-800">
-                  <span className="text-xl">⏳</span>
-                </div>
-                <p className="text-sm text-surface-400">Waiting for events...</p>
-              </div>
-            ) : (
-              <div className="relative">
-                <div className="pointer-events-none absolute left-[62px] top-0 bottom-0 w-px bg-surface-100 dark:bg-surface-800" />
-                {[...statusEvents, ...toolUses]
-                  .sort((a, b) => a.timestamp - b.timestamp)
-                  .map((event, i) => <EventRow key={i} event={event} />)}
-              </div>
-            )}
-          </CardContent>
+        <Card className="max-h-[500px] overflow-auto p-0">
+          {statusEvents.length === 0 && toolUses.length === 0 ? (
+            <EmptyState
+              icon={<IconSpinner className="h-6 w-6 text-geist-gray-700" />}
+              title="Waiting for events…"
+            />
+          ) : (
+            <div className="relative">
+              <div className="pointer-events-none absolute left-[62px] top-0 bottom-0 w-px bg-geist-gray-alpha-200" />
+              {[...statusEvents, ...toolUses]
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .map((event, i) => <EventRow key={i} event={event} />)}
+            </div>
+          )}
         </Card>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, accent, icon }: { label: string; value: number; accent: 'primary' | 'purple' | 'success'; icon: string }) {
-  const borderClasses = {
-    primary: 'border-l-primary-500',
-    purple: 'border-l-purple-500',
-    success: 'border-l-success-500',
-  };
-  const bgClasses = {
-    primary: 'bg-primary-50 dark:bg-primary-950/30',
-    purple: 'bg-purple-50 dark:bg-purple-950/30',
-    success: 'bg-success-50 dark:bg-success-950/30',
-  };
-
-  return (
-    <Card className={`overflow-hidden border border-surface-200 border-l-4 shadow-sm dark:border-surface-700 ${borderClasses[accent]}`}>
-      <CardContent className={`p-5 ${bgClasses[accent]} relative`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-3xl font-bold tabular-nums text-surface-900 dark:text-white">{value}</div>
-            <div className="mt-1 text-xs font-medium text-surface-500">{label}</div>
-          </div>
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${bgClasses[accent]}`}>
-            {icon}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function FileChangeRow({ path, changeType }: { path: string; changeType: string }) {
-  const colorMap: Record<string, 'success' | 'accent' | 'danger'> = {
-    create: 'success',
-    modify: 'accent',
-    delete: 'danger',
+  const colorMap: Record<string, string> = {
+    create: 'text-geist-green-700 dark:text-geist-green-900 bg-geist-green-100 dark:bg-geist-green-1000',
+    modify: 'text-geist-blue-700 dark:text-geist-blue-900 bg-geist-blue-100 dark:bg-geist-blue-1000',
+    delete: 'text-geist-red-700 dark:text-geist-red-900 bg-geist-red-100 dark:bg-geist-red-1000',
   };
   const iconMap: Record<string, string> = {
     create: '+',
@@ -172,18 +152,12 @@ function FileChangeRow({ path, changeType }: { path: string; changeType: string 
   };
 
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-surface-100 bg-white px-3.5 py-2.5 transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-800/50 dark:hover:bg-surface-800">
-      <span className={`flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold ${
-        changeType === 'create' ? 'bg-success-100 text-success-700 dark:bg-success-950 dark:text-success-400'
-        : changeType === 'delete' ? 'bg-danger-100 text-danger-700 dark:bg-danger-950 dark:text-danger-400'
-        : 'bg-primary-100 text-primary-700 dark:bg-primary-950 dark:text-primary-400'
-      }`}>
+    <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-300 bg-geist-background-100 px-5 py-3.5 transition-colors hover:bg-geist-gray-alpha-100">
+      <span className={`flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold ${colorMap[changeType] ?? 'bg-geist-gray-alpha-200 text-geist-gray-900'}`}>
         {iconMap[changeType] ?? '~'}
       </span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-surface-700 dark:text-surface-300">{path}</span>
-      <Chip size="sm" variant="soft" color={colorMap[changeType] ?? 'accent'}>
-        {changeType}
-      </Chip>
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-geist-gray-900">{path}</span>
+      <StatusBadge status={changeType === 'create' ? 'completed' : changeType === 'delete' ? 'error' : 'running'} dot={false} />
     </div>
   );
 }
@@ -192,20 +166,20 @@ function EventRow({ event }: { event: ParsedEvent }) {
   const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const dotColors: Record<string, string> = {
-    status_change: 'bg-primary-500',
-    thinking: 'bg-warning-500',
-    tool_use: 'bg-purple-500',
-    file_change: 'bg-primary-400',
-    command_exec: 'bg-warning-400',
-    error: 'bg-danger-500',
-    raw_output: 'bg-surface-400',
+    status_change: 'bg-geist-blue-600',
+    thinking: 'bg-geist-amber-600',
+    tool_use: 'bg-geist-purple-600',
+    file_change: 'bg-geist-blue-500',
+    command_exec: 'bg-geist-amber-500',
+    error: 'bg-geist-red-600',
+    raw_output: 'bg-geist-gray-500',
   };
 
   const bgColors: Record<string, string> = {
-    status_change: 'border-l-primary-400',
-    thinking: 'border-l-warning-400',
-    tool_use: 'border-l-purple-400',
-    error: 'border-l-danger-400',
+    status_change: 'border-l-geist-blue-500',
+    thinking: 'border-l-geist-amber-500',
+    tool_use: 'border-l-geist-purple-500',
+    error: 'border-l-geist-red-500',
   };
 
   const description = (() => {
@@ -213,7 +187,7 @@ function EventRow({ event }: { event: ParsedEvent }) {
       case 'status_change':
         return `Status → ${event.status}`;
       case 'thinking':
-        return 'Thinking...';
+        return 'Thinking…';
       case 'tool_use':
         return `${event.tool}${event.args?.filePath ? ` → ${event.args.filePath}` : ''}`;
       case 'file_change':
@@ -228,10 +202,10 @@ function EventRow({ event }: { event: ParsedEvent }) {
   })();
 
   return (
-    <div className={`flex items-center gap-3 border-l-2 px-4 py-2 transition-colors hover:bg-surface-50/50 dark:hover:bg-surface-800/30 ${bgColors[event.type] ?? 'border-l-transparent'}`}>
-      <span className="w-16 shrink-0 font-mono text-[11px] tabular-nums text-surface-400">{time}</span>
-      <span className={`relative z-10 inline-flex h-2 w-2 rounded-full ${dotColors[event.type] ?? 'bg-surface-400'}`} />
-      <span className="min-w-0 flex-1 truncate text-xs text-surface-700 dark:text-surface-300">{description}</span>
+    <div className={`flex items-center gap-3 border-l-2 px-5 py-3 transition-colors hover:bg-geist-gray-alpha-100 ${bgColors[event.type] ?? 'border-l-transparent'}`}>
+      <span className="w-16 shrink-0 font-mono text-[11px] tabular-nums text-geist-gray-700">{time}</span>
+      <span className={`relative z-10 inline-flex h-2 w-2 rounded-full ${dotColors[event.type] ?? 'bg-geist-gray-500'}`} />
+      <span className="min-w-0 flex-1 truncate text-xs text-geist-gray-900">{description}</span>
     </div>
   );
 }

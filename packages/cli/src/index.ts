@@ -1,9 +1,11 @@
 #!/usr/bin/env node
+import { BATON_VERSION } from '@baton/shared';
 import { daemonCommand } from './commands/daemon.js';
 import { agentCommand } from './commands/agent.js';
 import { providerCommand } from './commands/provider.js';
 import { pipelineCommand } from './commands/pipeline.js';
 import { worktreeCommand } from './commands/worktree.js';
+import { doctorCommand } from './commands/doctor.js';
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
@@ -25,6 +27,9 @@ async function main() {
     case 'worktree':
       await worktreeCommand(args[1], args.slice(2));
       break;
+    case 'doctor':
+      await doctorCommand();
+      break;
 
     // Legacy shortcuts (backward compat)
     case 'start':
@@ -44,6 +49,12 @@ async function main() {
       await agentCommand('stop', [args[1]]);
       break;
 
+    case 'version':
+    case '--version':
+    case '-v':
+      console.log(BATON_VERSION);
+      break;
+
     case 'help':
     default:
       printHelp();
@@ -53,13 +64,14 @@ async function main() {
 
 function printHelp() {
   console.log(`
-  Baton CLI v0.0.1
+  Baton CLI v${BATON_VERSION}
 
   Usage:
-    baton daemon start [--foreground]       Start the daemon
-    baton daemon stop                        Stop the daemon
-    baton daemon status                      Show daemon status
-    baton daemon pair                        Generate QR pairing code
+    baton daemon start [--foreground] [--json]  Start the daemon
+    baton daemon stop [--json]                  Stop the daemon
+    baton daemon restart [--json]               Restart the daemon
+    baton daemon status [--json]                Show daemon status (machine-readable with --json)
+    baton daemon pair                           Generate QR pairing code
 
     baton agent run <path> [--provider X]   Start an agent
     baton agent ls [-a]                      List agents
@@ -79,6 +91,8 @@ function printHelp() {
     baton worktree ls                        List worktrees
     baton worktree create <path> --branch X  Create worktree
     baton worktree archive <path>            Archive worktree
+
+    baton doctor                              Run diagnostics
 
   Legacy shortcuts:
     baton start <path>     = agent run

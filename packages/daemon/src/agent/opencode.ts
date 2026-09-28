@@ -31,6 +31,7 @@ export class OpenCodeAdapter extends BaseAgentAdapter {
     const clean = stripAnsi(raw);
     if (!clean) return events;
 
+    // OpenCode uses similar patterns to Claude Code
     if (/thinking|processing/i.test(clean)) {
       events.push({ type: 'thinking', content: clean, timestamp: now });
       return events;
@@ -44,9 +45,12 @@ export class OpenCodeAdapter extends BaseAgentAdapter {
         changeType: /create/i.test(clean) ? 'create' : /delete/i.test(clean) ? 'delete' : 'modify',
         timestamp: now,
       });
+      return events;
     }
 
-    events.push({ type: 'raw_output', content: raw, timestamp: now });
+    if (events.length === 0) {
+      events.push({ type: 'raw_output', content: raw, timestamp: now });
+    }
 
     return events;
   }

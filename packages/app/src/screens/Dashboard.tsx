@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Button, Chip, Input } from '@heroui/react';
 import type { AgentProcess, AgentType } from '@baton/shared';
 import { SystemStats } from '../components/SystemStats.js';
 import { wsService } from '../services/websocket.js';
 import { useAgentStore } from '../stores/connection.js';
+import { PageHeader, Card, EmptyState, StatusBadge, StatusDot, Button, Input } from '../lib/ui.js';
+import { IconServer } from '../lib/icons.js';
 
 const AGENT_OPTIONS: {
   type: AgentType;
@@ -12,34 +13,34 @@ const AGENT_OPTIONS: {
   desc: string;
 }[] = [
   {
-    type: 'codex',
-    label: 'Codex',
-    desc: 'Remote AI coding agent.',
+    type: 'claude-code',
+    label: 'Claude Code',
+    desc: 'Deep reasoning for large code changes and reviews.',
   },
   {
-    type: 'claude-code',
-    label: 'Claude Code (PTY)',
-    desc: 'Terminal-based for deep code changes.',
+    type: 'codex',
+    label: 'Codex',
+    desc: 'Fast execution loops for shipping product work quickly.',
+  },
+  {
+    type: 'opencode',
+    label: 'OpenCode',
+    desc: 'Flexible open-source runtime for portable workflows.',
+  },
+  {
+    type: 'kiro-cli',
+    label: 'Kiro CLI',
+    desc: 'Amazon Kiro agent for spec-driven development.',
   },
 ];
-
-const STATUS_COLORS: Record<string, 'success' | 'accent' | 'default' | 'warning' | 'danger'> = {
-  running: 'success',
-  thinking: 'accent',
-  executing: 'accent',
-  waiting_input: 'warning',
-  idle: 'default',
-  stopped: 'danger',
-  starting: 'default',
-  error: 'danger',
-};
 
 export function DashboardScreen() {
   const navigate = useNavigate();
   const agents = useAgentStore((s) => s.agents);
   const { addAgent, removeAgent, setAgents, updateAgentStatus } = useAgentStore();
   const [projectPath, setProjectPath] = useState('');
-  const [agentType, setAgentType] = useState<AgentType>('codex');
+  const [agentType, setAgentType] = useState<AgentType>('claude-code');
+  const [mode, setMode] = useState<'chat' | 'terminal'>('chat');
   const [loading, setLoading] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
 
@@ -64,6 +65,7 @@ export function DashboardScreen() {
             projectPath: agent.projectPath,
             status: agent.status as AgentProcess['status'],
             startedAt: '',
+            mode: agent.mode,
           })),
         );
       }
@@ -96,12 +98,16 @@ export function DashboardScreen() {
       const res = await fetch('/api/agents/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentType, projectPath: projectPath.trim() }),
+        body: JSON.stringify({
+          agentType,
+          projectPath: projectPath.trim(),
+          mode: mode === 'chat' ? 'sdk' : 'pty',
+        }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        alert(`Failed to start agent: ${err.error ?? 'Unknown error'}`);
+        console.error(`Failed to start agent: ${err.error ?? 'Unknown error'}`);
         return;
       }
 
@@ -112,10 +118,11 @@ export function DashboardScreen() {
         projectPath: projectPath.trim(),
         status: 'running',
         startedAt: new Date().toISOString(),
+        mode: mode === 'chat' ? 'sdk' : 'pty',
       });
-      navigate(`/chat/${data.sessionId}`);
+      navigate(`/${mode}/${data.sessionId}`);
     } catch (err) {
-      alert(`Failed to connect to Daemon: ${err}`);
+      console.error(`Failed to connect to Daemon: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -134,106 +141,115 @@ export function DashboardScreen() {
     AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
 
   return (
-    <div className="space-y-8 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-semibold text-surface-900 dark:text-white">
-          Baton
-        </h1>
-        <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-          Agent orchestration dashboard
-        </p>
-      </div>
+    <div className="max-w-5xl space-y-8">
+      <PageHeader title="Baton" description="Agent orchestration dashboard" />
 
-      <div className="rounded-lg border border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
-        <div className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">
-          <div className="flex items-center gap-2">
-            <Chip size="sm" variant="soft" color={daemonOnline ? 'success' : 'danger'}>
-              {daemonOnline ? 'Daemon Online' : 'Daemon Offline'}
-            </Chip>
-          </div>
+      <Card>
+        <div className="mb-4 flex items-center gap-2">
+          <StatusBadge status={daemonOnline ? 'connected' : 'disconnected'} />
         </div>
 
-        <div className="p-4">
-          <div className="mb-4 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-surface-600 dark:text-surface-400">
-                Agent
-              </label>
-              <div className="flex gap-2">
-                {AGENT_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.type}
-                    type="button"
-                    onClick={() => setAgentType(opt.type)}
-                    className={`flex-1 rounded border px-3 py-2 text-left text-sm transition-colors ${
-                      agentType === opt.type
-                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300'
-                        : 'border-surface-200 text-surface-600 hover:border-surface-300 dark:border-surface-700 dark:text-surface-300 dark:hover:border-surface-600'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-surface-600 dark:text-surface-400">
-                Project Path
-              </label>
-              <Input
-                placeholder="/path/to/project"
-                value={projectPath}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setProjectPath(e.target.value)
-                }
-                onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && startAgent()}
-                className="font-mono text-sm [&>div]:bg-surface-50 [&>div]:dark:bg-surface-950 [&>div]:border-surface-200 [&>div]:dark:border-surface-700"
-              />
+        <div className="mb-6 grid gap-6 md:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-geist-gray-800">Agent</label>
+            <div className="grid grid-cols-2 gap-2">
+              {AGENT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.type}
+                  type="button"
+                  onClick={() => setAgentType(opt.type)}
+                  className={`rounded-[var(--radius-sm)] border px-4 py-3 text-left text-sm font-medium transition-colors ${
+                    agentType === opt.type
+                      ? 'border-geist-gray-1000 bg-geist-gray-alpha-100 text-geist-gray-1000'
+                      : 'border-geist-gray-alpha-400 text-geist-gray-800 hover:border-geist-gray-alpha-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-surface-500 dark:text-surface-400">
-              {selectedAgent.desc}
-            </p>
-            <Button
-              variant="primary"
-              isDisabled={loading || !projectPath.trim() || !daemonOnline}
-              onPress={startAgent}
-              className="min-w-[140px]"
-            >
-              {loading ? 'Starting...' : `Launch ${selectedAgent.label}`}
-            </Button>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-geist-gray-800">
+              Project Path
+            </label>
+            <Input
+              placeholder="/path/to/project"
+              value={projectPath}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProjectPath(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && startAgent()}
+              className="font-mono"
+            />
           </div>
         </div>
-      </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-geist-gray-800">{selectedAgent.desc}</p>
+            <div className="flex shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-geist-gray-alpha-400">
+              <button
+                type="button"
+                onClick={() => setMode('chat')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === 'chat'
+                    ? 'bg-geist-gray-1000 text-geist-background-100'
+                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100'
+                }`}
+              >
+                Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('terminal')}
+                className={`border-l border-geist-gray-alpha-400 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === 'terminal'
+                    ? 'bg-geist-gray-1000 text-geist-background-100'
+                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100'
+                }`}
+              >
+                Terminal
+              </button>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            disabled={loading || !projectPath.trim() || !daemonOnline}
+            onClick={startAgent}
+            className="min-w-[140px]"
+          >
+            {loading ? 'Starting…' : `Launch ${selectedAgent.label}`}
+          </Button>
+        </div>
+      </Card>
 
       <SystemStats />
 
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-surface-900 dark:text-white">
-            Active Sessions
-          </h2>
-          <span className="text-sm text-surface-500 dark:text-surface-400">
-            {agents.length} total
-          </span>
+          <h2 className="text-lg font-semibold text-geist-gray-1000">Active Sessions</h2>
+          <span className="text-sm text-geist-gray-800">{agents.length} total</span>
         </div>
 
         {agents.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-surface-200 bg-surface-50 py-12 text-center dark:border-surface-700 dark:bg-surface-950">
-            <p className="text-surface-500 dark:text-surface-400">
-              No active sessions. Launch an agent to get started.
-            </p>
-          </div>
+          <EmptyState
+            icon={<IconServer className="h-6 w-6 text-geist-gray-700" />}
+            title="No active sessions"
+            description="Launch an agent to get started."
+          />
         ) : (
           <div className="space-y-2">
             {agents.map((agent) => (
               <AgentCard
                 key={agent.id}
                 agent={agent}
-                onOpen={() => navigate(`/chat/${agent.id}`)}
+                onOpen={() =>
+                  navigate(
+                    agent.mode === 'sdk'
+                      ? `/chat/${agent.id}`
+                      : `/terminal/${agent.id}`,
+                  )
+                }
                 onStop={() => stopAgent(agent.id)}
               />
             ))}
@@ -257,40 +273,31 @@ function AgentCard({
   const label = AGENT_OPTIONS.find((option) => option.type === agent.type)?.label ?? agent.type;
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-surface-200 bg-white px-4 py-3 dark:border-surface-800 dark:bg-surface-900">
+    <Card className="flex items-center justify-between px-5 py-4" padding={false}>
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-5 text-left"
       >
-        <span
-          className={`h-2 w-2 rounded-full ${
-            agent.status === 'running' ? 'bg-success-500' :
-            agent.status === 'thinking' ? 'bg-primary-500' :
-            agent.status === 'stopped' ? 'bg-danger-500' :
-            'bg-surface-400'
-          }`}
-        />
+        <StatusDot status={agent.status} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-surface-900 dark:text-white">
-              {label}
-            </span>
-            <Chip size="sm" variant="soft" color={STATUS_COLORS[agent.status] ?? 'default'}>
-              {agent.status.replace('_', ' ')}
-            </Chip>
+            <span className="text-sm font-medium text-geist-gray-1000">{label}</span>
+            <StatusBadge status={agent.status} />
           </div>
-          <div className="mt-0.5 truncate font-mono text-xs text-surface-500 dark:text-surface-400">
+          <div className="mt-0.5 truncate font-mono text-xs text-geist-gray-800">
             {agent.projectPath}
           </div>
         </div>
       </button>
 
       {!isStopped && (
-        <Button size="sm" variant="danger" onPress={onStop}>
-          Stop
-        </Button>
+        <div className="px-5">
+          <Button size="sm" variant="error" onClick={onStop}>
+            Stop
+          </Button>
+        </div>
       )}
-    </div>
+    </Card>
   );
 }

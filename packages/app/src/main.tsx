@@ -3,12 +3,18 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router';
 import { App } from './App.js';
 import { DashboardScreen } from './screens/Dashboard.js';
-import { ChatScreen } from './screens/Chat.js';
 import { TerminalScreen } from './screens/Terminal.js';
 import { AgentDetailScreen } from './screens/AgentDetail.js';
+import { ChatScreen } from './screens/Chat.js';
 import { SettingsScreen } from './screens/Settings.js';
 import { FilesScreen } from './screens/Files.js';
+import { GitScreen } from './screens/Git.js';
+import { PullRequestsScreen } from './screens/PullRequests.js';
+import { WorktreesScreen } from './screens/Worktrees.js';
 import { PipelinesScreen } from './screens/Pipelines.js';
+import { AnalyticsScreen } from './screens/Analytics.js';
+import { OrchestrationScreen } from './screens/Orchestration.js';
+import { ApiProvidersScreen } from './screens/ApiProviders.js';
 import '@xterm/xterm/css/xterm.css';
 import './app.css';
 
@@ -18,11 +24,17 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route element={<App />}>
           <Route index element={<DashboardScreen />} />
-          <Route path="chat/:sessionId" element={<ChatScreen />} />
           <Route path="terminal/:sessionId" element={<TerminalScreen />} />
           <Route path="agent/:sessionId" element={<AgentDetailScreen />} />
-          <Route path="files" element={<FilesScreen />} />
+          <Route path="chat/:sessionId" element={<ChatScreen />} />
+          <Route path="files/:sessionId" element={<FilesScreen />} />
+          <Route path="git/:sessionId" element={<GitScreen />} />
           <Route path="pipelines" element={<PipelinesScreen />} />
+          <Route path="analytics" element={<AnalyticsScreen />} />
+          <Route path="orchestration" element={<OrchestrationScreen />} />
+          <Route path="pull-requests" element={<PullRequestsScreen />} />
+          <Route path="worktrees" element={<WorktreesScreen />} />
+          <Route path="api-providers" element={<ApiProvidersScreen />} />
           <Route path="settings" element={<SettingsScreen />} />
         </Route>
       </Routes>

@@ -1,7 +1,15 @@
 import type { AgentConfig, SpawnConfig } from './agent.js';
 
 // Agent types
-export type AgentType = 'claude-code' | 'claude-code-sdk' | 'codex' | 'codex-sdk' | 'opencode' | 'custom';
+export type AgentType =
+  | 'claude-code'
+  | 'claude-code-sdk'
+  | 'codex'
+  | 'codex-sdk'
+  | 'opencode'
+  | 'kiro-cli'
+  | 'kiro-cli-acp'
+  | 'custom';
 
 export type AgentStatus =
   | 'starting'
@@ -21,6 +29,8 @@ export interface AgentProcess {
   pid?: number;
   startedAt: string;
   stoppedAt?: string;
+  /** Adapter mode this session was started with */
+  mode?: 'pty' | 'sdk';
 }
 
 export type { AgentConfig, SpawnConfig } from './agent.js';
@@ -29,6 +39,11 @@ export type { AgentConfig, SpawnConfig } from './agent.js';
 export type ParsedEvent =
   | StatusChangeEvent
   | ToolUseEvent
+  | ToolCallStartEvent
+  | ToolCallEndEvent
+  | PermissionRequestEvent
+  | PermissionResponseEvent
+  | TurnBoundaryEvent
   | FileChangeEvent
   | CommandExecEvent
   | ThinkingEvent
@@ -54,6 +69,53 @@ export interface ToolUseEvent {
   args: Record<string, unknown>;
   timestamp: number;
   itemId?: string;
+}
+
+/** Emitted when a tool call begins — provides structured metadata for UI rendering */
+export interface ToolCallStartEvent {
+  type: 'tool_call_start';
+  callId: string;
+  tool: string;
+  title?: string;
+  description?: string;
+  args: Record<string, unknown>;
+  timestamp: number;
+}
+
+/** Emitted when a tool call finishes — pairs with tool_call_start via callId */
+export interface ToolCallEndEvent {
+  type: 'tool_call_end';
+  callId: string;
+  success: boolean;
+  durationMs?: number;
+  timestamp: number;
+}
+
+/** Agent is requesting user permission to proceed with an action */
+export interface PermissionRequestEvent {
+  type: 'permission_request';
+  requestId: string;
+  tool: string;
+  action: string;
+  description: string;
+  timestamp: number;
+}
+
+/** User response to a permission request */
+export interface PermissionResponseEvent {
+  type: 'permission_response';
+  requestId: string;
+  approved: boolean;
+  timestamp: number;
+}
+
+/** Marks the boundary of a single agent turn (request → response cycle) */
+export interface TurnBoundaryEvent {
+  type: 'turn_boundary';
+  turnId: string;
+  direction: 'start' | 'end';
+  status?: 'completed' | 'failed' | 'cancelled';
+  timestamp: number;
 }
 
 export interface FileChangeEvent {
@@ -94,6 +156,8 @@ export interface RawOutputEvent {
   timestamp: number;
   itemId?: string;
 }
+
+// ── Chat / SDK events (Codex-style) ────────────────────────────────
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -156,15 +220,12 @@ export interface SubagentEvent {
   itemId?: string;
 }
 
-// ── Thinking Configuration (unified, inspired by CliRelay) ──────────
+// ── Thinking Configuration (unified) ───────────────────────────────
 
-/** Thinking mode: how to specify thinking effort */
 export type ThinkingMode = 'budget' | 'level' | 'none' | 'auto';
 
-/** Thinking level for Mode=level */
 export type ThinkingLevel = 'none' | 'auto' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
-/** Unified thinking configuration */
 export interface ThinkingConfig {
   mode: ThinkingMode;
   /** Token budget, effective when mode='budget'. Special values: 0=disabled, -1=auto */
@@ -173,7 +234,6 @@ export interface ThinkingConfig {
   level?: ThinkingLevel;
 }
 
-/** Level → budget mapping */
 const LEVEL_TO_BUDGET: Record<string, number> = {
   none: 0,
   auto: -1,
@@ -184,12 +244,10 @@ const LEVEL_TO_BUDGET: Record<string, number> = {
   xhigh: 32768,
 };
 
-/** Convert a thinking level to a numeric budget */
 export function levelToBudget(level: ThinkingLevel): number {
   return LEVEL_TO_BUDGET[level] ?? -1;
 }
 
-/** Convert a numeric budget to the nearest thinking level */
 export function budgetToLevel(budget: number): ThinkingLevel {
   if (budget < 0) return 'auto';
   if (budget === 0) return 'none';
@@ -200,7 +258,6 @@ export function budgetToLevel(budget: number): ThinkingLevel {
   return 'xhigh';
 }
 
-/** Convert a ThinkingConfig to a provider-level effort string (for backward compat) */
 export function thinkingConfigToEffort(config?: ThinkingConfig | null): string | undefined {
   if (!config) return undefined;
   if (config.mode === 'none') return undefined;
@@ -208,7 +265,6 @@ export function thinkingConfigToEffort(config?: ThinkingConfig | null): string |
   if (config.mode === 'level' && config.level) {
     const v = config.level;
     if (v === 'low' || v === 'medium' || v === 'high') return v;
-    // Map extended levels to the closest standard
     if (v === 'minimal') return 'low';
     if (v === 'xhigh') return 'high';
     if (v === 'none' || v === 'auto') return undefined;
@@ -219,11 +275,9 @@ export function thinkingConfigToEffort(config?: ThinkingConfig | null): string |
   return undefined;
 }
 
-// ── Deprecated — use ThinkingConfig instead ─────────────────────────
-/** @deprecated Use ThinkingConfig with mode='level' */
+/** @deprecated Use ThinkingConfig with mode='level'. Kept for backward compat with older SDK adapters. */
 export type ReasoningEffort = 'low' | 'medium' | 'high';
 
-export type AccessMode = 'on-request' | 'full-access';
 export type ServiceTier = 'default' | 'fast';
 
 // Agent Adapter interface
@@ -278,3 +332,4 @@ export interface Session {
 export * from './system.js';
 export * from './agent.js';
 export * from './provider.js';
+export * from './git.js';

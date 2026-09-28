@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ParsedEvent } from '@baton/shared';
+import type { ParsedEvent, UserInputPromptEvent, PermissionRequestEvent } from '@baton/shared';
 
 export type MessageKind =
   | 'chat'
@@ -38,10 +38,21 @@ interface ChatState extends InternalState {
   messages: ChatMessage[];
   agentStatus: string;
   waitingApproval: boolean;
+  activePrompt: UserInputPromptEvent | null;
+  activePermission: PermissionRequestEvent | null;
+  promptQueue: string[];
+  sessionOwner: 'local' | 'remote' | null;
   addEvent: (event: ParsedEvent) => void;
   addUserMessage: (content: string) => void;
   setStatus: (status: string) => void;
+  setSessionOwner: (owner: 'local' | 'remote' | null) => void;
   setWaitingApproval: (waiting: boolean) => void;
+  setActivePrompt: (prompt: UserInputPromptEvent | null) => void;
+  setActivePermission: (perm: PermissionRequestEvent | null) => void;
+  enqueuePrompt: (prompt: string) => void;
+  dequeuePrompt: () => string | undefined;
+  removeQueuedPrompt: (index: number) => void;
+  clearQueue: () => void;
   clear: () => void;
 }
 
@@ -127,6 +138,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   messages: [],
   agentStatus: 'unknown',
   waitingApproval: false,
+  activePrompt: null,
+  activePermission: null,
+  promptQueue: [],
+  sessionOwner: null,
   _counter: 0,
   _turnCounter: 0,
   _streamBuffer: '',
@@ -184,6 +199,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           );
           return {
             agentStatus: event.status,
+            waitingApproval: false,
+            activePrompt: null,
+            activePermission: null,
             messages: msgs,
             _streamingMsgIdByType: new Map<string, string>(),
           };
@@ -191,8 +209,56 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return { agentStatus: event.status };
       }
 
+      if (event.type === 'turn_boundary') {
+        if (event.direction === 'end') {
+          return {
+            agentStatus: 'idle',
+            waitingApproval: false,
+            activePrompt: null,
+            activePermission: null,
+          };
+        }
+        return state;
+      }
+
       if (event.type === 'waiting_approval') {
         return { waitingApproval: true };
+      }
+
+      if (event.type === 'permission_request') {
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        return {
+          _counter: newCounter,
+          waitingApproval: true,
+          activePermission: event,
+          messages: [
+            ...state.messages,
+            {
+              id,
+              turnId: tid,
+              role: 'system' as const,
+              kind: 'chat' as const,
+              content: event.description || `Permission requested: ${event.action}`,
+              timestamp: ts,
+              eventType: 'permission_request',
+              meta: {
+                requestId: event.requestId,
+                tool: event.tool,
+                action: event.action,
+                description: event.description,
+              },
+              itemId,
+            },
+          ],
+        };
+      }
+
+      if (event.type === 'permission_response') {
+        return {
+          waitingApproval: false,
+          activePermission: null,
+        };
       }
 
       if (event.type === 'chat_message') {
@@ -525,6 +591,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         const id = `m-${newCounter}`;
         return {
           _counter: newCounter,
+          activePrompt: event,
           messages: [
             ...state.messages,
             {
@@ -646,7 +713,34 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   setStatus: (status) => set({ agentStatus: status }),
 
+  setSessionOwner: (owner) => set({ sessionOwner: owner }),
+
   setWaitingApproval: (waiting) => set({ waitingApproval: waiting }),
+
+  setActivePrompt: (prompt) => set({ activePrompt: prompt }),
+
+  setActivePermission: (perm) => set({ activePermission: perm }),
+
+  enqueuePrompt: (prompt) => {
+    if (!prompt.trim()) return;
+    set((s) => ({ promptQueue: [...s.promptQueue, prompt.trim()] }));
+  },
+
+  dequeuePrompt: () => {
+    const queue = get().promptQueue;
+    if (queue.length === 0) return undefined;
+    const [first, ...rest] = queue;
+    set({ promptQueue: rest });
+    return first;
+  },
+
+  removeQueuedPrompt: (index) => {
+    set((s) => ({ promptQueue: s.promptQueue.filter((_, i) => i !== index) }));
+  },
+
+  clearQueue: () => {
+    set({ promptQueue: [] });
+  },
 
   clear: () => {
     const s = get();
@@ -657,6 +751,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       messages: [],
       agentStatus: 'unknown',
       waitingApproval: false,
+      activePrompt: null,
+      activePermission: null,
+      promptQueue: [],
+      sessionOwner: null,
       _counter: 0,
       _turnCounter: 0,
       _streamBuffer: '',

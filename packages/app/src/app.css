@@ -1,78 +1,231 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import 'tailwindcss';
-@import '@heroui/styles';
 
 /* ============================================
-   Baton Design System — Notion-inspired
+   Baton Design System — Geist
+   Faithful implementation of Vercel's Geist spec
+   (design.md.1 = Light, design.dark.md = Dark)
    ============================================ */
 
-/* Fonts */
-
-@theme {
-  /* Notion-inspired color palette */
-
-  /* Surface levels (light) */
-  --color-surface-0: #ffffff;
-  --color-surface-50: #fafaf9;
-  --color-surface-100: #f5f5f4;
-  --color-surface-200: #e7e5e4;
-  --color-surface-300: #d6d3d1;
-  --color-surface-400: #a8a29e;
-  --color-surface-500: #78716c;
-  --color-surface-600: #57534e;
-  --color-surface-700: #44403c;
-  --color-surface-800: #292524;
-  --color-surface-900: #1c1917;
-  --color-surface-950: #0c0a09;
-
-  /* Primary (Notion blue) */
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #2383e2;
-  --color-primary-600: #1d4ed8;
-  --color-primary-700: #1e40af;
-  --color-primary-800: #1e3a8a;
-  --color-primary-900: #1e3a8a;
-
-  /* Semantic colors */
-  --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
-  --color-success-400: #22c55e;
-  --color-success-500: #16a34a;
-  --color-success-600: #15803d;
-
-  --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
-  --color-warning-400: #f59e0b;
-  --color-warning-500: #d97706;
-  --color-warning-600: #b45309;
-
-  --color-danger-50: #fef2f2;
-  --color-danger-100: #fee2e2;
-  --color-danger-400: #f87171;
-  --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
-  --color-danger-700: #b91c1c;
-
-  /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
-
-  /* Spacing */
-  --spacing-sidebar: 240px;
-
-  /* Border radius (Notion uses subtle rounding) */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+/* Geist variable fonts (self-hosted woff2; the `geist` npm pkg is Next-only) */
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/fonts/GeistSans-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMono-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
-/* Dark mode support */
+/* ──────────────────────────────────────────────
+   Theme tokens. Tailwind v4 generates utilities
+   from every --color-*, so e.g. --color-geist-gray-500
+   yields bg-/text-/border-geist-gray-500.
+   Values default to the LIGHT theme; the .dark
+   block below overrides the same custom properties
+   at runtime (no class-name change needed).
+   ────────────────────────────────────────────── */
+@theme {
+  /* --- Neutral surfaces --- */
+  --color-geist-background-100: #ffffff; /* primary page/card surface */
+  --color-geist-background-200: #fafafa; /* subtle separation */
+
+  /* --- Gray (solid, for text & opaque fills) --- */
+  --color-geist-gray-100: #f2f2f2;
+  --color-geist-gray-200: #ebebeb;
+  --color-geist-gray-300: #e6e6e6;
+  --color-geist-gray-400: #eaeaea;
+  --color-geist-gray-500: #c9c9c9;
+  --color-geist-gray-600: #a8a8a8;
+  --color-geist-gray-700: #8f8f8f;
+  --color-geist-gray-800: #7d7d7d;
+  --color-geist-gray-900: #4d4d4d;
+  --color-geist-gray-1000: #171717;
+
+  /* --- Gray alpha (translucent, for borders/dividers/overlays) --- */
+  --color-geist-gray-alpha-100: #0000000d;
+  --color-geist-gray-alpha-200: #00000015;
+  --color-geist-gray-alpha-300: #0000001a;
+  --color-geist-gray-alpha-400: #00000014;
+  --color-geist-gray-alpha-500: #00000036;
+  --color-geist-gray-alpha-600: #0000003d;
+  --color-geist-gray-alpha-700: #00000070;
+  --color-geist-gray-alpha-800: #00000082;
+  --color-geist-gray-alpha-900: #000000b3;
+  --color-geist-gray-alpha-1000: #000000e8;
+
+  /* --- Blue (success, links, focus) --- */
+  --color-geist-blue-100: #f0f7ff;
+  --color-geist-blue-200: #e9f4ff;
+  --color-geist-blue-300: #dfefff;
+  --color-geist-blue-400: #cae7ff;
+  --color-geist-blue-500: #94ccff;
+  --color-geist-blue-600: #48aeff;
+  --color-geist-blue-700: #006bff;
+  --color-geist-blue-800: #0059ec;
+  --color-geist-blue-900: #005ff2;
+  --color-geist-blue-1000: #002359;
+
+  /* --- Red (errors) --- */
+  --color-geist-red-100: #ffeeef;
+  --color-geist-red-200: #ffe8ea;
+  --color-geist-red-300: #ffe3e4;
+  --color-geist-red-400: #ffd7d6;
+  --color-geist-red-500: #ffb1b3;
+  --color-geist-red-600: #ff676d;
+  --color-geist-red-700: #fc0035;
+  --color-geist-red-800: #ea001d;
+  --color-geist-red-900: #d8001b;
+  --color-geist-red-1000: #47000c;
+
+  /* --- Amber (warnings) --- */
+  --color-geist-amber-100: #fff6de;
+  --color-geist-amber-200: #fff4cf;
+  --color-geist-amber-300: #fff1c1;
+  --color-geist-amber-400: #ffdc73;
+  --color-geist-amber-500: #ffc543;
+  --color-geist-amber-600: #ffa600;
+  --color-geist-amber-700: #ffae00;
+  --color-geist-amber-800: #ff9300;
+  --color-geist-amber-900: #aa4d00;
+  --color-geist-amber-1000: #561900;
+
+  /* --- Green (success) --- */
+  --color-geist-green-100: #ecfdec;
+  --color-geist-green-200: #e5fce7;
+  --color-geist-green-300: #d3fad1;
+  --color-geist-green-400: #b9f5bc;
+  --color-geist-green-500: #82eb8d;
+  --color-geist-green-600: #4ce15e;
+  --color-geist-green-700: #28a948;
+  --color-geist-green-800: #279141;
+  --color-geist-green-900: #107d32;
+  --color-geist-green-1000: #003a00;
+
+  /* --- Teal --- */
+  --color-geist-teal-100: #defffb;
+  --color-geist-teal-200: #ddfef6;
+  --color-geist-teal-300: #ccf9f1;
+  --color-geist-teal-400: #b1f7ec;
+  --color-geist-teal-500: #52f0db;
+  --color-geist-teal-600: #00e3c4;
+  --color-geist-teal-700: #00ac96;
+  --color-geist-teal-800: #00927f;
+  --color-geist-teal-900: #007f70;
+  --color-geist-teal-1000: #003f34;
+
+  /* --- Purple --- */
+  --color-geist-purple-100: #faf0ff;
+  --color-geist-purple-200: #f9f0ff;
+  --color-geist-purple-300: #f6e8ff;
+  --color-geist-purple-400: #f2d9ff;
+  --color-geist-purple-500: #dfa7ff;
+  --color-geist-purple-600: #c979ff;
+  --color-geist-purple-700: #a000f8;
+  --color-geist-purple-800: #8500d1;
+  --color-geist-purple-900: #7d00cc;
+  --color-geist-purple-1000: #2f004e;
+
+  /* --- Pink --- */
+  --color-geist-pink-100: #ffe8f6;
+  --color-geist-pink-200: #ffe8f3;
+  --color-geist-pink-300: #ffdfeb;
+  --color-geist-pink-400: #ffd3e1;
+  --color-geist-pink-500: #fdb3cc;
+  --color-geist-pink-600: #f97ea7;
+  --color-geist-pink-700: #f22782;
+  --color-geist-pink-800: #e4106e;
+  --color-geist-pink-900: #c41562;
+  --color-geist-pink-1000: #460523;
+
+  /* --- Typography --- */
+  --font-sans: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* --- Radius (Geist: 6/12/16) --- */
+  --radius-sm: 6px; /* everyday surfaces & controls */
+  --radius-md: 12px; /* menus & modals */
+  --radius-lg: 16px; /* fullscreen surfaces */
+
+  /* --- Elevation (Light theme) --- */
+  --shadow-raised: 0 2px 2px rgba(0, 0, 0, 0.04);
+  --shadow-popover: 0 1px 1px rgba(0, 0, 0, 0.02), 0 4px 8px -4px rgba(0, 0, 0, 0.04),
+    0 16px 24px -8px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 1px 1px rgba(0, 0, 0, 0.02), 0 8px 16px -4px rgba(0, 0, 0, 0.04),
+    0 24px 32px -8px rgba(0, 0, 0, 0.06);
+
+  /* --- Motion --- */
+  --ease-geist: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* ──────────────────────────────────────────────
+   Dark theme overrides — same token names, new
+   values. Re-declared as plain custom properties
+   on .dark so utilities flip automatically.
+   ────────────────────────────────────────────── */
+.dark {
+  --color-geist-background-100: #000000;
+  --color-geist-background-200: #0a0a0a;
+
+  --color-geist-gray-100: #1a1a1a;
+  --color-geist-gray-200: #1f1f1f;
+  --color-geist-gray-300: #292929;
+  --color-geist-gray-400: #2e2e2e;
+  --color-geist-gray-500: #454545;
+  --color-geist-gray-600: #878787;
+  --color-geist-gray-700: #8f8f8f;
+  --color-geist-gray-800: #7d7d7d;
+  --color-geist-gray-900: #a0a0a0;
+  --color-geist-gray-1000: #ededed;
+
+  --color-geist-gray-alpha-100: #ffffff12;
+  --color-geist-gray-alpha-200: #ffffff17;
+  --color-geist-gray-alpha-300: #ffffff21;
+  --color-geist-gray-alpha-400: #ffffff24;
+  --color-geist-gray-alpha-500: #ffffff3d;
+  --color-geist-gray-alpha-600: #ffffff82;
+  --color-geist-gray-alpha-700: #ffffff8a;
+  --color-geist-gray-alpha-800: #ffffff78;
+  --color-geist-gray-alpha-900: #ffffff9c;
+  --color-geist-gray-alpha-1000: #ffffffeb;
+
+  --color-geist-blue-600: #0090ff;
+  --color-geist-blue-700: #006efe;
+  --color-geist-blue-900: #47a8ff;
+  --color-geist-blue-1000: #eaf6ff;
+
+  --color-geist-red-600: #f32e40;
+  --color-geist-red-900: #ff565f;
+  --color-geist-red-1000: #ffe9ed;
+
+  --color-geist-amber-600: #ed9a00;
+  --color-geist-amber-1000: #fff3d5;
+
+  --color-geist-green-600: #00952d;
+  --color-geist-green-900: #00ca50;
+  --color-geist-green-1000: #d8ffe4;
+
+  --color-geist-teal-600: #009e86;
+  --color-geist-teal-900: #00cfb7;
+  --color-geist-teal-1000: #cbfff5;
+
+  --color-geist-purple-600: #9440d5;
+  --color-geist-purple-900: #c472fb;
+  --color-geist-purple-1000: #fbecff;
+
+  --color-geist-pink-600: #ba0056;
+  --color-geist-pink-900: #ff4d8d;
+  --color-geist-pink-1000: #ffe9f4;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.16);
+}
 
 @layer base {
   :root {
@@ -82,32 +235,26 @@
   .dark {
     color-scheme: dark;
   }
-}
 
-/* ============================================
-   Base styles — Notion minimal aesthetic
-   ============================================ */
-
-@layer base {
   html {
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-surface-50 text-surface-900 antialiased;
+    @apply bg-geist-background-200 text-geist-gray-1000;
     font-family: var(--font-sans);
-    line-height: 1.6;
   }
 
-  .dark body,
-  .dark {
-    @apply bg-surface-950 text-surface-100;
+  .dark body {
+    @apply bg-geist-background-100 text-geist-gray-1000;
   }
 
   /* Minimal scrollbar */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -115,119 +262,103 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-300 rounded;
+    @apply bg-geist-gray-alpha-500;
     border: 2px solid transparent;
     background-clip: padding-box;
+    border-radius: var(--radius-sm);
   }
 
-  .dark ::-webkit-scrollbar-thumb {
-    @apply bg-surface-700;
-  }
-
-  /* Links */
   a {
-    @apply text-primary-500 hover:text-primary-600;
+    @apply text-geist-blue-700 hover:text-geist-blue-800;
   }
 
   .dark a {
-    @apply text-primary-400 hover:text-primary-300;
+    @apply text-geist-blue-900 hover:text-geist-blue-600;
   }
 
-  /* Code blocks */
-  code, pre {
+  code,
+  pre {
     font-family: var(--font-mono);
   }
-}
 
-/* ============================================
-   Notion-style components
-   ============================================ */
-
-@layer components {
-  .notion-card-hover:hover {
-    @apply border-surface-300 dark:border-surface-700;
+  /* Tabular figures for data alignment */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 /* ============================================
-   Terminal themes (light/dark)
+   Utilities — Geist focus ring & motion easing
    ============================================ */
 
-/* Light terminal (Notion-inspired) */
-:root {
-  --terminal-bg: #fafaf9;
-  --terminal-fg: #1c1917;
-  --terminal-cursor: #2383e2;
-  --terminal-selection: rgba(35, 131, 226, 0.2);
-  --terminal-ansi-black: #78716c;
-  --terminal-ansi-red: #dc2626;
-  --terminal-ansi-green: #16a34a;
-  --terminal-ansi-yellow: #ca8a04;
-  --terminal-ansi-blue: #2383e2;
-  --terminal-ansi-magenta: #9333ea;
-  --terminal-ansi-cyan: #0891b2;
-  --terminal-ansi-white: #292524;
-  --terminal-ansi-bright-black: #a8a29e;
-  --terminal-ansi-bright-red: #ef4444;
-  --terminal-ansi-bright-green: #22c55e;
-  --terminal-ansi-bright-yellow: #eab308;
-  --terminal-ansi-bright-blue: #3b82f6;
-  --terminal-ansi-bright-magenta: #a855f7;
-  --terminal-ansi-bright-cyan: #06b6d4;
-  --terminal-ansi-bright-white: #1c1917;
-}
-
-/* Dark terminal */
-.dark {
-  --terminal-bg: #191919;
-  --terminal-fg: #e8e8e8;
-  --terminal-cursor: #4193ef;
-  --terminal-selection: rgba(65, 147, 239, 0.3);
-  --terminal-ansi-black: #383838;
-  --terminal-ansi-red: #f87171;
-  --terminal-ansi-green: #4ade80;
-  --terminal-ansi-yellow: #fbbf24;
-  --terminal-ansi-blue: #60a5fa;
-  --terminal-ansi-magenta: #c084fc;
-  --terminal-ansi-cyan: #22d3ee;
-  --terminal-ansi-white: #e8e8e8;
-  --terminal-ansi-bright-black: #6b6b6b;
-  --terminal-ansi-bright-red: #fca5a5;
-  --terminal-ansi-bright-green: #86efac;
-  --terminal-ansi-bright-yellow: #fcd34d;
-  --terminal-ansi-bright-blue: #93c5fd;
-  --terminal-ansi-bright-magenta: #d8b4fe;
-  --terminal-ansi-bright-cyan: #a5f3fc;
-  --terminal-ansi-bright-white: #ffffff;
+/* Two-layer focus ring: 2px surface gap + 2px blue-700 */
+@utility focus-ring {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--color-geist-background-100),
+    0 0 0 4px var(--color-geist-blue-700);
 }
 
 /* ============================================
-   Animations — minimal, Notion-like
+   Animations — short, physical, only when useful
    ============================================ */
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @utility animate-fade-in {
-  animation: fade-in 0.15s ease-out;
+  animation: fade-in 0.15s var(--ease-geist);
 }
 
 @utility animate-slide-up {
-  animation: slide-up 0.15s ease-out;
+  animation: slide-up 0.15s var(--ease-geist);
 }
 
 @utility animate-pulse-dot {
   animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* ============================================
+   Terminal themes
+   ============================================ */
+
+:root {
+  --terminal-bg: var(--color-geist-background-200);
+  --terminal-fg: var(--color-geist-gray-1000);
+  --terminal-cursor: var(--color-geist-blue-700);
+  --terminal-selection: color-mix(in srgb, var(--color-geist-blue-700) 20%, transparent);
+}
+
+.dark {
+  --terminal-bg: #191919;
+  --terminal-fg: #e8e8e8;
+  --terminal-cursor: #47a8ff;
+  --terminal-selection: rgba(71, 168, 255, 0.3);
 }

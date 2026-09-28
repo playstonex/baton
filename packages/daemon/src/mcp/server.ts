@@ -20,13 +20,16 @@ function registerTool(server: McpServer, tool: BuiltTool, context: ToolContext):
   );
 }
 
-export function createMcpServer(agentManager: AgentManager): McpServer {
+export function createMcpServer(
+  agentManager: AgentManager,
+  onAgentFinished?: (sessionId: string, status: string) => void,
+): McpServer {
   const server = new McpServer({
     name: 'baton-daemon',
     version: '0.1.0',
   });
 
-  const context: ToolContext = { agentManager };
+  const context: ToolContext = { agentManager, onAgentFinished };
 
   const allTools = [...agentTools, ...worktreeTools, ...providerTools];
   for (const tool of allTools) {
@@ -62,8 +65,11 @@ async function connectExternalMcpServers(server: McpServer): Promise<void> {
   }
 }
 
-export async function startMcpServer(agentManager: AgentManager): Promise<void> {
-  const server = createMcpServer(agentManager);
+export async function startMcpServer(
+  agentManager: AgentManager,
+  onAgentFinished?: (sessionId: string, status: string) => void,
+): Promise<void> {
+  const server = createMcpServer(agentManager, onAgentFinished);
   await connectExternalMcpServers(server);
   const transport = new StdioServerTransport();
   await server.connect(transport);

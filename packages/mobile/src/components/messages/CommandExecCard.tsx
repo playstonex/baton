@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
 import { TypingIndicator } from './TypingIndicator';
 import { humanizeCommand } from './CommandHumanizer';
+import { FontFamily } from '../../constants/theme';
 
 interface Props {
   command: string;
@@ -141,7 +142,7 @@ const styles = StyleSheet.create({
   },
   cmdText: {
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     lineHeight: 15,
     opacity: 0.7,
   },

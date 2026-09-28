@@ -3,11 +3,7 @@ import { randomInt } from 'node:crypto';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET ?? (() => {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('JWT_SECRET environment variable is required in production');
-    }
-    console.warn('[gateway] JWT_SECRET not set — using dev-only secret. Set JWT_SECRET for production.');
-    return 'dev-secret-do-not-use-in-production';
+    throw new Error('JWT_SECRET environment variable is required');
   })(),
 );
 

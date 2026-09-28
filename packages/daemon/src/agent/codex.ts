@@ -3,29 +3,6 @@ import { BaseAgentAdapter } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 import { execSync } from 'node:child_process';
 
-function checkCodexAuth(): { ok: boolean; message: string } {
-  try {
-    // codex stores config in ~/.codex/config.toml and auth tokens
-    const { readFileSync } = require('node:fs') as typeof import('node:fs');
-    const home = process.env.HOME ?? '~';
-    const configPath = `${home}/.codex/config.toml`;
-    readFileSync(configPath, 'utf-8');
-    return { ok: true, message: '' };
-  } catch {
-    try {
-      // Try running codex with a quick non-interactive check
-      execSync('codex exec --help', { stdio: 'pipe', timeout: 5000 });
-      return { ok: true, message: '' };
-    } catch {
-      return {
-        ok: false,
-        message:
-          'codex is not logged in. Run `codex login` in your terminal first, or switch to "Claude Code (SDK)" mode.',
-      };
-    }
-  }
-}
-
 export class CodexAdapter extends BaseAgentAdapter {
   readonly name = 'Codex';
   readonly agentType = 'codex' as const;
@@ -40,10 +17,6 @@ export class CodexAdapter extends BaseAgentAdapter {
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
-    const auth = checkCodexAuth();
-    if (!auth.ok) {
-      throw new Error(auth.message);
-    }
     return {
       command: 'codex',
       args: config.args ?? [],

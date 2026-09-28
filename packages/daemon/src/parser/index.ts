@@ -1,71 +1,85 @@
 import type { ParsedEvent } from '@baton/shared';
 import { stripAnsi } from './ansi.js';
 
+let _callIdCounter = 0;
+function nextCallId(): string {
+  return `call_${++_callIdCounter}_${Date.now().toString(36)}`;
+}
+
+let _turnIdCounter = 0;
+function nextTurnId(): string {
+  return `turn_${++_turnIdCounter}_${Date.now().toString(36)}`;
+}
+
+let _requestCounter = 0;
+function nextRequestId(): string {
+  return `perm_${++_requestCounter}_${Date.now().toString(36)}`;
+}
+
 // Claude Code interactive mode output patterns
 const PATTERNS = {
-  // "● Thinking..." or "⏺ Thinking..."
   thinking: /[●⏺◉○]\s*(?:Thinking|Analyzing|Processing)/i,
 
-  // Tool use indicators — Claude Code shows these as structured blocks
-  // e.g., "⏺ Read file: src/index.ts" or "● Edit src/index.ts"
-  toolUse: /(?:⏺|●|▸|→)\s*(Read|Write|Edit|Create|Bash|Glob|Grep|MultiEdit|TodoRead|TodoWrite|WebFetch|Task|LS| NotebookEdit|ServerStatus|Ask|ToolUse)\b/i,
+  toolUse: /(?:⏺|●|▸|→)\s*(Read|Write|Edit|Create|Bash|Glob|Grep|MultiEdit|TodoRead|TodoWrite|WebFetch|Task|LS|NotebookEdit|ServerStatus|Ask|ToolUse)\b/i,
 
-  // File path in tool use
   filePath: /(?:Read|Write|Edit|Create|MultiEdit)\s+(?:file:\s*)?(`[^`]+`|["'[\s]([^\s"'`]+\.\w+))/i,
 
-  // Command execution in Bash
   bashCommand: /(?:Bash|Command)\s*\n?\s*(?:`([^`]+)`|$ (.+)$)/m,
 
-  // Permission request — "Allow this action?"
-  permissionRequest: /(?:Allow|Deny|approve|reject)\s+(?:this\s+)?action/i,
+  permissionRequest: /(?:Allow|approve)\s+(?:this\s+)?(?:action|tool use|command)\??/i,
 
-  // Waiting for input — ">" prompt
+  permissionPromptLine: /(?:\[[YyNn]\]|\(y\/n\)|→\s*(?:Yes|No|Allow|Deny)|Always allow|Allow (?:once|always)|Don't ask again)/i,
+
   waitingInput: /(?:^|>)\s*$/m,
 
-  // Error messages
   error: /(?:Error|error|ERROR)[:\s]/,
 
-  // Completion — "Claude Code finished" or response text after tool use
   completion: /(?:completed|finished|done)/i,
 
-  // Diff markers
   diffStart: /^[-+@]{1,3}\s/m,
 
-  // File changes in tool output
   fileChange: /(?:Updating|Creating|Deleting|Modified)\s+([^\s]+)/i,
 } as const;
 
 export interface ParserState {
   inToolUse: boolean;
   currentTool: string | null;
+  currentCallId: string | null;
+  toolStartTime: number | null;
   buffer: string;
   lastStatus: string;
+  inTurn: boolean;
+  currentTurnId: string | null;
 }
 
 export class ClaudeCodeParser {
   private state: ParserState = {
     inToolUse: false,
     currentTool: null,
+    currentCallId: null,
+    toolStartTime: null,
     buffer: '',
     lastStatus: 'raw_output',
+    inTurn: false,
+    currentTurnId: null,
   };
 
   parse(rawChunk: string): ParsedEvent[] {
     const events: ParsedEvent[] = [];
     const now = Date.now();
 
-    // Keep raw for terminal display, parse cleaned text
     const clean = stripAnsi(rawChunk);
     if (!clean) return events;
 
-    // Buffer for multi-line pattern matching
     this.state.buffer += clean;
     if (this.state.buffer.length > 50000) {
       this.state.buffer = this.state.buffer.slice(-25000);
     }
 
-    // 1. Thinking/Processing status
+    // 1. Thinking/Processing — marks turn start
     if (PATTERNS.thinking.test(clean)) {
+      this.closeToolUse(events, now);
+      this.startTurn(events, now);
       this.state.inToolUse = false;
       events.push({ type: 'thinking', content: clean, timestamp: now });
       events.push({ type: 'status_change', status: 'thinking', timestamp: now });
@@ -73,28 +87,45 @@ export class ClaudeCodeParser {
       return events;
     }
 
-    // 2. Tool use detection
+    // 2. Tool use detection — emit tool_call_start alongside existing tool_use
     const toolMatch = clean.match(PATTERNS.toolUse);
     if (toolMatch) {
+      this.closeToolUse(events, now);
+      this.startTurn(events, now);
+
       const toolName = toolMatch[1];
+      const callId = nextCallId();
       this.state.inToolUse = true;
       this.state.currentTool = toolName;
+      this.state.currentCallId = callId;
+      this.state.toolStartTime = now;
+
+      const args = this.extractToolArgs(clean, toolName);
+
       events.push({
         type: 'tool_use',
         tool: toolName,
-        args: this.extractToolArgs(clean, toolName),
+        args,
         timestamp: now,
       });
+
+      events.push({
+        type: 'tool_call_start',
+        callId,
+        tool: toolName,
+        title: `${toolName} ${args.filePath ?? args.command ?? ''}`.trim(),
+        args,
+        timestamp: now,
+      });
+
       events.push({ type: 'status_change', status: 'executing', timestamp: now });
       this.state.lastStatus = 'executing';
 
-      // Try to extract file path from tool use
       const fileMatch = clean.match(PATTERNS.filePath);
       if (fileMatch) {
         const filePath = fileMatch[1] || fileMatch[2];
         if (filePath) {
-          const changeType =
-            toolName === 'Create' ? 'create' : toolName === 'Write' ? 'modify' : 'modify';
+          const changeType = toolName === 'Create' ? 'create' : 'modify';
           events.push({
             type: 'file_change',
             path: filePath.replace(/^`|`$/g, '').trim(),
@@ -120,8 +151,23 @@ export class ClaudeCodeParser {
       }
     }
 
-    // 4. Permission request — waiting for user input
-    if (PATTERNS.permissionRequest.test(clean)) {
+    // 4. Permission request — emit permission_request event
+    if (PATTERNS.permissionRequest.test(clean) || PATTERNS.permissionPromptLine.test(clean)) {
+      this.closeToolUse(events, now);
+
+      const toolName = this.state.currentTool ?? 'unknown';
+      const requestId = nextRequestId();
+      const promptText = clean.trim().split('\n')[0] ?? '';
+
+      events.push({
+        type: 'permission_request',
+        requestId,
+        tool: toolName,
+        action: toolName,
+        description: promptText,
+        timestamp: now,
+      });
+
       events.push({ type: 'status_change', status: 'waiting_input', timestamp: now });
       this.state.lastStatus = 'waiting_input';
       return events;
@@ -129,6 +175,8 @@ export class ClaudeCodeParser {
 
     // 5. Error detection
     if (PATTERNS.error.test(clean)) {
+      this.closeToolUse(events, now);
+      this.endTurn(events, now, 'failed');
       events.push({ type: 'error', message: clean, timestamp: now });
       return events;
     }
@@ -144,9 +192,10 @@ export class ClaudeCodeParser {
       return events;
     }
 
-    // 7. Idle — response text (not tool use, not thinking)
+    // 7. Idle — response text (end of tool use and turn)
     if (this.state.inToolUse && clean.length > 0 && !PATTERNS.toolUse.test(clean)) {
-      // After tool use, if we see normal text, agent is in response/idle mode
+      this.closeToolUse(events, now);
+      this.endTurn(events, now, 'completed');
       this.state.inToolUse = false;
       events.push({ type: 'status_change', status: 'idle', timestamp: now });
       this.state.lastStatus = 'raw_output';
@@ -158,6 +207,47 @@ export class ClaudeCodeParser {
     }
 
     return events;
+  }
+
+  private closeToolUse(events: ParsedEvent[], now: number): void {
+    if (this.state.currentCallId && this.state.toolStartTime) {
+      events.push({
+        type: 'tool_call_end',
+        callId: this.state.currentCallId,
+        success: true,
+        durationMs: now - this.state.toolStartTime,
+        timestamp: now,
+      });
+    }
+    this.state.currentCallId = null;
+    this.state.toolStartTime = null;
+  }
+
+  private startTurn(events: ParsedEvent[], now: number): void {
+    if (!this.state.inTurn) {
+      this.state.inTurn = true;
+      this.state.currentTurnId = nextTurnId();
+      events.push({
+        type: 'turn_boundary',
+        turnId: this.state.currentTurnId,
+        direction: 'start',
+        timestamp: now,
+      });
+    }
+  }
+
+  private endTurn(events: ParsedEvent[], now: number, status: 'completed' | 'failed' | 'cancelled'): void {
+    if (this.state.inTurn) {
+      events.push({
+        type: 'turn_boundary',
+        turnId: this.state.currentTurnId!,
+        direction: 'end',
+        status,
+        timestamp: now,
+      });
+      this.state.inTurn = false;
+      this.state.currentTurnId = null;
+    }
   }
 
   private extractToolArgs(text: string, tool: string): Record<string, unknown> {
@@ -185,8 +275,12 @@ export class ClaudeCodeParser {
     this.state = {
       inToolUse: false,
       currentTool: null,
+      currentCallId: null,
+      toolStartTime: null,
       buffer: '',
       lastStatus: 'raw_output',
+      inTurn: false,
+      currentTurnId: null,
     };
   }
 }

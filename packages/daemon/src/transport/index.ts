@@ -3,7 +3,14 @@ import type {
   ClientMessage,
   DaemonMessage,
   ParsedEvent,
+  TerminalOutputMessage,
+  ParsedEventMessage,
+  StatusUpdateMessage,
 } from '@baton/shared';
+import { parseClientMessage } from '@baton/shared/protocol';
+import { SeqBuffer } from '@baton/shared/protocol';
+import { createWelcome, DEFAULT_SERVER_FEATURES } from '@baton/shared/protocol';
+import type { AccessMode } from '@baton/shared';
 
 type BunWebSocket = import('bun').ServerWebSocket<{ clientId: string }>;
 
@@ -11,6 +18,9 @@ interface Client {
   id: string;
   ws: BunWebSocket;
   subscriptions: Set<string>;
+  /** Capabilities advertised by the client in its `hello` message. Undefined
+   * until (and unless) the client sends hello. COMPAT(features). */
+  capabilities?: Record<string, boolean>;
 }
 
 const OPEN = 1;
@@ -20,17 +30,38 @@ export class Transport {
   private clients = new Map<string, Client>();
   private registeredSessions = new Set<string>();
   private sessionUnsubs = new Map<string, { unsubRaw: () => void; unsubEvent: () => void }>();
+  private sessionOwners = new Map<string, string>();
+  private localClientId: string | null = null;
+  private pendingPermissions = new Map<
+    string,
+    { sessionId: string; resolve: (response: string) => void }
+  >();
+  private accessModes = new Map<string, AccessMode>();
+  /** Per-session seq buffers for resume-after-reconnect. COMPAT(sessionResume). */
+  private seqBuffers = new Map<string, SeqBuffer>();
+  private onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
+  private onPushTokenUnregister?: (clientId: string) => void;
+  private onAccessModeChange?: (mode: AccessMode) => void;
 
   constructor(
     private agentManager: AgentManager,
     private port: number,
-  ) {}
+    opts?: {
+      onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
+      onPushTokenUnregister?: (clientId: string) => void;
+      onAccessModeChange?: (mode: AccessMode) => void;
+    },
+  ) {
+    this.onPushTokenRegister = opts?.onPushTokenRegister;
+    this.onPushTokenUnregister = opts?.onPushTokenUnregister;
+    this.onAccessModeChange = opts?.onAccessModeChange;
+  }
 
   start(): void {
     const clients = this.clients;
     const self = this;
 
-    const hostname = process.env.HOST || '0.0.0.0';
+    const hostname = process.env.HOST || '::';
 
     this.server = Bun.serve<{ clientId: string }>({
       fetch(req, server) {
@@ -45,19 +76,53 @@ export class Transport {
           ws.data = { clientId };
           const client: Client = { id: clientId, ws, subscriptions: new Set() };
           clients.set(clientId, client);
+          if (!self.localClientId) self.localClientId = clientId;
+          console.log(`[WS] Client connected: ${clientId.slice(0, 8)} (total: ${clients.size})`);
+          // Send a welcome carrying server version + features, so capability
+          // gating works. Legacy clients swallow `welcome` (they only key off
+          // `agent_list`), so this is backward compatible. COMPAT(features).
+          self.sendWelcome(clientId);
           self.sendAgentList(clientId);
         },
         message(ws: import('bun').ServerWebSocket<{ clientId: string }>, message: string | Buffer) {
           const clientId = ws.data.clientId;
+          let parsed: unknown;
           try {
-            const msg = JSON.parse(message.toString()) as ClientMessage;
-            self.handleMessage(clientId, msg);
+            parsed = JSON.parse(message.toString());
           } catch {
-            self.send(clientId, { type: 'error', message: 'Invalid message format' });
+            self.send(clientId, { type: 'error', message: 'Invalid JSON' });
+            return;
           }
+          // Boundary validation: reject malformed messages here rather than
+          // letting them crash deep inside the agent manager. Gracefully
+          // echoes back a structured error so the client can react.
+          const result = parseClientMessage(parsed);
+          if (!result.ok) {
+            self.send(clientId, { type: 'error', message: result.error, code: 'INVALID_MESSAGE' });
+            return;
+          }
+          self.handleMessage(clientId, result.value);
         },
         close(ws: import('bun').ServerWebSocket<{ clientId: string }>) {
-          clients.delete(ws.data.clientId);
+          const clientId = ws.data.clientId;
+          console.log(`[WS] Client disconnected: ${clientId.slice(0, 8)}`);
+          if (self.localClientId === clientId) {
+            const remaining = Array.from(clients.values()).filter((c) => c.id !== clientId);
+            self.localClientId = remaining[0]?.id ?? null;
+          }
+          for (const [sid, ownerId] of self.sessionOwners.entries()) {
+            if (ownerId === clientId) {
+              self.sessionOwners.delete(sid);
+              self.broadcast({
+                type: 'session_ownership',
+                sessionId: sid,
+                owner: 'local',
+                claimedBy: self.localClientId ?? '',
+              });
+            }
+          }
+          self.accessModes.delete(clientId);
+          clients.delete(clientId);
         },
       },
       hostname,
@@ -69,6 +134,16 @@ export class Transport {
 
   private handleMessage(clientId: string, msg: ClientMessage): void {
     switch (msg.type) {
+      case 'hello': {
+        // Client advertises its capabilities. Store for later gating. A
+        // client that never sends hello is treated as legacy (fail-open).
+        const client = this.clients.get(clientId);
+        if (client) {
+          client.capabilities = msg.capabilities as Record<string, boolean> | undefined;
+        }
+        break;
+      }
+
       case 'terminal_input': {
         try {
           this.agentManager.write(msg.sessionId, msg.data);
@@ -82,22 +157,25 @@ export class Transport {
       }
 
       case 'chat_input': {
-        console.log(`[baton] transport: chat_input session=${msg.sessionId.slice(0,8)} content="${msg.content.slice(0, 60)}" model=${msg.model ?? 'default'}`);
-        const ackId = msg.messageId;
         try {
-          if (msg.model) this.agentManager.setModel(msg.sessionId, msg.model);
           this.agentManager.chatWrite(msg.sessionId, msg.content);
-          console.log('[baton] transport: chatWrite succeeded');
-          if (ackId) {
-            this.send(clientId, { type: 'ack', status: 'ok', messageId: ackId });
+          if (msg.messageId) {
+            this.send(clientId, { type: 'ack', status: 'ok', messageId: msg.messageId });
           }
         } catch (err) {
-          const msg_err = err instanceof Error ? err.message : `Session ${msg.sessionId} not found`;
-          console.error('[baton] transport: chatWrite error:', msg_err);
-          if (ackId) {
-            this.send(clientId, { type: 'ack', status: 'error', messageId: ackId, error: msg_err });
+          if (msg.messageId) {
+            this.send(clientId, {
+              type: 'ack',
+              status: 'error',
+              messageId: msg.messageId,
+              error: err instanceof Error ? err.message : 'chatWrite failed',
+            });
+          } else {
+            this.send(clientId, {
+              type: 'error',
+              message: err instanceof Error ? err.message : 'chatWrite failed',
+            });
           }
-          this.send(clientId, { type: 'error', message: msg_err });
         }
         break;
       }
@@ -108,54 +186,76 @@ export class Transport {
         } catch (err) {
           this.send(clientId, {
             type: 'error',
-            message: err instanceof Error ? err.message : `Session ${msg.sessionId} not found`,
+            message: err instanceof Error ? err.message : 'steer failed',
           });
         }
         break;
       }
 
       case 'cancel_turn': {
-        this.agentManager.cancelTurn(msg.sessionId).catch((err) => {
+        try {
+          void this.agentManager.cancelTurn(msg.sessionId);
+        } catch (err) {
           this.send(clientId, {
             type: 'error',
-            message: err instanceof Error ? err.message : `Cancel failed for ${msg.sessionId}`,
+            message: err instanceof Error ? err.message : 'cancelTurn failed',
           });
-        });
+        }
         break;
       }
 
       case 'approve_input': {
-        this.agentManager.approve(msg.sessionId, msg.reason).catch((err) => {
+        try {
+          void this.agentManager.approve(msg.sessionId, msg.reason);
+        } catch (err) {
           this.send(clientId, {
             type: 'error',
-            message: err instanceof Error ? err.message : `Approve failed for ${msg.sessionId}`,
+            message: err instanceof Error ? err.message : 'approve failed',
           });
-        });
+        }
         break;
       }
 
       case 'reject_input': {
-        this.agentManager.reject(msg.sessionId, msg.reason).catch((err) => {
+        try {
+          void this.agentManager.reject(msg.sessionId, msg.reason);
+        } catch (err) {
           this.send(clientId, {
             type: 'error',
-            message: err instanceof Error ? err.message : `Reject failed for ${msg.sessionId}`,
+            message: err instanceof Error ? err.message : 'reject failed',
           });
-        });
+        }
         break;
       }
 
       case 'model_list_request': {
-        this.agentManager.listModels(msg.sessionId).then((models) => {
-          const selected = this.agentManager.getSelectedModel(msg.sessionId);
-          this.send(clientId, { type: 'model_list', sessionId: msg.sessionId, models, selected });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to list models' });
-        });
+        try {
+          void this.agentManager.listModels(msg.sessionId).then((models) => {
+            this.send(clientId, {
+              type: 'model_list',
+              sessionId: msg.sessionId,
+              models,
+              selected: this.agentManager.getSelectedModel(msg.sessionId),
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'listModels failed',
+          });
+        }
         break;
       }
 
       case 'model_select': {
-        this.agentManager.setModel(msg.sessionId, msg.model);
+        try {
+          this.agentManager.setModel(msg.sessionId, msg.model);
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setModel failed',
+          });
+        }
         break;
       }
 
@@ -163,7 +263,10 @@ export class Transport {
         try {
           this.agentManager.setReasoningEffort(msg.sessionId, msg.effort);
         } catch (err) {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to set reasoning effort' });
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setReasoningEffort failed',
+          });
         }
         break;
       }
@@ -172,7 +275,10 @@ export class Transport {
         try {
           this.agentManager.setThinkingConfig(msg.sessionId, msg.config);
         } catch (err) {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to set thinking config' });
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setThinkingConfig failed',
+          });
         }
         break;
       }
@@ -181,7 +287,10 @@ export class Transport {
         try {
           this.agentManager.setAccessMode(msg.sessionId, msg.mode);
         } catch (err) {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to set access mode' });
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setAccessMode failed',
+          });
         }
         break;
       }
@@ -190,77 +299,160 @@ export class Transport {
         try {
           this.agentManager.setServiceTier(msg.sessionId, msg.tier);
         } catch (err) {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to set service tier' });
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'setServiceTier failed',
+          });
         }
         break;
       }
 
       case 'git_branch_list_request': {
-        this.agentManager.listGitBranches(msg.sessionId).then((result) => {
-          this.send(clientId, { type: 'git_branch_list', sessionId: msg.sessionId, ...result });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to list git branches' });
-        });
+        try {
+          void this.agentManager
+            .listGitBranches(msg.sessionId)
+            .then(({ branches, currentBranch }) => {
+              this.send(clientId, {
+                type: 'git_branch_list',
+                sessionId: msg.sessionId,
+                branches,
+                currentBranch,
+              });
+            });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'listGitBranches failed',
+          });
+        }
         break;
       }
 
       case 'git_branch_select': {
         try {
-          this.agentManager.gitCheckout(msg.sessionId, msg.branch).then((result) => {
-            this.send(clientId, { type: 'git_result', sessionId: msg.sessionId, operation: 'checkout', ...result });
+          void this.agentManager.gitCheckout(msg.sessionId, msg.branch).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'checkout',
+              operation: 'checkout',
+              success: r.success,
+              error: r.error,
+            });
           });
         } catch (err) {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to switch branch' });
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitCheckout failed',
+          });
         }
         break;
       }
 
       case 'git_status_request': {
-        Promise.all([
-          this.agentManager.gitStatus(msg.sessionId),
-          this.agentManager.gitDiff(msg.sessionId),
-        ]).then(([status, diff]) => {
-          const projectPath = this.agentManager.getProjectPath(msg.sessionId);
-          this.send(clientId, { type: 'git_status', sessionId: msg.sessionId, status, diff, projectPath });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Failed to get git status' });
-        });
+        try {
+          void Promise.all([
+            this.agentManager.gitStatus(msg.sessionId),
+            this.agentManager.gitDiff(msg.sessionId),
+          ]).then(([status, diff]) => {
+            this.send(clientId, {
+              type: 'git_status',
+              sessionId: msg.sessionId,
+              status,
+              diff,
+              projectPath: this.agentManager.getProjectPath(msg.sessionId),
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitStatus failed',
+          });
+        }
         break;
       }
 
       case 'git_commit': {
-        this.agentManager.gitCommit(msg.sessionId, msg.message).then((result) => {
-          this.send(clientId, { type: 'git_result', sessionId: msg.sessionId, operation: 'commit', ...result });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Commit failed' });
-        });
+        try {
+          void this.agentManager.gitCommit(msg.sessionId, msg.message).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'commit',
+              operation: 'commit',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitCommit failed',
+          });
+        }
         break;
       }
 
       case 'git_push': {
-        this.agentManager.gitPush(msg.sessionId).then((result) => {
-          this.send(clientId, { type: 'git_result', sessionId: msg.sessionId, operation: 'push', ...result });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Push failed' });
-        });
+        try {
+          void this.agentManager.gitPush(msg.sessionId).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'push',
+              operation: 'push',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitPush failed',
+          });
+        }
         break;
       }
 
       case 'git_pull': {
-        this.agentManager.gitPull(msg.sessionId).then((result) => {
-          this.send(clientId, { type: 'git_result', sessionId: msg.sessionId, operation: 'pull', ...result });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Pull failed' });
-        });
+        try {
+          void this.agentManager.gitPull(msg.sessionId).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'pull',
+              operation: 'pull',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitPull failed',
+          });
+        }
         break;
       }
 
       case 'git_create_branch': {
-        this.agentManager.gitCreateBranch(msg.sessionId, msg.name).then((result) => {
-          this.send(clientId, { type: 'git_result', sessionId: msg.sessionId, operation: 'create_branch', ...result });
-        }).catch((err) => {
-          this.send(clientId, { type: 'error', message: err instanceof Error ? err.message : 'Branch creation failed' });
-        });
+        try {
+          void this.agentManager.gitCreateBranch(msg.sessionId, msg.name).then((r) => {
+            this.send(clientId, {
+              type: 'git_result',
+              sessionId: msg.sessionId,
+              action: 'create_branch',
+              operation: 'create_branch',
+              success: r.success,
+              error: r.error,
+            });
+          });
+        } catch (err) {
+          this.send(clientId, {
+            type: 'error',
+            message: err instanceof Error ? err.message : 'gitCreateBranch failed',
+          });
+        }
         break;
       }
 
@@ -284,6 +476,8 @@ export class Transport {
         if (!msg.sessionId) return;
         try {
           await this.agentManager.stop(msg.sessionId);
+          this.seqBuffers.get(msg.sessionId)?.clear();
+          this.seqBuffers.delete(msg.sessionId);
           this.broadcast({
             type: 'status_update',
             sessionId: msg.sessionId,
@@ -301,6 +495,73 @@ export class Transport {
       case 'attach_session': {
         if (!msg.sessionId) return;
         const client = this.clients.get(clientId);
+        if (!client) {
+          console.log(`[ATTACH] No client found for ${clientId.slice(0, 8)}`);
+          return;
+        }
+
+        if (!this.agentManager.get(msg.sessionId)) {
+          console.log(
+            `[ATTACH] Session not found: ${msg.sessionId.slice(0, 8)} (client: ${clientId.slice(0, 8)})`,
+          );
+          this.send(clientId, {
+            type: 'error',
+            message: `Session ${msg.sessionId} not found`,
+          });
+          return;
+        }
+
+        client.subscriptions.add(msg.sessionId);
+        this.ensureSessionRegistered(msg.sessionId);
+
+        try {
+          const history = this.agentManager.getDisplayHistory(msg.sessionId);
+          if (history.length > 0) {
+            this.send(clientId, {
+              type: 'history_replay',
+              sessionId: msg.sessionId,
+              output: history.join(''),
+            });
+          }
+
+          const events = this.agentManager.getEventHistory(msg.sessionId);
+          if (events.length > 0) {
+            this.send(clientId, {
+              type: 'event_history',
+              sessionId: msg.sessionId,
+              events,
+            });
+          }
+
+          const proc = this.agentManager.get(msg.sessionId);
+          if (proc) {
+            this.send(clientId, {
+              type: 'status_update',
+              sessionId: msg.sessionId,
+              status: proc.status,
+            });
+          }
+
+          const ownerId = this.sessionOwners.get(msg.sessionId);
+          if (ownerId) {
+            this.send(clientId, {
+              type: 'session_ownership',
+              sessionId: msg.sessionId,
+              owner: ownerId === this.localClientId ? 'local' : 'remote',
+              claimedBy: ownerId,
+            });
+          }
+        } catch (err) {
+          console.log(`[ATTACH] Error replaying history for ${msg.sessionId.slice(0, 8)}: ${err}`);
+        }
+        break;
+      }
+
+      case 'resume_session': {
+        // COMPAT(sessionResume): a reconnecting client that advertised the
+        // sessionResume capability asks to be caught up rather than full-replay.
+        if (!msg.sessionId) return;
+        const client = this.clients.get(clientId);
         if (!client) return;
 
         if (!this.agentManager.get(msg.sessionId)) {
@@ -314,41 +575,36 @@ export class Transport {
         client.subscriptions.add(msg.sessionId);
         this.ensureSessionRegistered(msg.sessionId);
 
-        try {
-          const proc = this.agentManager.get(msg.sessionId);
-          const currentStatus = proc?.status;
-
-          const history = this.agentManager.getOutputHistory(msg.sessionId);
-          for (const data of history) {
-            this.send(clientId, {
-              type: 'terminal_output',
-              sessionId: msg.sessionId,
-              data,
-            });
-          }
-
-          const events = this.agentManager.getEventHistory(msg.sessionId);
-          for (const event of events) {
-            if (event.type === 'waiting_approval' && currentStatus !== 'waiting_input') {
-              continue;
-            }
-            this.send(clientId, {
-              type: 'parsed_event',
-              sessionId: msg.sessionId,
-              event,
-            });
-          }
-
-          if (proc) {
-            this.send(clientId, {
-              type: 'status_update',
-              sessionId: msg.sessionId,
-              status: proc.status,
-            });
-          }
-        } catch {
-          // Session might not exist
+        const lastSeq = (msg.payload as { lastSeq?: number } | undefined)?.lastSeq ?? 0;
+        const buf = this.seqBuffers.get(msg.sessionId);
+        if (!buf) {
+          // Session registered but no buffer (shouldn't happen) — fall back.
+          this.send(clientId, {
+            type: 'resume_reply',
+            sessionId: msg.sessionId,
+            fromSeq: 0,
+            toSeq: 0,
+            currentSeq: 0,
+            gap: true,
+          });
+          return;
         }
+
+        const replay = buf.replay(lastSeq);
+        for (const m of replay.messages) {
+          const client2 = this.clients.get(clientId);
+          if (client2?.ws.readyState === OPEN) {
+            client2.ws.send(JSON.stringify(m));
+          }
+        }
+        this.send(clientId, {
+          type: 'resume_reply',
+          sessionId: msg.sessionId,
+          fromSeq: replay.fromSeq,
+          toSeq: replay.toSeq,
+          currentSeq: replay.currentSeq,
+          gap: replay.gap,
+        });
         break;
       }
 
@@ -369,37 +625,90 @@ export class Transport {
         }
         break;
       }
+
+      case 'claim_session': {
+        if (!msg.sessionId) return;
+        this.sessionOwners.set(msg.sessionId, clientId);
+        this.broadcast({
+          type: 'session_ownership',
+          sessionId: msg.sessionId,
+          owner: clientId === this.localClientId ? 'local' : 'remote',
+          claimedBy: clientId,
+        });
+        break;
+      }
+
+      case 'release_session': {
+        if (!msg.sessionId) return;
+        this.sessionOwners.delete(msg.sessionId);
+        this.broadcast({
+          type: 'session_ownership',
+          sessionId: msg.sessionId,
+          owner: 'local',
+          claimedBy: this.localClientId ?? clientId,
+        });
+        break;
+      }
+
+      case 'permission_response': {
+        // NOTE: effectively inert — nothing registers pendingPermissions, so this
+        // never writes. Real answers travel on other paths: SDK/ACP sessions via
+        // approve_input / reject_input, PTY sessions via a raw 'y'/'n'
+        // terminal_input from the client. Do NOT make this live without
+        // updating every client at once: current clients send permission_response
+        // TOGETHER with those paths, so wiring it would answer every prompt twice
+        // (and ACP's approve() would consume the NEXT pending request).
+        if (!msg.payload) return;
+        const { requestId, approved } = msg.payload as { requestId: string; approved: boolean };
+        const pending = this.pendingPermissions.get(requestId);
+        if (pending) {
+          this.agentManager.write(pending.sessionId, approved ? 'y\n' : 'n\n');
+          this.pendingPermissions.delete(requestId);
+        }
+        break;
+      }
+
+      case 'register_push_token': {
+        if (!msg.payload) return;
+        const { token, platform } = msg.payload as { token: string; platform: string };
+        this.onPushTokenRegister?.(clientId, token, platform);
+        break;
+      }
+
+      case 'unregister_push_token': {
+        this.onPushTokenUnregister?.(clientId);
+        break;
+      }
+
+      case 'set_access_mode': {
+        if (!msg.payload) return;
+        const { mode } = msg.payload as { mode: AccessMode };
+        this.accessModes.set(clientId, mode);
+        this.onAccessModeChange?.(mode);
+        this.broadcast({
+          type: 'access_mode',
+          mode,
+        } as DaemonMessage);
+        break;
+      }
     }
   }
 
   private ensureSessionRegistered(sessionId: string): void {
-    if (this.registeredSessions.has(sessionId)) return;
+    if (this.registeredSessions.has(sessionId)) {
+      return;
+    }
     this.registeredSessions.add(sessionId);
+    this.seqBuffers.set(sessionId, new SeqBuffer());
 
     const unsubRaw = this.agentManager.onRaw(sessionId, (data, sid) => {
       const msg: DaemonMessage = { type: 'terminal_output', sessionId: sid, data };
-      const payload = JSON.stringify(msg);
-      for (const client of this.clients.values()) {
-        if (client.subscriptions.has(sid) && client.ws.readyState === OPEN) {
-          client.ws.send(payload);
-        }
-      }
+      this.emitSequenced(sid, msg);
     });
 
     const unsubEvent = this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {
       const msg: DaemonMessage = { type: 'parsed_event', sessionId: sid, event };
-      const payload = JSON.stringify(msg);
-      let sent = 0;
-      for (const client of this.clients.values()) {
-        if (client.subscriptions.has(sid) && client.ws.readyState === OPEN) {
-          client.ws.send(payload);
-          sent++;
-        }
-      }
-      if (event.type === 'chat_message' || event.type === 'raw_output') {
-        const contentLen = 'content' in event ? String((event as { content?: string }).content ?? '').length : 0;
-        console.log(`[baton] transport: broadcast event=${event.type} session=${sid.slice(0,8)} sent_to=${sent} clients contentLen=${contentLen}`);
-      }
+      this.emitSequenced(sid, msg);
 
       if (event.type === 'status_change') {
         const statusMsg: DaemonMessage = {
@@ -407,15 +716,62 @@ export class Transport {
           sessionId: sid,
           status: event.status,
         };
-        this.broadcast(statusMsg);
+        this.emitSequenced(sid, statusMsg);
+      }
+
+      // Auto-approve permissions when any subscribed client has full-access mode
+      if (event.type === 'permission_request' && this.hasFullAccessClient(sid)) {
+        this.agentManager.write(sid, 'y\n');
       }
     });
 
     this.sessionUnsubs.set(sessionId, { unsubRaw, unsubEvent });
   }
 
+  /**
+   * Stamp a sequenced message with the next per-session seq, buffer it for
+   * resume, then broadcast to subscribed clients. The seq field is additive
+   * (optional) so legacy clients that don't advertise sessionResume simply
+   * ignore it. COMPAT(sessionResume).
+   */
+  private emitSequenced(
+    sessionId: string,
+    msg: TerminalOutputMessage | ParsedEventMessage | StatusUpdateMessage,
+  ): void {
+    const buf = this.seqBuffers.get(sessionId);
+    if (buf) buf.push(msg); // mutates msg.seq
+    const payload = JSON.stringify(msg);
+    for (const client of this.clients.values()) {
+      if (client.subscriptions.has(sessionId) && client.ws.readyState === OPEN) {
+        client.ws.send(payload);
+      }
+    }
+  }
+
   registerSessionEvents(sessionId: string): void {
     this.ensureSessionRegistered(sessionId);
+  }
+
+  private hasFullAccessClient(sessionId: string): boolean {
+    for (const [clientId, mode] of this.accessModes.entries()) {
+      if (mode === 'full-access') {
+        const client = this.clients.get(clientId);
+        if (client && client.subscriptions.has(sessionId) && client.ws.readyState === OPEN) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private sendWelcome(clientId: string): void {
+    const agents = this.agentManager.list().map((a) => ({
+      id: a.id,
+      type: a.type,
+      status: a.status,
+      projectPath: a.projectPath,
+    }));
+    this.send(clientId, createWelcome(clientId, agents, DEFAULT_SERVER_FEATURES));
   }
 
   private sendAgentList(clientId: string): void {
@@ -427,6 +783,7 @@ export class Transport {
         type: a.type,
         status: a.status,
         projectPath: a.projectPath,
+        mode: a.mode,
       })),
     });
   }
@@ -454,6 +811,8 @@ export class Transport {
     }
     this.sessionUnsubs.clear();
     this.registeredSessions.clear();
+    for (const buf of this.seqBuffers.values()) buf.clear();
+    this.seqBuffers.clear();
     for (const client of this.clients.values()) {
       client.ws.close(1001, 'Server shutting down');
     }

@@ -14,17 +14,27 @@ import {
   Clipboard,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import Svg, { Circle } from 'react-native-svg';
 import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
-import { STATUS_COLORS } from '../../src/constants/theme';
+import { apiFetch } from '../../src/services/api';
+import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import {
+  AgentQuestionCard,
+  type QuestionItem,
+  type PermissionItem,
+} from '../../src/components/AgentQuestionCard';
+import { AgentInputAutocomplete } from '../../src/components/AgentInputAutocomplete';
+import { AllFilesDiffView } from '../../src/components/AllFilesDiffView';
+import type { SessionOwnershipMessage } from '@baton/shared';
 import {
   MarkdownText,
   ThinkingBlock,
@@ -73,13 +83,7 @@ const RING_STROKE = 2;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-function ContextProgressRing({
-  fraction,
-  color,
-}: {
-  fraction: number;
-  color: string;
-}) {
+function ContextProgressRing({ fraction, color }: { fraction: number; color: string }) {
   const strokeDashoffset = RING_CIRCUMFERENCE * (1 - Math.min(fraction, 1));
   const pct = Math.round(fraction * 100);
 
@@ -113,9 +117,7 @@ function ContextProgressRing({
           origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
         />
       </Svg>
-      <Text style={[progressStyles.label, { color: ringColor }]}>
-        {pct}
-      </Text>
+      <Text style={[progressStyles.label, { color: ringColor }]}>{pct}</Text>
     </View>
   );
 }
@@ -144,7 +146,13 @@ function showActionSheet(
 ) {
   if (Platform.OS === 'ios') {
     ActionSheetIOS.showActionSheetWithOptions(
-      { title, options, cancelButtonIndex, destructiveButtonIndex: destructiveIndex ?? -1, message },
+      {
+        title,
+        options,
+        cancelButtonIndex,
+        destructiveButtonIndex: destructiveIndex ?? -1,
+        message,
+      },
       onSelect,
     );
   } else {
@@ -170,15 +178,84 @@ export default function ChatScreen() {
   const router = useRouter();
   const messages = useChatStore((s) => s.messages);
   const agentStatus = useChatStore((s) => s.agentStatus);
+  const running = isRunning(agentStatus);
   const waitingApproval = useChatStore((s) => s.waitingApproval);
+  const activePrompt = useChatStore((s) => s.activePrompt);
+  const activePermission = useChatStore((s) => s.activePermission);
+  const promptQueue = useChatStore((s) => s.promptQueue);
+  const enqueuePrompt = useChatStore((s) => s.enqueuePrompt);
+  const dequeuePrompt = useChatStore((s) => s.dequeuePrompt);
+  const removeQueuedPrompt = useChatStore((s) => s.removeQueuedPrompt);
+  const clearQueue = useChatStore((s) => s.clearQueue);
   const addEvent = useChatStore((s) => s.addEvent);
   const addUserMessage = useChatStore((s) => s.addUserMessage);
   const setStatus = useChatStore((s) => s.setStatus);
   const setWaitingApproval = useChatStore((s) => s.setWaitingApproval);
   const clear = useChatStore((s) => s.clear);
+  const sessionOwner = useChatStore((s) => s.sessionOwner);
+  const setSessionOwner = useChatStore((s) => s.setSessionOwner);
+  const [showDiffReview, setShowDiffReview] = useState(false);
   const [input, setInput] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
+
+  const autocomplete = useMemo<{
+    type: 'file' | 'command';
+    query: string;
+  } | null>(() => {
+    if (!inputFocused && !input) return null;
+    const fileMatch = input.match(/@([a-zA-Z0-9_\-./\\]*)$/);
+    if (fileMatch) {
+      return { type: 'file', query: fileMatch[1] };
+    }
+    const cmdMatch = input.match(/^\/([a-zA-Z0-9_\-]*)$/);
+    if (cmdMatch) {
+      return { type: 'command', query: cmdMatch[1] };
+    }
+    return null;
+  }, [input, inputFocused]);
+
+  const handleAutocompleteSelect = useCallback(
+    (replacement: string, action?: string) => {
+      if (action === 'review') {
+        setInput('');
+        setShowDiffReview(true);
+        return;
+      }
+      if (autocomplete?.type === 'file') {
+        const next = input.replace(/@([a-zA-Z0-9_\-./\\]*)$/, replacement);
+        setInput(next);
+      } else if (autocomplete?.type === 'command') {
+        setInput(`${replacement} `);
+      }
+    },
+    [autocomplete, input],
+  );
+
+  const toggleSessionControl = useCallback(() => {
+    if (!sessionId) return;
+    if (sessionOwner === 'remote') {
+      showActionSheet(
+        'Device Control',
+        ['Yield Control to Desktop', 'Cancel'],
+        1,
+        (idx) => {
+          if (idx === 0) {
+            wsService.send({ type: 'control', action: 'release_session', sessionId });
+            setSessionOwner('local');
+          }
+        },
+      );
+    } else {
+      wsService.send({ type: 'control', action: 'claim_session', sessionId });
+      setSessionOwner('remote');
+    }
+  }, [sessionId, sessionOwner, setSessionOwner]);
+
   const [models, setModels] = useState<string[]>([]);
+  /** Models from the user's configured API Providers (Settings > API
+   * Providers), merged ahead of the adapter's built-in list so custom models
+   * are selectable. Empty when no providers configured. */
+  const [providerModels, setProviderModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [thinkingMode, setThinkingMode] = useState<ThinkingMode>('level');
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('medium');
@@ -192,14 +269,30 @@ export default function ChatScreen() {
   const [projectPath, setProjectPath] = useState('');
   const [gitStatus, setGitStatus] = useState('');
   const [gitDiff, setGitDiff] = useState('');
-  const [approvalDetail, setApprovalDetail] = useState<{ toolName: string; detail: string } | null>(null);
-  const [tokenUsage, setTokenUsage] = useState<{ prompt: number; completion: number; total: number } | null>(null);
+  const [approvalDetail, setApprovalDetail] = useState<{ toolName: string; detail: string } | null>(
+    null,
+  );
+  const [tokenUsage, setTokenUsage] = useState<{
+    prompt: number;
+    completion: number;
+    total: number;
+  } | null>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedBursts, setExpandedBursts] = useState<Set<string>>(new Set());
-  const [promptModal, setPromptModal] = useState<{ visible: boolean; title: string; placeholder: string; onSubmit: (text: string) => void } | null>(null);
+  const [promptModal, setPromptModal] = useState<{
+    visible: boolean;
+    title: string;
+    placeholder: string;
+    onSubmit: (text: string) => void;
+  } | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ title?: string; options: MenuOption[]; onSelect: (i: number) => void; anchor?: { x: number; y: number; width: number; height: number } } | null>(null);
+  const [menu, setMenu] = useState<{
+    title?: string;
+    options: MenuOption[];
+    onSelect: (i: number) => void;
+    anchor?: { x: number; y: number; width: number; height: number };
+  } | null>(null);
   const flatRef = useRef<FlatList>(null);
   const attachBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const reasoningBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
@@ -222,7 +315,7 @@ export default function ChatScreen() {
 
   const attachSession = useCallback(() => {
     if (!sessionId) return;
-    wsService.send({ type: 'control', action: 'attach_session', sessionId });
+    wsService.attachOrResume(sessionId);
   }, [sessionId]);
 
   useEffect(() => {
@@ -238,12 +331,23 @@ export default function ChatScreen() {
           const ev = msg.event as unknown as Record<string, unknown>;
           const meta = ev.meta as Record<string, unknown> | undefined;
           if (meta) {
-            setApprovalDetail({ toolName: String(meta.toolName ?? ''), detail: String(meta.detail ?? '') });
+            setApprovalDetail({
+              toolName: String(meta.toolName ?? ''),
+              detail: String(meta.detail ?? ''),
+            });
           }
         }
         if (msg.event.type === 'token_usage') {
-          const te = msg.event as { promptTokens: number; completionTokens: number; totalTokens: number };
-          setTokenUsage({ prompt: te.promptTokens, completion: te.completionTokens, total: te.totalTokens });
+          const te = msg.event as {
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+          };
+          setTokenUsage({
+            prompt: te.promptTokens,
+            completion: te.completionTokens,
+            total: te.totalTokens,
+          });
         }
       }
     });
@@ -280,6 +384,13 @@ export default function ChatScreen() {
       }
     });
 
+    const unsubOwnership = wsService.on('session_ownership', (msg) => {
+      const m = msg as SessionOwnershipMessage;
+      if (m.sessionId === sessionId) {
+        setSessionOwner(m.owner);
+      }
+    });
+
     const unsubGitResult = wsService.on('git_result', (msg) => {
       if (msg.type === 'git_result' && msg.sessionId === sessionId) {
         if (msg.success) {
@@ -298,6 +409,20 @@ export default function ChatScreen() {
       wsService.send({ type: 'git_status_request', sessionId });
     }
 
+    // Fetch user-configured API provider models so the model picker can offer
+    // them (not just the agent adapter's built-in defaults).
+    apiFetch<Array<{ enabled?: boolean; models?: string[] }>>('/api/api-providers')
+      .then((providers) => {
+        const enabled = providers
+          .filter((p) => p.enabled !== false)
+          .flatMap((p) => p.models ?? [])
+          .filter(Boolean);
+        setProviderModels(enabled);
+      })
+      .catch(() => {
+        // offline or none configured — fall back to adapter models only
+      });
+
     return () => {
       unsubEvent();
       unsubStatus();
@@ -306,8 +431,9 @@ export default function ChatScreen() {
       unsubGitBranches();
       unsubGitStatus();
       unsubGitResult();
+      unsubOwnership();
     };
-  }, [sessionId, addEvent, setStatus, clear, attachSession]);
+  }, [sessionId, addEvent, setStatus, setSessionOwner, clear, attachSession]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -366,9 +492,7 @@ export default function ChatScreen() {
 
     for (const msg of paginatedMessages) {
       const isToolLike =
-        msg.kind === 'toolActivity' ||
-        msg.kind === 'fileChange' ||
-        msg.kind === 'commandExecution';
+        msg.kind === 'toolActivity' || msg.kind === 'fileChange' || msg.kind === 'commandExecution';
       if (isToolLike) {
         currentBurst.push(msg);
       } else {
@@ -428,13 +552,28 @@ export default function ChatScreen() {
 
   function sendChat() {
     if (!input.trim() || !sessionId) return;
+    if (input.trim() === '/review') {
+      setInput('');
+      setShowDiffReview(true);
+      return;
+    }
+    if (sessionOwner !== 'remote') {
+      wsService.send({ type: 'control', action: 'claim_session', sessionId });
+      setSessionOwner('remote');
+    }
     addUserMessage(input.trim());
     sendThinkingConfig(thinkingMode, thinkingLevel);
     if (serviceTier !== 'default') {
       wsService.send({ type: 'service_tier_select', sessionId, tier: serviceTier });
     }
     const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    wsService.send({ type: 'chat_input', sessionId, content: input.trim(), model: selectedModel ?? undefined, messageId });
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: input.trim(),
+      model: selectedModel ?? undefined,
+      messageId,
+    });
     setInput('');
   }
 
@@ -450,19 +589,78 @@ export default function ChatScreen() {
     wsService.send({ type: 'cancel_turn', sessionId });
   }
 
-  function approveAction() {
+  function approveAction(requestId?: string) {
     if (!sessionId) return;
+    const reqId = requestId ?? activePermission?.requestId;
+    if (reqId) {
+      wsService.send({
+        type: 'control',
+        action: 'permission_response',
+        sessionId,
+        payload: { requestId: reqId, approved: true },
+      });
+    }
     wsService.send({ type: 'approve_input', sessionId });
     setWaitingApproval(false);
+    useChatStore.getState().setActivePermission(null);
     setApprovalDetail(null);
   }
 
-  function rejectAction() {
+  function rejectAction(requestId?: string) {
     if (!sessionId) return;
+    const reqId = requestId ?? activePermission?.requestId;
+    if (reqId) {
+      wsService.send({
+        type: 'control',
+        action: 'permission_response',
+        sessionId,
+        payload: { requestId: reqId, approved: false },
+      });
+    }
     wsService.send({ type: 'reject_input', sessionId });
     setWaitingApproval(false);
+    useChatStore.getState().setActivePermission(null);
     setApprovalDetail(null);
   }
+
+  function answerQuestion(answerText: string) {
+    if (!sessionId || !answerText.trim()) return;
+    addUserMessage(answerText.trim());
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: answerText.trim(),
+      model: selectedModel ?? undefined,
+    });
+    useChatStore.getState().setActivePrompt(null);
+  }
+
+  function sendQueuedPrompt(promptText: string) {
+    if (!promptText.trim() || !sessionId) return;
+    addUserMessage(promptText.trim());
+    sendThinkingConfig(thinkingMode, thinkingLevel);
+    if (serviceTier !== 'default') {
+      wsService.send({ type: 'service_tier_select', sessionId, tier: serviceTier });
+    }
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: promptText.trim(),
+      model: selectedModel ?? undefined,
+      messageId,
+    });
+  }
+
+  // Feature 2: Continuous Prompt Queue auto-dispatch effect
+  useEffect(() => {
+    if (!running && (agentStatus === 'idle' || agentStatus === 'unknown') && promptQueue.length > 0) {
+      const nextPrompt = dequeuePrompt();
+      if (nextPrompt) {
+        sendQueuedPrompt(nextPrompt);
+      }
+    }
+  }, [running, agentStatus, promptQueue]);
 
   async function openAttachmentMenu() {
     const anchor = await measureAnchor(attachBtnRef);
@@ -483,14 +681,35 @@ export default function ChatScreen() {
   async function openReasoningMenu() {
     const anchor = await measureAnchor(reasoningBtnRef);
     const options: MenuOption[] = [
-      { label: `${thinkingMode === 'none' ? '\u2713 ' : ''}Off`, selected: thinkingMode === 'none' },
-      { label: `${thinkingMode === 'auto' ? '\u2713 ' : ''}Auto`, selected: thinkingMode === 'auto' },
+      {
+        label: `${thinkingMode === 'none' ? '\u2713 ' : ''}Off`,
+        selected: thinkingMode === 'none',
+      },
+      {
+        label: `${thinkingMode === 'auto' ? '\u2713 ' : ''}Auto`,
+        selected: thinkingMode === 'auto',
+      },
       { separator: true },
-      { label: `${thinkingMode === 'level' && thinkingLevel === 'minimal' ? '\u2713 ' : ''}Minimal`, selected: thinkingMode === 'level' && thinkingLevel === 'minimal' },
-      { label: `${thinkingMode === 'level' && thinkingLevel === 'low' ? '\u2713 ' : ''}Low`, selected: thinkingMode === 'level' && thinkingLevel === 'low' },
-      { label: `${thinkingMode === 'level' && thinkingLevel === 'medium' ? '\u2713 ' : ''}Medium`, selected: thinkingMode === 'level' && thinkingLevel === 'medium' },
-      { label: `${thinkingMode === 'level' && thinkingLevel === 'high' ? '\u2713 ' : ''}High`, selected: thinkingMode === 'level' && thinkingLevel === 'high' },
-      { label: `${thinkingMode === 'level' && thinkingLevel === 'xhigh' ? '\u2713 ' : ''}X-High`, selected: thinkingMode === 'level' && thinkingLevel === 'xhigh' },
+      {
+        label: `${thinkingMode === 'level' && thinkingLevel === 'minimal' ? '\u2713 ' : ''}Minimal`,
+        selected: thinkingMode === 'level' && thinkingLevel === 'minimal',
+      },
+      {
+        label: `${thinkingMode === 'level' && thinkingLevel === 'low' ? '\u2713 ' : ''}Low`,
+        selected: thinkingMode === 'level' && thinkingLevel === 'low',
+      },
+      {
+        label: `${thinkingMode === 'level' && thinkingLevel === 'medium' ? '\u2713 ' : ''}Medium`,
+        selected: thinkingMode === 'level' && thinkingLevel === 'medium',
+      },
+      {
+        label: `${thinkingMode === 'level' && thinkingLevel === 'high' ? '\u2713 ' : ''}High`,
+        selected: thinkingMode === 'level' && thinkingLevel === 'high',
+      },
+      {
+        label: `${thinkingMode === 'level' && thinkingLevel === 'xhigh' ? '\u2713 ' : ''}X-High`,
+        selected: thinkingMode === 'level' && thinkingLevel === 'xhigh',
+      },
       { separator: true },
       { label: 'Normal Speed', selected: serviceTier === 'default' },
       { label: 'Fast Speed', selected: serviceTier === 'fast' },
@@ -500,16 +719,42 @@ export default function ChatScreen() {
       anchor,
       options,
       onSelect: (index) => {
-        if (index === 0) { setThinkingMode('none'); sendThinkingConfig('none'); }
-        else if (index === 1) { setThinkingMode('auto'); sendThinkingConfig('auto'); }
-        else if (index === 3) { setThinkingMode('level'); setThinkingLevel('minimal'); sendThinkingConfig('level', 'minimal'); }
-        else if (index === 4) { setThinkingMode('level'); setThinkingLevel('low'); sendThinkingConfig('level', 'low'); }
-        else if (index === 5) { setThinkingMode('level'); setThinkingLevel('medium'); sendThinkingConfig('level', 'medium'); }
-        else if (index === 6) { setThinkingMode('level'); setThinkingLevel('high'); sendThinkingConfig('level', 'high'); }
-        else if (index === 7) { setThinkingMode('level'); setThinkingLevel('xhigh'); sendThinkingConfig('level', 'xhigh'); }
-        else if (index === 8) { setThinkingMode('level'); setThinkingLevel('medium'); }
-        else if (index === 9) { setServiceTier('default'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' }); }
-        else if (index === 10) { setServiceTier('fast'); wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' }); }
+        if (index === 0) {
+          setThinkingMode('none');
+          sendThinkingConfig('none');
+        } else if (index === 1) {
+          setThinkingMode('auto');
+          sendThinkingConfig('auto');
+        } else if (index === 3) {
+          setThinkingMode('level');
+          setThinkingLevel('minimal');
+          sendThinkingConfig('level', 'minimal');
+        } else if (index === 4) {
+          setThinkingMode('level');
+          setThinkingLevel('low');
+          sendThinkingConfig('level', 'low');
+        } else if (index === 5) {
+          setThinkingMode('level');
+          setThinkingLevel('medium');
+          sendThinkingConfig('level', 'medium');
+        } else if (index === 6) {
+          setThinkingMode('level');
+          setThinkingLevel('high');
+          sendThinkingConfig('level', 'high');
+        } else if (index === 7) {
+          setThinkingMode('level');
+          setThinkingLevel('xhigh');
+          sendThinkingConfig('level', 'xhigh');
+        } else if (index === 8) {
+          setThinkingMode('level');
+          setThinkingLevel('medium');
+        } else if (index === 9) {
+          setServiceTier('default');
+          wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' });
+        } else if (index === 10) {
+          setServiceTier('fast');
+          wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' });
+        }
       },
     });
   }
@@ -519,9 +764,12 @@ export default function ChatScreen() {
     wsService.send({
       type: 'thinking_config_select',
       sessionId,
-      config: mode === 'none' ? { mode: 'none' }
-        : mode === 'auto' ? { mode: 'auto' }
-        : { mode: 'level', level: level ?? 'medium' },
+      config:
+        mode === 'none'
+          ? { mode: 'none' }
+          : mode === 'auto'
+            ? { mode: 'auto' }
+            : { mode: 'level', level: level ?? 'medium' },
     });
   }
 
@@ -583,11 +831,16 @@ export default function ChatScreen() {
       options,
       onSelect: (index) => {
         if (index === displayBranches.length + 1) {
-          setPromptModal({ visible: true, title: 'Create Branch', placeholder: 'Branch name', onSubmit: (name) => {
-            if (name.trim()) {
-              wsService.send({ type: 'git_create_branch', sessionId, name: name.trim() });
-            }
-          }});
+          setPromptModal({
+            visible: true,
+            title: 'Create Branch',
+            placeholder: 'Branch name',
+            onSubmit: (name) => {
+              if (name.trim()) {
+                wsService.send({ type: 'git_create_branch', sessionId, name: name.trim() });
+              }
+            },
+          });
           return;
         }
         if (index < displayBranches.length && displayBranches[index] !== currentBranch) {
@@ -604,6 +857,7 @@ export default function ChatScreen() {
       title: 'Git Actions',
       anchor,
       options: [
+        { label: 'Review All Changes' },
         { label: 'Status' },
         { label: 'Commit...' },
         { label: 'Push' },
@@ -611,26 +865,33 @@ export default function ChatScreen() {
       ],
       onSelect: (index) => {
         if (index === 0) {
-          wsService.send({ type: 'git_status_request', sessionId });
+          setShowDiffReview(true);
         }
         if (index === 1) {
-          setPromptModal({ visible: true, title: 'Commit', placeholder: 'Commit message', onSubmit: (message) => {
-            if (message.trim()) {
-              wsService.send({ type: 'git_commit', sessionId, message: message.trim() });
-            }
-          }});
+          wsService.send({ type: 'git_status_request', sessionId });
         }
         if (index === 2) {
-          wsService.send({ type: 'git_push', sessionId });
+          setPromptModal({
+            visible: true,
+            title: 'Commit',
+            placeholder: 'Commit message',
+            onSubmit: (message) => {
+              if (message.trim()) {
+                wsService.send({ type: 'git_commit', sessionId, message: message.trim() });
+              }
+            },
+          });
         }
         if (index === 3) {
+          wsService.send({ type: 'git_push', sessionId });
+        }
+        if (index === 4) {
           wsService.send({ type: 'git_pull', sessionId });
         }
       },
     });
   }
 
-  const running = isRunning(agentStatus);
   const statusColor = STATUS_COLORS[agentStatus] ?? '#a8a29e';
   const sendDisabled = !input.trim();
 
@@ -645,7 +906,16 @@ export default function ChatScreen() {
         />
       );
     }
-    return <MessageBubble msg={item.msg} colors={c} onLongPress={() => showMessageActions(item.msg)} />;
+    return (
+      <MessageBubble
+        msg={item.msg}
+        colors={c}
+        onLongPress={() => showMessageActions(item.msg)}
+        onAnswerQuestion={answerQuestion}
+        onApprovePermission={() => approveAction(item.msg.meta?.requestId as string | undefined)}
+        onRejectPermission={() => rejectAction(item.msg.meta?.requestId as string | undefined)}
+      />
+    );
   }
 
   return (
@@ -655,11 +925,7 @@ export default function ChatScreen() {
       keyboardVerticalOffset={0}
     >
       <View style={styles.headerOverlay}>
-        <BlurView
-          tint={c.isDark ? 'dark' : 'light'}
-          intensity={60}
-          style={styles.headerBlur}
-        >
+        <BlurView tint={c.isDark ? 'dark' : 'light'} intensity={60} style={styles.headerBlur}>
           <View style={{ height: insets.top }} />
           <View style={styles.headerContent}>
             <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
@@ -668,15 +934,72 @@ export default function ChatScreen() {
               )}
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             </View>
-            <View style={styles.headerTitles}>
+            <Pressable
+              onPress={() => setShowDiffReview(true)}
+              style={styles.headerTitles}
+            >
               <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
                 {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
               </Text>
               <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
-                {agentStatus.replace('_', ' ')}{gitStatus ? ` \u2022 ${gitStatus.split('\n').length} changed` : ''}
+                {agentStatus.replace('_', ' ')}
+                {gitStatus ? ` \u2022 ${gitStatus.split('\n').filter(Boolean).length} changed` : ''}
               </Text>
-            </View>
+            </Pressable>
             <View style={styles.spacer} />
+
+            {gitStatus.trim().length > 0 && (
+              <Pressable
+                onPress={() => setShowDiffReview(true)}
+                style={({ pressed }) => [
+                  styles.headerDiffPill,
+                  {
+                    backgroundColor: pressed
+                      ? c.subtle
+                      : c.isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(0,0,0,0.05)',
+                  },
+                ]}
+                hitSlop={4}
+              >
+                <Ionicons name="document-text-outline" size={13} color={Colors.primary[500]} />
+                <Text style={[styles.headerDiffPillText, { color: Colors.primary[500] }]}>
+                  {gitStatus.split('\n').filter(Boolean).length}
+                </Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={toggleSessionControl}
+              style={({ pressed }) => [
+                styles.headerControlPill,
+                {
+                  backgroundColor: pressed
+                    ? c.subtle
+                    : sessionOwner === 'remote'
+                      ? 'rgba(34,197,94,0.14)'
+                      : c.isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(0,0,0,0.05)',
+                },
+              ]}
+              hitSlop={4}
+            >
+              <Ionicons
+                name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
+                size={12}
+                color={sessionOwner === 'remote' ? Colors.success[400] : c.textTertiary}
+              />
+              <Text
+                style={[
+                  styles.headerControlText,
+                  { color: sessionOwner === 'remote' ? Colors.success[400] : c.textTertiary },
+                ]}
+              >
+                {sessionOwner === 'remote' ? 'Mobile' : 'Take Control'}
+              </Text>
+            </Pressable>
             <Pressable
               ref={gitActionsBtnRef}
               onPress={openGitActionsMenu}
@@ -706,9 +1029,7 @@ export default function ChatScreen() {
       {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyIcon, { color: c.textTertiary }]}>{'\u{1F4AC}'}</Text>
-          <Text style={[styles.emptyTitle, { color: c.textSecondary }]}>
-            Start a conversation
-          </Text>
+          <Text style={[styles.emptyTitle, { color: c.textSecondary }]}>Start a conversation</Text>
           <Text style={[styles.emptySub, { color: c.textTertiary }]}>
             Type a message below to interact with the agent
           </Text>
@@ -719,10 +1040,7 @@ export default function ChatScreen() {
             ref={flatRef}
             data={groupedData}
             keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
-            contentContainerStyle={[
-              styles.messageList,
-              { paddingTop: insets.top + HEADER_HEIGHT },
-            ]}
+            contentContainerStyle={[styles.messageList, { paddingTop: insets.top + HEADER_HEIGHT }]}
             renderItem={renderGroupedItem}
             onScroll={handleScroll}
             scrollEventThrottle={64}
@@ -752,45 +1070,97 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {waitingApproval && (
-        <View style={[styles.approvalBanner, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
-          <Text style={[styles.approvalTitle, { color: c.textPrimary }]}>
-            {'\uD83D\uDEE1'} Approval Required
-          </Text>
-          {approvalDetail && (
-            <View style={styles.approvalDetailContainer}>
-              {approvalDetail.toolName ? (
-                <Text style={[styles.approvalTool, { color: c.textSecondary }]}>
-                  {approvalDetail.toolName}
-                </Text>
-              ) : null}
-              {approvalDetail.detail ? (
-                <Text style={[styles.approvalDetailText, { color: c.textTertiary }]} numberOfLines={3}>
-                  {approvalDetail.detail}
-                </Text>
-              ) : null}
+      {(activePermission || waitingApproval) && (
+        <View style={styles.dockedCardWrapper}>
+          <AgentQuestionCard
+            permission={
+              activePermission ?? {
+                requestId: 'legacy',
+                tool: approvalDetail?.toolName ?? 'Action',
+                action: approvalDetail?.detail ?? 'Command approval requested',
+                description: approvalDetail?.detail ?? 'The agent needs your approval to proceed.',
+              }
+            }
+            onApprove={() => approveAction(activePermission?.requestId)}
+            onReject={() => rejectAction(activePermission?.requestId)}
+            compact
+          />
+        </View>
+      )}
+
+      {activePrompt && activePrompt.questions?.length > 0 && (
+        <View style={styles.dockedCardWrapper}>
+          <AgentQuestionCard
+            question={activePrompt.questions[0]}
+            onAnswer={answerQuestion}
+            compact
+          />
+        </View>
+      )}
+
+      {promptQueue.length > 0 && (
+        <View
+          style={[
+            styles.queueStrip,
+            {
+              backgroundColor: c.isDark ? 'rgba(44,44,46,0.85)' : 'rgba(235,235,240,0.85)',
+              borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            },
+          ]}
+        >
+          <View style={styles.queueHeaderRow}>
+            <View style={styles.queueTitleGroup}>
+              <Ionicons name="time-outline" size={14} color={Colors.primary[500]} />
+              <Text style={[styles.queueCountText, { color: c.textPrimary }]}>
+                Queue ({promptQueue.length})
+              </Text>
             </View>
-          )}
-          <View style={styles.approvalButtons}>
-            <Pressable
-              style={[styles.approvalBtn, { backgroundColor: '#22c55e' }]}
-              onPress={approveAction}
-              hitSlop={4}
-            >
-              <Text style={styles.approvalBtnText}>{'\u2713'} Approve</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.approvalBtn, { backgroundColor: '#ef4444' }]}
-              onPress={rejectAction}
-              hitSlop={4}
-            >
-              <Text style={styles.approvalBtnText}>{'\u2717'} Reject</Text>
+            <Pressable onPress={clearQueue} hitSlop={6}>
+              <Text style={[Typography.caption2, { color: Colors.danger[400], fontWeight: '600' }]}>
+                Clear
+              </Text>
             </Pressable>
           </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.queueChipsContainer}
+          >
+            {promptQueue.map((item, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.queueChip,
+                  {
+                    backgroundColor: c.isDark ? '#1c1c1e' : '#fff',
+                    borderColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+                  },
+                ]}
+              >
+                <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
+                <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
+                  {item}
+                </Text>
+                <Pressable onPress={() => removeQueuedPrompt(idx)} hitSlop={6}>
+                  <Ionicons name="close-circle" size={14} color={c.textTertiary} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
 
       <View style={[styles.composerWrapper, { paddingBottom: insets.bottom }]}>
+        {autocomplete && (
+          <AgentInputAutocomplete
+            type={autocomplete.type}
+            query={autocomplete.query}
+            projectPath={projectPath}
+            colors={c}
+            onSelect={handleAutocompleteSelect}
+            onClose={() => setInputFocused(false)}
+          />
+        )}
         <View
           style={[
             styles.composerCard,
@@ -807,7 +1177,12 @@ export default function ChatScreen() {
           />
 
           {planMode && (
-            <View style={[styles.planBadge, { backgroundColor: c.isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)' }]}>
+            <View
+              style={[
+                styles.planBadge,
+                { backgroundColor: c.isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)' },
+              ]}
+            >
               <Ionicons name="list-outline" size={11} color="#ff9500" />
               <Text style={styles.planBadgeText}>Plan</Text>
             </View>
@@ -820,9 +1195,18 @@ export default function ChatScreen() {
               onChangeText={setInput}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
-              onSubmitEditing={running ? sendSteer : sendChat}
+              onSubmitEditing={() => {
+                if (running) {
+                  if (input.trim()) {
+                    enqueuePrompt(input.trim());
+                    setInput('');
+                  }
+                } else {
+                  sendChat();
+                }
+              }}
               returnKeyType="send"
-              placeholder={running ? 'Steer the agent...' : 'Ask anything...'}
+              placeholder={running ? 'Type to queue next prompt...' : 'Ask anything...'}
               placeholderTextColor={c.textTertiary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -849,16 +1233,21 @@ export default function ChatScreen() {
               onPress={async () => {
                 wsService.send({ type: 'model_list_request', sessionId });
                 const anchor = await measureAnchor(modelBtnRef);
+                const availableModels = Array.from(new Set([...providerModels, ...models]));
                 setMenu({
                   title: 'Model',
                   anchor,
-                  options: models.map((m) => ({
+                  options: availableModels.map((m) => ({
                     label: shortModelName(m),
                     selected: m === selectedModel,
                   })),
                   onSelect: (index) => {
-                    setSelectedModel(models[index]);
-                    wsService.send({ type: 'model_select', sessionId, model: models[index] });
+                    setSelectedModel(availableModels[index]);
+                    wsService.send({
+                      type: 'model_select',
+                      sessionId,
+                      model: availableModels[index],
+                    });
                   },
                 });
               }}
@@ -869,7 +1258,12 @@ export default function ChatScreen() {
               <Text style={[styles.modelLabel, { color: c.textTertiary }]}>
                 {shortModelName(selectedModel)}
               </Text>
-              <Ionicons name="chevron-down" size={10} color={c.textTertiary} style={{ marginLeft: 2 }} />
+              <Ionicons
+                name="chevron-down"
+                size={10}
+                color={c.textTertiary}
+                style={{ marginLeft: 2 }}
+              />
             </Pressable>
 
             <Pressable
@@ -880,7 +1274,11 @@ export default function ChatScreen() {
               onPress={openReasoningMenu}
             >
               <View style={styles.reasoningButtonInner}>
-                <Ionicons name="bulb-outline" size={16} color={thinkingMode === 'level' ? '#ff9500' : c.textTertiary} />
+                <Ionicons
+                  name="bulb-outline"
+                  size={16}
+                  color={thinkingMode === 'level' ? '#ff9500' : c.textTertiary}
+                />
                 {thinkingMode === 'level' && (
                   <Text style={[styles.reasoningBadge, { color: '#ff9500' }]}>
                     {THINKING_LEVEL_SHORT[thinkingLevel]}
@@ -911,68 +1309,129 @@ export default function ChatScreen() {
               </Pressable>
             )}
 
+            {running && input.trim().length > 0 && (
+              <Pressable
+                onPress={sendSteer}
+                style={[
+                  styles.steerButton,
+                  {
+                    backgroundColor: c.isDark ? '#3a3a3c' : '#e5e5ea',
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Steer immediately"
+              >
+                <Ionicons name="flash" size={12} color="#f59e0b" />
+                <Text style={[styles.steerLabel, { color: c.textPrimary }]}>Steer</Text>
+              </Pressable>
+            )}
+
             <Pressable
-              onPress={running ? sendSteer : sendChat}
+              onPress={() => {
+                if (running) {
+                  if (input.trim()) {
+                    enqueuePrompt(input.trim());
+                    setInput('');
+                  }
+                } else {
+                  sendChat();
+                }
+              }}
               style={[
                 styles.sendButton,
                 {
                   backgroundColor: sendDisabled
-                    ? c.isDark ? '#3a3a3c' : '#d1d1d6'
-                    : c.isDark ? '#e8e8e8' : '#1c1917',
+                    ? c.isDark
+                      ? '#3a3a3c'
+                      : '#d1d1d6'
+                    : running
+                      ? Colors.primary[500]
+                      : c.isDark
+                        ? '#e8e8e8'
+                        : '#1c1917',
                 },
               ]}
               disabled={sendDisabled}
               hitSlop={4}
-              accessibilityLabel="Send"
+              accessibilityLabel={running ? 'Queue prompt' : 'Send'}
             >
               <Ionicons
-                name="arrow-up"
+                name={running ? 'add' : 'arrow-up'}
                 size={14}
-                color={sendDisabled ? (c.isDark ? '#636366' : '#aeaeb2') : (c.isDark ? '#1c1917' : '#fff')}
+                color={
+                  sendDisabled
+                    ? c.isDark
+                      ? '#8e8e93'
+                      : '#8e8e93'
+                    : running
+                      ? '#ffffff'
+                      : c.isDark
+                        ? '#1c1917'
+                        : '#ffffff'
+                }
               />
             </Pressable>
           </View>
         </View>
 
         <View style={styles.secondaryBar}>
-            <Pressable ref={runtimeBtnRef} style={styles.secondaryPill} hitSlop={4} onPress={openRuntimePicker}>
-              <Ionicons name={runtimeMode === 'cloud' ? 'cloud-outline' : 'laptop-outline'} size={13} color={c.textTertiary} />
-              <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>
-                {runtimeMode === 'cloud' ? 'Cloud' : 'Local'}
-              </Text>
-              <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-            </Pressable>
+          <Pressable
+            ref={runtimeBtnRef}
+            style={styles.secondaryPill}
+            hitSlop={4}
+            onPress={openRuntimePicker}
+          >
+            <Ionicons
+              name={runtimeMode === 'cloud' ? 'cloud-outline' : 'laptop-outline'}
+              size={13}
+              color={c.textTertiary}
+            />
+            <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>
+              {runtimeMode === 'cloud' ? 'Cloud' : 'Local'}
+            </Text>
+            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+          </Pressable>
 
-            <Pressable ref={accessBtnRef} style={styles.secondaryPill} hitSlop={4} onPress={openAccessModeMenu}>
-              <Ionicons
-                name={accessMode === 'full-access' ? 'shield-outline' : 'shield-checkmark-outline'}
-                size={13}
-                color={c.textTertiary}
-              />
-              <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-            </Pressable>
+          <Pressable
+            ref={accessBtnRef}
+            style={styles.secondaryPill}
+            hitSlop={4}
+            onPress={openAccessModeMenu}
+          >
+            <Ionicons
+              name={accessMode === 'full-access' ? 'shield-outline' : 'shield-checkmark-outline'}
+              size={13}
+              color={c.textTertiary}
+            />
+            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+          </Pressable>
 
-            <View style={styles.spacer} />
+          <View style={styles.spacer} />
 
-            <Pressable ref={branchBtnRef} style={styles.secondaryPill} hitSlop={4} onPress={openGitBranchMenu}>
-              <Ionicons name="git-branch-outline" size={13} color={c.textTertiary} />
-              <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>
-                {currentBranch}
-              </Text>
-              <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-            </Pressable>
+          <Pressable
+            ref={branchBtnRef}
+            style={styles.secondaryPill}
+            hitSlop={4}
+            onPress={openGitBranchMenu}
+          >
+            <Ionicons name="git-branch-outline" size={13} color={c.textTertiary} />
+            <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>{currentBranch}</Text>
+            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+          </Pressable>
 
-            {contextFraction > 0 && (
-              <ContextProgressRing fraction={contextFraction} color={c.textTertiary} />
-            )}
-          </View>
+          {contextFraction > 0 && (
+            <ContextProgressRing fraction={contextFraction} color={c.textTertiary} />
+          )}
+        </View>
       </View>
 
       {promptModal?.visible && (
         <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
           <Pressable style={styles.modalOverlay} onPress={() => setPromptModal(null)}>
             <Pressable style={[styles.promptSheet, { backgroundColor: c.bg }]} onPress={() => {}}>
-              <Text style={[styles.promptTitle, { color: c.textPrimary }]}>{promptModal.title}</Text>
+              <Text style={[styles.promptTitle, { color: c.textPrimary }]}>
+                {promptModal.title}
+              </Text>
               <TextInput
                 autoFocus
                 style={[styles.promptInput, { color: c.textPrimary, borderColor: c.subtle }]}
@@ -995,9 +1454,14 @@ export default function ChatScreen() {
                   onPress={() => {
                     setPromptModal(null);
                   }}
-                  style={[styles.promptDoneBtn, { backgroundColor: c.isDark ? '#e8e8e8' : '#1c1917' }]}
+                  style={[
+                    styles.promptDoneBtn,
+                    { backgroundColor: c.isDark ? '#e8e8e8' : '#1c1917' },
+                  ]}
                 >
-                  <Text style={[styles.promptDoneText, { color: c.isDark ? '#1c1917' : '#fff' }]}>Done</Text>
+                  <Text style={[styles.promptDoneText, { color: c.isDark ? '#1c1917' : '#fff' }]}>
+                    Done
+                  </Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -1022,6 +1486,16 @@ export default function ChatScreen() {
           setMenu(null);
         }}
         onClose={() => setMenu(null)}
+      />
+
+      <AllFilesDiffView
+        visible={showDiffReview}
+        sessionId={sessionId ?? ''}
+        projectPath={projectPath}
+        onClose={() => setShowDiffReview(false)}
+        onCommitSuccess={() => {
+          wsService.send({ type: 'git_status_request', sessionId });
+        }}
       />
     </KeyboardAvoidingView>
   );
@@ -1058,13 +1532,7 @@ function ToolBurstRenderer({
   );
 }
 
-function TurnEndActions({
-  messages,
-  colors: c,
-}: {
-  messages: ChatMessage[];
-  colors: ThemeColors;
-}) {
+function TurnEndActions({ messages, colors: c }: { messages: ChatMessage[]; colors: ThemeColors }) {
   const fileChanges = messages.filter((m) => m.kind === 'fileChange');
   if (fileChanges.length === 0) return null;
 
@@ -1073,9 +1541,7 @@ function TurnEndActions({
       <Pressable
         style={[turnEndStyles.pill, { backgroundColor: c.subtle }]}
         onPress={() => {
-          const summary = fileChanges
-            .map((m) => m.content)
-            .join('\n');
+          const summary = fileChanges.map((m) => m.content).join('\n');
           Clipboard.setString(summary);
         }}
         hitSlop={4}
@@ -1105,24 +1571,63 @@ function MessageBubble({
   msg,
   colors: c,
   onLongPress,
+  onAnswerQuestion,
+  onApprovePermission,
+  onRejectPermission,
 }: {
   msg: ChatMessage;
   colors: ThemeColors;
   onLongPress?: () => void;
+  onAnswerQuestion?: (ans: string) => void;
+  onApprovePermission?: () => void;
+  onRejectPermission?: () => void;
 }) {
+  if (msg.eventType === 'user_input_prompt') {
+    const rawQuestions = msg.meta?.questions as QuestionItem[] | undefined;
+    const q: QuestionItem = rawQuestions?.[0] ?? { question: msg.content };
+    return (
+      <View style={styles.systemRow}>
+        <AgentQuestionCard
+          question={q}
+          onAnswer={onAnswerQuestion}
+          style={{ width: '100%' }}
+        />
+      </View>
+    );
+  }
+
+  if (msg.eventType === 'permission_request') {
+    const perm: PermissionItem = {
+      requestId: (msg.meta?.requestId as string) ?? '',
+      tool: (msg.meta?.tool as string) ?? '',
+      action: (msg.meta?.action as string) ?? '',
+      description: (msg.meta?.description as string) ?? msg.content,
+    };
+    return (
+      <View style={styles.systemRow}>
+        <AgentQuestionCard
+          permission={perm}
+          onApprove={onApprovePermission}
+          onReject={onRejectPermission}
+          style={{ width: '100%' }}
+        />
+      </View>
+    );
+  }
   if (msg.role === 'user') {
     const isLong = msg.content.length > 360 || (msg.content.match(/\n/g) ?? []).length > 8;
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.userRow}>
           <View style={[styles.userBubble, { backgroundColor: '#3b82f6' }]}>
-            <Text style={styles.userText} numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}>
+            <Text
+              style={styles.userText}
+              numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
+            >
               {msg.content}
             </Text>
             {isLong && (
-              <Text style={styles.userCollapseHint}>
-                {msg.isCollapsed ? 'Show more' : ''}
-              </Text>
+              <Text style={styles.userCollapseHint}>{msg.isCollapsed ? 'Show more' : ''}</Text>
             )}
           </View>
         </View>
@@ -1156,7 +1661,8 @@ function MessageBubble({
   }
 
   if (msg.kind === 'toolActivity') {
-    const toolName = (msg.meta?.tool as string) ?? msg.content.replace(/^\uD83D\uDD27\s*/, '').split(' ')[0];
+    const toolName =
+      (msg.meta?.tool as string) ?? msg.content.replace(/^\uD83D\uDD27\s*/, '').split(' ')[0];
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.systemRow}>
@@ -1245,7 +1751,12 @@ function MessageBubble({
   return (
     <Pressable onLongPress={onLongPress} delayLongPress={300}>
       <View style={styles.systemRow}>
-        <View style={[styles.systemBubble, isError ? styles.errorBubble : { backgroundColor: c.subtle }]}>
+        <View
+          style={[
+            styles.systemBubble,
+            isError ? styles.errorBubble : { backgroundColor: c.subtle },
+          ]}
+        >
           <Text style={[styles.systemText, isError ? styles.errorText : { color: c.textTertiary }]}>
             {isError ? `\u26A0\uFE0F ${msg.content}` : msg.content}
           </Text>
@@ -1309,7 +1820,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 13,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
   },
   headerSubtitle: {
     fontSize: 10,
@@ -1321,6 +1832,31 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerDiffPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: CornerRadius.small,
+  },
+  headerDiffPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: FontFamily.mono,
+  },
+  headerControlPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: CornerRadius.small,
+  },
+  headerControlText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 
   statusDotOuter: {
@@ -1559,15 +2095,74 @@ const styles = StyleSheet.create({
   approvalTool: {
     fontSize: 13,
     fontWeight: '500',
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
   },
   approvalDetailText: {
     fontSize: 12,
     lineHeight: 16,
   },
-  approvalButtons: { flexDirection: 'row', gap: 12 },
-  approvalBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
-  approvalBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  dockedCardWrapper: {
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
+  queueStrip: {
+    marginHorizontal: 12,
+    marginBottom: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  queueHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  queueTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  queueCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  queueChipsContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  queueChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    maxWidth: 200,
+  },
+  queueChipNum: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  queueChipText: {
+    fontSize: 12,
+    maxWidth: 140,
+  },
+  steerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 9,
+    height: 32,
+    borderRadius: 16,
+  },
+  steerLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
 
   modalOverlay: {
     flex: 1,

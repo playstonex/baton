@@ -1,55 +1,57 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Button, Chip } from '@heroui/react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { wsService } from '../services/websocket.js';
+import { StatusBadge, StatusDot, Button } from '../lib/ui.js';
+import { IconFile, IconGitBranch, IconActivity, IconStop } from '../lib/icons.js';
 import '@xterm/xterm/css/xterm.css';
 
+// Terminal ANSI colors are self-contained (not theme tokens).
 const LIGHT_THEME = {
-  background: '#fafaf9',
-  foreground: '#1c1917',
-  cursor: '#2383e2',
-  selectionBackground: 'rgba(35, 131, 226, 0.2)',
+  background: '#ffffff',
+  foreground: '#171717',
+  cursor: '#006bff',
+  selectionBackground: 'rgba(0, 107, 255, 0.2)',
   black: '#78716c',
-  red: '#dc2626',
-  green: '#16a34a',
-  yellow: '#ca8a04',
-  blue: '#2383e2',
-  magenta: '#9333ea',
-  cyan: '#0891b2',
-  white: '#292524',
-  brightBlack: '#a8a29e',
-  brightRed: '#ef4444',
-  brightGreen: '#22c55e',
-  brightYellow: '#eab308',
-  brightBlue: '#3b82f6',
-  brightMagenta: '#a855f7',
-  brightCyan: '#06b6d4',
-  brightWhite: '#1c1917',
+  red: '#ea001d',
+  green: '#28a948',
+  yellow: '#ffae00',
+  blue: '#006bff',
+  magenta: '#a000f8',
+  cyan: '#00ac96',
+  white: '#4d4d4d',
+  brightBlack: '#a8a8a8',
+  brightRed: '#ff676d',
+  brightGreen: '#4ce15e',
+  brightYellow: '#ffc543',
+  brightBlue: '#48aeff',
+  brightMagenta: '#c979ff',
+  brightCyan: '#00e3c4',
+  brightWhite: '#171717',
 };
 
 const DARK_THEME = {
   background: '#191919',
   foreground: '#e8e8e8',
-  cursor: '#4193ef',
-  selectionBackground: 'rgba(65, 147, 239, 0.3)',
+  cursor: '#47a8ff',
+  selectionBackground: 'rgba(71, 168, 255, 0.3)',
   black: '#383838',
-  red: '#f87171',
-  green: '#4ade80',
-  yellow: '#fbbf24',
-  blue: '#60a5fa',
-  magenta: '#c084fc',
-  cyan: '#22d3ee',
-  white: '#e8e8e8',
+  red: '#ff565f',
+  green: '#00ca50',
+  yellow: '#ff9300',
+  blue: '#47a8ff',
+  magenta: '#c472fb',
+  cyan: '#00cfb7',
+  white: '#ededed',
   brightBlack: '#6b6b6b',
-  brightRed: '#fca5a5',
-  brightGreen: '#86efac',
-  brightYellow: '#fcd34d',
-  brightBlue: '#93c5fd',
-  brightMagenta: '#d8b4fe',
-  brightCyan: '#a5f3fc',
+  brightRed: '#ff676d',
+  brightGreen: '#4ce15e',
+  brightYellow: '#ffc543',
+  brightBlue: '#48aeff',
+  brightMagenta: '#c979ff',
+  brightCyan: '#00e3c4',
   brightWhite: '#ffffff',
 };
 
@@ -65,10 +67,12 @@ export function TerminalScreen() {
   const fitRef = useRef<FitAddon | null>(null);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<string>('unknown');
+  const [sessionOwner, setSessionOwner] = useState<'local' | 'remote' | null>(null);
+  const [isClaimed, setIsClaimed] = useState(false);
 
   const attachSession = useCallback(() => {
     if (!sessionId) return;
-    wsService.send({ type: 'control', action: 'attach_session', sessionId });
+    wsService.attachOrResume(sessionId);
   }, [sessionId]);
 
   useEffect(() => {
@@ -78,7 +82,7 @@ export function TerminalScreen() {
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace",
+      fontFamily: "'Geist Mono', 'JetBrains Mono', Menlo, Monaco, monospace",
       theme: isDark ? DARK_THEME : LIGHT_THEME,
       scrollback: 10000,
     });
@@ -132,6 +136,12 @@ export function TerminalScreen() {
       }
     });
 
+    const unsubHistory = wsService.on('history_replay', (msg) => {
+      if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        term.write(msg.output);
+      }
+    });
+
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
         setStatus(msg.status as string);
@@ -143,6 +153,23 @@ export function TerminalScreen() {
         if (msg.event.type === 'status_change') {
           setStatus(msg.event.status);
         }
+      }
+    });
+
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        for (const event of msg.events) {
+          if (event.type === 'status_change') {
+            setStatus(event.status);
+          }
+        }
+      }
+    });
+
+    const unsubOwnership = wsService.on('session_ownership', (msg) => {
+      if (msg.type === 'session_ownership' && msg.sessionId === sessionId) {
+        setSessionOwner(msg.owner);
+        setIsClaimed(msg.owner === 'local');
       }
     });
 
@@ -168,12 +195,16 @@ export function TerminalScreen() {
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
       unsubOutput();
+      unsubHistory();
       unsubStatus();
       unsubEvents();
+      unsubEventHistory();
+      unsubOwnership();
       unsubState();
       mql.removeEventListener('change', handleThemeChange);
       term.dispose();
       wsService.send({ type: 'control', action: 'detach_session', sessionId });
+      wsService.clearResume(sessionId);
     };
   }, [sessionId, attachSession]);
 
@@ -183,27 +214,61 @@ export function TerminalScreen() {
     navigate('/');
   }
 
-  const statusDotColor = status === 'running' ? 'bg-success-500' : status === 'thinking' ? 'bg-primary-500' : status === 'stopped' ? 'bg-danger-500' : 'bg-surface-300';
+  function claimSession() {
+    if (!sessionId) return;
+    wsService.send({ type: 'control', action: 'claim_session', sessionId });
+  }
+
+  function releaseSession() {
+    if (!sessionId) return;
+    wsService.send({ type: 'control', action: 'release_session', sessionId });
+  }
 
   return (
-    <div className="flex h-full flex-col gap-2">
-      <div className="flex items-center justify-between rounded border border-surface-200 bg-white px-3 py-2 dark:border-surface-800 dark:bg-surface-900">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${statusDotColor}`} />
-          <span className="text-sm font-medium text-surface-700 dark:text-surface-300">Agent</span>
-          <span className="font-mono text-xs text-surface-400">{sessionId?.slice(0, 8)}</span>
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <StatusDot status={status} />
+          <span className="text-sm font-medium text-geist-gray-900">Agent</span>
+          <span className="font-mono text-xs text-geist-gray-700">{sessionId?.slice(0, 8)}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <Chip size="sm" variant="soft" color={connected ? 'success' : 'danger'}>
-            {connected ? 'Connected' : 'Disconnected'}
-          </Chip>
-          <Button size="sm" variant="outline" onPress={() => navigate(`/chat/${sessionId}`)}>
-            Chat
+        <div className="flex flex-wrap items-center gap-3">
+          {sessionOwner && (
+            <StatusBadge
+              status={sessionOwner === 'local' ? 'connected' : 'waiting_input'}
+              dot={false}
+            />
+          )}
+          {sessionOwner && (
+            <span className="text-xs text-geist-gray-800">
+              {sessionOwner === 'local' ? 'You control' : 'Remote control'}
+            </span>
+          )}
+          {sessionOwner === 'remote' && (
+            <Button size="sm" variant="primary" onClick={claimSession}>
+              Take Control
+            </Button>
+          )}
+          {isClaimed && sessionOwner === 'local' && (
+            <Button size="sm" variant="tertiary" onClick={releaseSession}>
+              Release
+            </Button>
+          )}
+          <StatusBadge status={connected ? 'connected' : 'disconnected'} dot={false} />
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/files/${sessionId}`)}>
+            <IconFile className="mr-1.5 h-3.5 w-3.5" />
+            Files
           </Button>
-          <Button size="sm" variant="outline" onPress={() => navigate(`/agent/${sessionId}`)}>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/git/${sessionId}`)}>
+            <IconGitBranch className="mr-1.5 h-3.5 w-3.5" />
+            Git
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/agent/${sessionId}`)}>
+            <IconActivity className="mr-1.5 h-3.5 w-3.5" />
             Events
           </Button>
-          <Button size="sm" variant="danger" onPress={stopAgent}>
+          <Button size="sm" variant="error" onClick={stopAgent}>
+            <IconStop className="mr-1.5 h-3.5 w-3.5" />
             Stop
           </Button>
         </div>
@@ -211,7 +276,8 @@ export function TerminalScreen() {
 
       <div
         ref={termContainerRef}
-        className="flex-1 overflow-hidden rounded border border-surface-200 dark:border-surface-800"
+        className="flex-1 overflow-hidden rounded-[var(--radius-sm)] border border-geist-gray-alpha-400"
+        style={{ background: 'var(--terminal-bg)' }}
       />
     </div>
   );

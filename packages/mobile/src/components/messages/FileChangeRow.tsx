@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
+import { FontFamily } from '../../constants/theme';
 
 const CHANGE_COLORS: Record<string, string> = {
   create: '#21C45E',
@@ -73,12 +74,12 @@ const styles = StyleSheet.create({
   },
   filePath: {
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     color: '#3b82f6',
     flexShrink: 1,
   },
   counts: {
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
   },
 });

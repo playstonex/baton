@@ -2,13 +2,25 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  # Reused by release.yml as a gate: nothing is published from a red tree.
+  workflow_call:
+
+concurrency:
+  # Distinct per caller so the release gate never cancels a push/PR run.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  check:
+    name: Build, typecheck, test, lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +37,47 @@ jobs:
 
       - run: pnpm typecheck
 
+      # Vitest over every package except the daemon (its tests need Bun).
       - run: pnpm test
 
       - run: pnpm lint
+
+  daemon-test:
+    name: Daemon tests (Bun)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: bun test
+        working-directory: packages/daemon
+        env:
+          # Keep agent snapshots etc. out of the runner's real home.
+          BATON_HOME: ${{ runner.temp }}/baton-home
+        run: bun test
+
+  pty:
+    name: Rust PTY (cargo check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/daemon/pty
+
+      - run: cargo check --locked --release --manifest-path packages/daemon/pty/Cargo.toml

@@ -9,11 +9,11 @@ export async function startWorktreeSession(
   agentType: string = 'claude-code',
 ): Promise<{ sessionId: string; worktreePath: string }> {
   const wt = await createWorktree(basePath, branch);
-  const adapter = createAdapter(agentType as 'claude-code' | 'codex' | 'opencode');
+  const adapter = createAdapter(agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
 
   const sessionId = await agentManager.start(
     {
-      type: agentType as 'claude-code' | 'codex' | 'opencode',
+      type: agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
       projectPath: wt.path,
     },
     adapter,

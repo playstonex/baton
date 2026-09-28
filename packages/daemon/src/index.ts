@@ -3,15 +3,31 @@ import { readdir, stat, readFile } from 'node:fs/promises';
 import { join, basename, extname, resolve, sep } from 'node:path';
 import { access } from 'node:fs/promises';
 import { Hono } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import QRCode from 'qrcode';
-import { generateKeyPair, keyToFingerprint } from '@baton/shared';
+import { generateKeyPair, keyToFingerprint } from '@baton/shared/crypto';
 import { AgentManager } from './agent/manager.js';
-import { createAdapter, ProviderRegistry } from './agent/index.js';
+import { createAdapter, createSdkAdapter, ProviderRegistry } from './agent/index.js';
 import { Transport } from './transport/index.js';
 import { RelayConnection } from './transport/relay.js';
 import { FileWatcher } from './watcher/index.js';
 import { Orchestrator } from './orchestrator/index.js';
+import { ScheduleService } from './scheduler/schedule.js';
+import { WorkspaceCheckpointService } from './workspace/checkpoint.js';
+import { getVapidKeys } from './system/vapid.js';
+import { AnalyticsService } from './system/analytics.js';
+import { PushNotificationService } from './system/push.js';
+import { ContextCompressor } from './parser/compressor.js';
+import { GitService } from './git/index.js';
+import { createDefaultForgeRegistry, parseRepoRef, checkoutPullRequest } from './forge/index.js';
+import { listWorktrees, createWorktree, archiveWorktree } from './worktree/core.js';
+import { ApiProviderRegistry } from './api-converter/index.js';
+import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
+import { previewCodexProviders } from './api-converter/codex-sync.js';
+import { loadBatonEnv } from './env.js';
+import type { ResponsesApiRequest } from './api-converter/types.js';
+import { acquirePid, releasePid, DaemonAlreadyRunningError, BATON_VERSION } from '@baton/shared';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
   StartAgentRequest,
@@ -19,27 +35,82 @@ import type {
   ParsedEvent,
   ClientMessage,
   DaemonMessage,
+  ApiProviderProfile,
+  ApiProviderConfig,
 } from '@baton/shared';
 
 const DEFAULT_PORT = 3210;
 
-function getLocalIp(): string | null {
+function getLocalIps(): { ipv4: string | null; ipv6: string | null } {
   const nets = Object.values(os.networkInterfaces());
+  let ipv4: string | null = null;
+  let ipv6: string | null = null;
   for (const interfaces of nets) {
     for (const iface of interfaces ?? []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+      if (iface.internal) continue;
+      if (iface.family === 'IPv4' && !ipv4) {
+        ipv4 = iface.address;
+      }
+      if (iface.family === 'IPv6' && !ipv6) {
+        ipv6 = iface.address;
       }
     }
   }
-  return null;
+  return { ipv4, ipv6 };
 }
+
+/** Format host for display in URLs — wraps IPv6 addresses in brackets. */
+function formatHostForUrl(host: string): string {
+  return host.includes(':') ? `[${host}]` : host;
+}
+
+export function isLoopbackAddress(ip: string): boolean {
+  const addr = ip.replace(/^::ffff:/i, ''); // IPv4-mapped IPv6
+  return addr === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(addr);
+}
+
+export function isLocalOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname;
+    return host === 'localhost' || host === '[::1]' || host === '::1' || isLoopbackAddress(host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Provider env vars must look like an API key name. `envKey` selects which
+ * process env var the proxy forwards upstream, so an unconstrained value
+ * (e.g. AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN) would turn the proxy into a
+ * general env-var exfiltration channel.
+ */
+export const API_KEY_ENV_PATTERN = /^[A-Z][A-Z0-9_]*_API_KEY$/;
 
 export function createDaemon(port = DEFAULT_PORT) {
   const app = new Hono();
+  const batonHome = process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
   const agentManager = new AgentManager();
+  void agentManager.restore();
   const orchestrator = new Orchestrator(agentManager);
-  const transport = new Transport(agentManager, port);
+  const scheduler = new ScheduleService(agentManager);
+  void scheduler.restore();
+  const checkpointService = new WorkspaceCheckpointService();
+  const analytics = new AnalyticsService(join(batonHome, 'analytics.db'));
+  const pushService = new PushNotificationService();
+  const compressor = new ContextCompressor();
+  const gitService = new GitService();
+  const forgeRegistry = createDefaultForgeRegistry();
+  const transport = new Transport(agentManager, port, {
+    onPushTokenRegister: (clientId, token, platform) => {
+      pushService.register(clientId, token, platform as 'ios' | 'android' | 'web');
+    },
+    onPushTokenUnregister: (clientId) => {
+      pushService.unregister(clientId);
+    },
+    onAccessModeChange: (mode) => {
+      pushService.setAccessMode(mode);
+    },
+  });
   const watchers = new Map<string, FileWatcher>();
   let relayConnection: RelayConnection | null = null;
 
@@ -53,15 +124,49 @@ export function createDaemon(port = DEFAULT_PORT) {
         return true;
       }
     }
-    return allowedProjectPaths.size === 0;
+    for (const agent of agentManager.list()) {
+      if (agent.projectPath) {
+        const allowedResolved = resolve(agent.projectPath) + sep;
+        if (resolved.startsWith(allowedResolved) || resolved === resolve(agent.projectPath)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   app.use('*', cors());
 
+  // ── Local-only guard for credential-bearing routes ───────────────────
+  // /proxy/* attaches a real API key (resolved from the daemon's env) to an
+  // outbound request, and /api/api-providers mutations decide WHERE that key
+  // goes (baseUrl) and WHICH env var is read (envKey). The daemon listens on
+  // all interfaces with no auth and permissive CORS, so without this guard any
+  // LAN peer — or any web page the user visits, via a cross-origin fetch to
+  // localhost — could point a provider at its own server and have the daemon
+  // POST the key there. Require a loopback peer AND no foreign browser Origin.
+  // Codex (the proxy's real caller) runs on this host and sends no Origin; the
+  // web UI is served from localhost (Vite dev or same-origin).
+  const localOnly: MiddlewareHandler = async (c, next) => {
+    if (c.req.method === 'GET' && !c.req.path.startsWith('/proxy/')) return next();
+    const ip = (c.env as { requestIP?: string } | undefined)?.requestIP;
+    if (!ip || !isLoopbackAddress(ip)) {
+      return c.json({ error: 'This endpoint is only available from the daemon host' }, 403);
+    }
+    const origin = c.req.header('origin');
+    if (origin && !isLocalOrigin(origin)) {
+      return c.json({ error: 'Cross-origin request refused' }, 403);
+    }
+    return next();
+  };
+  app.use('/api/api-providers', localOnly);
+  app.use('/api/api-providers/*', localOnly);
+  app.use('/proxy/*', localOnly);
+
   app.get('/api/health', (c) => {
     return c.json({
       status: 'ok',
-      version: '0.0.1',
+      version: BATON_VERSION,
       relay: relayConnection?.connected ?? false,
     });
   });
@@ -84,39 +189,102 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.get('/api/system/stats', async (c) => {
     const { collectSystemStats } = await import('./system/stats.js');
-    return c.json(await collectSystemStats());
+    return c.json(await collectSystemStats(agentManager));
+  });
+
+  app.get('/api/analytics/health', (c) => {
+    return c.json(analytics.getHealthScore());
+  });
+
+  app.get('/api/analytics/hourly', (c) => {
+    const hours = parseInt(c.req.query('hours') ?? '24', 10);
+    return c.json(analytics.getHourlyStats(hours));
+  });
+
+  app.get('/api/analytics/session/:id', (c) => {
+    const stats = analytics.getSessionStats(c.req.param('id'));
+    return c.json(stats);
+  });
+
+  app.get('/api/analytics/recent', (c) => {
+    const limit = parseInt(c.req.query('limit') ?? '100', 10);
+    return c.json(analytics.getRecentEvents(limit));
+  });
+
+  app.post('/api/push/register', async (c) => {
+    const body = await c.req.json<{
+      clientId: string;
+      token: string;
+      platform: 'ios' | 'android' | 'web';
+    }>();
+    pushService.register(body.clientId, body.token, body.platform);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/push/unregister', async (c) => {
+    const body = await c.req.json<{ clientId: string }>();
+    pushService.unregister(body.clientId);
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/push/subscriptions', (c) => {
+    return c.json(pushService.listSubscriptions());
   });
 
   app.post('/api/agents/start', async (c) => {
     const body = await c.req.json<StartAgentRequest>();
-    console.log(`[baton] POST /api/agents/start: type=${body.agentType} mode=${body.mode ?? 'pty'} path=${body.projectPath}`);
-    const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
-
     const absPath = resolve(body.projectPath);
-    const safe = await access(absPath).then(() => true).catch(() => false);
+    const safe = await access(absPath)
+      .then(() => true)
+      .catch(() => false);
     if (!safe) {
       return c.json({ error: 'Invalid project path' }, 400);
     }
     allowedProjectPaths.add(absPath);
 
+    const agentConfig = {
+      type: body.agentType,
+      projectPath: body.projectPath,
+      args: body.args,
+      env: body.env,
+    };
+
+    // SDK mode: try the SDK adapter first; fall back to PTY if unavailable.
+    const sdkAdapter = createSdkAdapter(body.agentType);
+    const wantSdk =
+      (body.mode ?? 'pty') === 'sdk' || (body.mode === 'auto' && !!sdkAdapter?.isSdkAvailable());
     let sessionId: string;
-    try {
-      sessionId = await agentManager.start(
-        {
-          type: body.agentType,
-          projectPath: body.projectPath,
-          args: body.args,
-          env: body.env,
-        },
-        adapter,
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error starting agent';
-      console.error(`[baton] POST /api/agents/start failed:`, msg);
-      return c.json({ error: msg }, 400);
+    if (wantSdk && sdkAdapter) {
+      sessionId = await agentManager.startSdk(agentConfig, sdkAdapter);
+    } else {
+      const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
+      sessionId = await agentManager.start(agentConfig, adapter);
     }
 
     transport.registerSessionEvents(sessionId);
+    syncActiveAgents();
+
+    agentManager.onEvent(sessionId, (event: ParsedEvent) => {
+      analytics.logEvent(sessionId, event);
+      compressor.addEvent(sessionId, event);
+
+      if (pushService.shouldNotify(event.type)) {
+        pushService.broadcast({
+          title: `Agent ${event.type.replace(/_/g, ' ')}`,
+          body:
+            event.type === 'permission_request'
+              ? `Permission needed for ${(event as Extract<ParsedEvent, { type: 'permission_request' }>).tool}`
+              : event.type === 'error'
+                ? (event as Extract<ParsedEvent, { type: 'error' }>).message
+                : `Status: ${(event as Extract<ParsedEvent, { type: 'status_change' }>).status}`,
+          data: { sessionId, eventType: event.type },
+        });
+      }
+
+      if (compressor.needsCompaction(sessionId)) {
+        compressor.compact(sessionId);
+      }
+    });
 
     if (!watchers.has(body.projectPath)) {
       const watcher = new FileWatcher({ projectPath: body.projectPath });
@@ -125,17 +293,34 @@ export function createDaemon(port = DEFAULT_PORT) {
         transport.broadcast(msg);
         relayConnection?.send(msg);
       });
-      watcher.start();
       watchers.set(body.projectPath, watcher);
+      // chokidar's initial traversal is CPU-bound and synchronous per entry; on
+      // very large trees (100k+ files — e.g. a project with a big build dir or
+      // vendored deps) it stalls the event loop and freezes HTTP/WS, which
+      // surfaces as the agent appearing "unlinked" from the app. file_change
+      // events are a non-essential nicety, so default to OFF and let the user
+      // opt in per-project via BATON_WATCH=1 when they know the tree is small.
+      if (process.env.BATON_WATCH === '1') {
+        setImmediate(() => watcher.start());
+      } else {
+        console.log(
+          `[watcher] file-change watch disabled for ${body.projectPath} (set BATON_WATCH=1 to enable; large trees can freeze the daemon)`,
+        );
+      }
     }
 
-    console.log(`[baton] POST /api/agents/start done: sessionId=${sessionId.slice(0,8)}`);
     return c.json({ sessionId, agentType: body.agentType, status: 'running' });
   });
+
+  function syncActiveAgents(): void {
+    analytics.setActiveAgents(agentManager.list().filter((a) => a.status !== 'stopped').length);
+  }
 
   app.post('/api/agents/:id/stop', async (c) => {
     const id = c.req.param('id');
     await agentManager.stop(id);
+    compressor.clear(id);
+    syncActiveAgents();
     return c.json({ ok: true });
   });
 
@@ -180,10 +365,8 @@ export function createDaemon(port = DEFAULT_PORT) {
   ]);
 
   app.get('/api/files', async (c) => {
-    const dir = c.req.query('path') ?? '/';
-    if (!isPathAllowed(dir)) {
-      return c.json({ error: 'Path not allowed' }, 403);
-    }
+    const rawDir = c.req.query('path') ?? '/';
+    const dir = resolve(rawDir);
 
     try {
       const entries = await readdir(dir, { withFileTypes: true });
@@ -216,6 +399,82 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
+  app.get('/api/files/search', async (c) => {
+    const rawDir = c.req.query('path');
+    if (!rawDir) return c.json({ error: 'path is required' }, 400);
+    const query = (c.req.query('q') ?? '').trim().toLowerCase();
+    const dir = resolve(rawDir);
+    // Search walks a whole tree recursively (git ls-files / deep scan), so unlike
+    // the one-level directory browser it is scoped to registered project paths.
+    if (!isPathAllowed(dir)) return c.json({ error: 'Path not allowed' }, 403);
+
+    try {
+      const s = await stat(dir);
+      if (!s.isDirectory()) {
+        return c.json({ error: 'Path is not a directory' }, 400);
+      }
+      // 1. Try git ls-files if inside a git repository
+      const proc = Bun.spawn(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], {
+        cwd: dir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const stdout = await new Response(proc.stdout).text();
+      const exitCode = await proc.exited;
+
+      let filePaths: string[] = [];
+      if (exitCode === 0 && stdout.trim().length > 0) {
+        filePaths = stdout.trim().split('\n');
+      } else {
+        // Fallback: fast recursive scan (up to depth 4, skip hidden & node_modules)
+        const scan = async (curDir: string, relPrefix = '', depth = 0): Promise<string[]> => {
+          if (depth > 4) return [];
+          const res: string[] = [];
+          const entries = await readdir(curDir, { withFileTypes: true }).catch(() => []);
+          for (const e of entries) {
+            if (IGNORE_DIRS.has(e.name) || e.name.startsWith('.')) continue;
+            const rel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
+            if (e.isDirectory()) {
+              res.push(...(await scan(join(curDir, e.name), rel, depth + 1)));
+            } else {
+              res.push(rel);
+            }
+            if (res.length > 500) break;
+          }
+          return res;
+        };
+        filePaths = await scan(dir);
+      }
+
+      // Filter and rank by query
+      let matches = filePaths;
+      if (query) {
+        matches = filePaths
+          .filter((p) => p.toLowerCase().includes(query))
+          .sort((a, b) => {
+            const aName = a.split('/').pop()?.toLowerCase() ?? '';
+            const bName = b.split('/').pop()?.toLowerCase() ?? '';
+            const aNameStarts = aName.startsWith(query);
+            const bNameStarts = bName.startsWith(query);
+            if (aNameStarts && !bNameStarts) return -1;
+            if (!aNameStarts && bNameStarts) return 1;
+            const aNameMatch = aName.includes(query);
+            const bNameMatch = bName.includes(query);
+            if (aNameMatch && !bNameMatch) return -1;
+            if (!aNameMatch && bNameMatch) return 1;
+            return a.length - b.length;
+          });
+      }
+
+      return c.json({
+        path: dir,
+        files: matches.slice(0, 30),
+      });
+    } catch {
+      return c.json({ error: 'Search failed', files: [] }, 400);
+    }
+  });
+
   app.get('/api/files/content', async (c) => {
     const filePath = c.req.query('path');
     if (!filePath) return c.json({ error: 'Missing path' }, 400);
@@ -238,6 +497,303 @@ export function createDaemon(port = DEFAULT_PORT) {
       });
     } catch {
       return c.json({ error: 'Cannot read file' }, 400);
+    }
+  });
+
+  const RAW_MIME: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+  };
+
+  app.get('/api/files/raw', async (c) => {
+    const filePath = c.req.query('path');
+    if (!filePath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(filePath)) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
+
+    try {
+      const s = await stat(filePath);
+      if (s.isDirectory()) return c.json({ error: 'Path is a directory' }, 400);
+      if (s.size > 10 * 1024 * 1024) return c.json({ error: 'File too large (max 10MB)' }, 400);
+
+      const ext = extname(filePath).toLowerCase();
+      const contentType = RAW_MIME[ext] ?? 'application/octet-stream';
+
+      const data = await readFile(filePath);
+      return new Response(data, {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': String(s.size),
+          'Cache-Control': 'no-cache',
+        },
+      });
+    } catch {
+      return c.json({ error: 'Cannot read file' }, 400);
+    }
+  });
+
+  // Git RPC API
+  app.get('/api/git/status', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.status(projectPath));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git status failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/commit', async (c) => {
+    const body = await c.req.json<{ projectPath: string; message?: string; all?: boolean }>();
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.commit(body));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git commit failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/push', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.push(projectPath));
+  });
+
+  app.post('/api/git/pull', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.pull(projectPath));
+  });
+
+  app.get('/api/git/branches', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.branches(projectPath));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git branches failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/checkout', async (c) => {
+    const body = await c.req.json<{ projectPath: string; branch: string }>();
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.checkout(body));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git checkout failed' }, 500);
+    }
+  });
+
+  app.post('/api/git/create-branch', async (c) => {
+    const body = await c.req.json<{ projectPath: string; branch: string; checkout?: boolean }>();
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.createBranch(body));
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Git create branch failed' },
+        500,
+      );
+    }
+  });
+
+  app.get('/api/git/log', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    const count = parseInt(c.req.query('count') ?? '25', 10);
+    return c.json(await gitService.log(projectPath, count));
+  });
+
+  app.post('/api/git/stash', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.stash(projectPath));
+  });
+
+  app.post('/api/git/stash-pop', async (c) => {
+    const { projectPath } = await c.req.json<{ projectPath: string }>();
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    return c.json(await gitService.stashPop(projectPath));
+  });
+
+  app.get('/api/git/remote-url', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.remoteUrl(projectPath));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git remote-url failed' }, 500);
+    }
+  });
+
+  app.get('/api/git/diff', async (c) => {
+    const projectPath = c.req.query('path');
+    if (!projectPath) return c.json({ error: 'Missing path' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      const file = c.req.query('file') || undefined;
+      const staged = c.req.query('staged') === 'true';
+      return c.json(await gitService.diff(projectPath, file, staged));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git diff failed' }, 500);
+    }
+  });
+
+  app.get('/api/git/commit-diff', async (c) => {
+    const projectPath = c.req.query('path');
+    const hash = c.req.query('hash');
+    if (!projectPath || !hash) return c.json({ error: 'Missing path or hash' }, 400);
+    if (!isPathAllowed(projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await gitService.commitDiff(projectPath, hash));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Git commit-diff failed' }, 500);
+    }
+  });
+
+  // Forge API (code-hosting platforms — GitHub, later GitLab/Gitea)
+  // Resolve a `repo` (owner/name, full URL, or scp-ssh remote) to a forge
+  // service via the open registry. Returns null + the caller-facing reason.
+  async function resolveForge(repoParam: string | undefined) {
+    if (!repoParam) return { error: 'Missing repo', status: 400 as const };
+    const ref = parseRepoRef(repoParam);
+    if (!ref) return { error: 'Unrecognized repo (expected owner/name, URL, or ssh remote)', status: 400 as const };
+    const forge = await forgeRegistry.resolveHost(ref.host);
+    if (!forge) return { error: `No forge adapter for host ${ref.host}`, status: 400 as const };
+    const service = forgeRegistry.create(forge);
+    if (!service) return { error: `Forge ${forge} not available`, status: 500 as const };
+    return { ref, service };
+  }
+
+  app.get('/api/forge/prs', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    try {
+      const state = c.req.query('state') || undefined;
+      const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
+      return c.json(await resolved.service.listPullRequests(resolved.ref, { state, limit }));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge list PRs failed' }, 500);
+    }
+  });
+
+  app.get('/api/forge/issues', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    try {
+      const state = c.req.query('state') || undefined;
+      const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
+      return c.json(await resolved.service.listIssues(resolved.ref, { state, limit }));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge list issues failed' }, 500);
+    }
+  });
+
+  app.get('/api/forge/pr/:number/checks', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    const prNumber = parseInt(c.req.param('number'), 10);
+    if (!Number.isFinite(prNumber)) return c.json({ error: 'Invalid PR number' }, 400);
+    try {
+      return c.json(await resolved.service.getChecks(resolved.ref, prNumber));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge checks failed' }, 500);
+    }
+  });
+
+  app.get('/api/forge/pr/:number/checkout-target', async (c) => {
+    const resolved = await resolveForge(c.req.query('repo'));
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    const prNumber = parseInt(c.req.param('number'), 10);
+    if (!Number.isFinite(prNumber)) return c.json({ error: 'Invalid PR number' }, 400);
+    try {
+      return c.json(await resolved.service.getCheckoutTarget(resolved.ref, prNumber));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge checkout-target failed' }, 500);
+    }
+  });
+
+  // Check out a PR into a local working tree (fork-aware). Writes to the tree,
+  // so the projectPath must be an allowed path.
+  app.post('/api/forge/pr/:number/checkout', async (c) => {
+    const body = await c.req.json<{ repo?: string; projectPath?: string }>().catch(() => ({}) as {
+      repo?: string;
+      projectPath?: string;
+    });
+    if (!body.projectPath) return c.json({ error: 'Missing projectPath' }, 400);
+    if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
+    const resolved = await resolveForge(body.repo);
+    if ('error' in resolved) return c.json({ error: resolved.error }, resolved.status);
+    const prNumber = parseInt(c.req.param('number'), 10);
+    if (!Number.isFinite(prNumber)) return c.json({ error: 'Invalid PR number' }, 400);
+    try {
+      const target = await resolved.service.getCheckoutTarget(resolved.ref, prNumber);
+      return c.json(await checkoutPullRequest(body.projectPath, target));
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Forge checkout failed' }, 500);
+    }
+  });
+
+  // Worktree API (parallel git worktrees for isolated agent branches)
+  app.get('/api/worktree/list', async (c) => {
+    const status = c.req.query('status');
+    try {
+      const all = await listWorktrees(
+        status === 'active' || status === 'archived' ? status : undefined,
+      );
+      return c.json(all);
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Worktree list failed' },
+        500,
+      );
+    }
+  });
+
+  app.post('/api/worktree/create', async (c) => {
+    const body = await c.req
+      .json<{ basePath?: string; branch?: string }>()
+      .catch(() => ({}) as { basePath?: string; branch?: string });
+    if (!body.basePath || !body.branch) {
+      return c.json({ error: 'Missing basePath or branch' }, 400);
+    }
+    if (!isPathAllowed(body.basePath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await createWorktree(body.basePath, body.branch));
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Worktree create failed' },
+        500,
+      );
+    }
+  });
+
+  app.post('/api/worktree/archive', async (c) => {
+    const body = await c.req
+      .json<{ path?: string }>()
+      .catch(() => ({}) as { path?: string });
+    if (!body.path) return c.json({ error: 'Missing path' }, 400);
+    try {
+      const result = await archiveWorktree(body.path);
+      if (!result) return c.json({ error: 'Worktree not found or already archived' }, 404);
+      return c.json(result);
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Worktree archive failed' },
+        500,
+      );
     }
   });
 
@@ -265,7 +821,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       models?: string[];
     }>();
     await providerRegistry.set(body.name, {
-      type: body.type as 'claude-code' | 'codex' | 'opencode' | 'custom',
+      type: body.type as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli' | 'custom',
       binary: body.binary,
       args: [],
       env: {},
@@ -280,6 +836,149 @@ export function createDaemon(port = DEFAULT_PORT) {
     const removed = await providerRegistry.remove(c.req.param('name'));
     if (!removed) return c.json({ error: 'Provider not found' }, 404);
     return c.json({ ok: true });
+  });
+
+  // API Providers — managed here, synced into Codex's config.toml on every write
+  const apiProviderRegistry = new ApiProviderRegistry();
+  apiProviderRegistry.setPort(port);
+
+  app.get('/api/api-providers', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    return c.json(apiProviderRegistry.list());
+  });
+
+  app.get('/api/api-providers/default', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const provider = apiProviderRegistry.getDefault();
+    if (!provider) return c.json({ error: 'No provider configured' }, 404);
+    return c.json(provider);
+  });
+
+  // NOTE: must be declared before the `/:name` route or it gets shadowed.
+  app.get('/api/api-providers/codex-preview', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const config: ApiProviderConfig = { providers: {} };
+    for (const p of apiProviderRegistry.list()) {
+      const { name, ...profile } = p;
+      config.providers[name] = profile;
+    }
+    return c.json({ toml: previewCodexProviders(config, port) });
+  });
+
+  app.get('/api/api-providers/:name', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const profile = apiProviderRegistry.get(c.req.param('name'));
+    if (!profile) return c.json({ error: 'Provider not found' }, 404);
+    return c.json({ name: c.req.param('name'), ...profile });
+  });
+
+  app.post('/api/api-providers', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const body = await c.req.json<{
+      name: string;
+      baseUrl: string;
+      envKey?: string;
+      models?: string[];
+      enabled?: boolean;
+      isDefault?: boolean;
+      apiMode?: 'responses' | 'chat' | 'chat-completions';
+      upstreamFormat?: 'responses' | 'openai-chat' | 'anthropic';
+    }>();
+
+    const upstreamFormat = body.upstreamFormat ?? 'openai-chat';
+    const envKey = body.envKey ?? 'OPENAI_API_KEY';
+    if (!API_KEY_ENV_PATTERN.test(envKey)) {
+      return c.json({ error: 'envKey must be an env var name ending in _API_KEY' }, 400);
+    }
+    const profile: ApiProviderProfile = {
+      baseUrl: body.baseUrl,
+      envKey,
+      models: body.models ?? [],
+      enabled: body.enabled ?? true,
+      isDefault: body.isDefault ?? false,
+      // apiMode follows upstreamFormat: responses↔responses, chat↔openai-chat.
+      // Most third-party OpenAI-compatible providers only expose /chat/completions,
+      // so defaulting to openai-chat avoids the common /responses 404 trap.
+      apiMode: (body.apiMode ?? (upstreamFormat === 'responses' ? 'responses' : 'chat')) as
+        | 'responses'
+        | 'chat',
+      upstreamFormat,
+      createdAt: new Date().toISOString(),
+    };
+
+    await apiProviderRegistry.set(body.name, profile);
+    return c.json({ ok: true }, 201);
+  });
+
+  app.put('/api/api-providers/:name', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const name = c.req.param('name');
+    const existing = apiProviderRegistry.get(name);
+    if (!existing) return c.json({ error: 'Provider not found' }, 404);
+
+    const body = await c.req.json<Partial<ApiProviderProfile>>();
+    if (body.envKey !== undefined && !API_KEY_ENV_PATTERN.test(body.envKey)) {
+      return c.json({ error: 'envKey must be an env var name ending in _API_KEY' }, 400);
+    }
+    await apiProviderRegistry.set(name, { ...existing, ...body });
+    return c.json({ ok: true });
+  });
+
+  app.delete('/api/api-providers/:name', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+    const removed = await apiProviderRegistry.remove(c.req.param('name'));
+    if (!removed) return c.json({ error: 'Provider not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  // Preview the [model_providers.*] TOML that would be written to Codex's
+  // config.toml, for display in the API Providers UI.
+  // ── Protocol-adapting proxy ──────────────────────────────────────────
+  // Codex (wire_api = "responses") POSTs Responses-API requests here. The
+  // daemon adapts the request to the target provider's `upstreamFormat`,
+  // forwards it to the provider's real baseUrl, and adapts the reply back.
+  app.post('/proxy/responses', async (c) => {
+    if (!apiProviderRegistry.ensureLoaded()) await apiProviderRegistry.load();
+
+    const requestedProvider = c.req.header('X-Provider');
+    const provider = requestedProvider
+      ? apiProviderRegistry.get(requestedProvider)
+      : apiProviderRegistry.getDefault();
+
+    if (!provider || !provider.enabled) {
+      return c.json({ error: 'No API provider configured' }, 500);
+    }
+
+    const apiKey = resolveApiKey(provider);
+    if (!apiKey) {
+      return c.json(
+        { error: `Environment variable ${provider.envKey} is not set; cannot resolve API key` },
+        500,
+      );
+    }
+
+    const req = (await c.req.json()) as ResponsesApiRequest;
+    const result = await proxyResponses(req, {
+      baseUrl: provider.baseUrl,
+      apiKey,
+      upstreamFormat: provider.upstreamFormat ?? 'responses',
+    });
+
+    if ('error' in result) {
+      return c.json({ error: result.error }, result.status as 400 | 401 | 403 | 404 | 429 | 500);
+    }
+
+    if ('stream' in result) {
+      return new Response(result.stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
+    return c.json(result.json);
   });
 
   // Pipeline / Orchestration API
@@ -308,6 +1007,106 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json(pipeline);
   });
 
+  // ── Schedules (cron-triggered agents) ─────────────────────────────
+  app.get('/api/schedules', (c) => {
+    return c.json(scheduler.list());
+  });
+
+  app.post('/api/schedules', async (c) => {
+    const body = await c.req.json<{
+      name: string;
+      cron: string;
+      agentType: string;
+      projectPath: string;
+      prompt: string;
+      enabled?: boolean;
+    }>();
+    try {
+      const schedule = scheduler.add({
+        name: body.name,
+        cron: body.cron,
+        agentType: body.agentType,
+        projectPath: body.projectPath,
+        prompt: body.prompt,
+        enabled: body.enabled ?? true,
+      });
+      return c.json(schedule, 201);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Invalid schedule' }, 400);
+    }
+  });
+
+  app.delete('/api/schedules/:id', (c) => {
+    const removed = scheduler.remove(c.req.param('id'));
+    if (!removed) return c.json({ error: 'Not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/schedules/:id/enable', (c) => {
+    scheduler.enable(c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/schedules/:id/disable', (c) => {
+    scheduler.disable(c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  // ── Workspace checkpoints (undo AI changes) ───────────────────────
+  app.get('/api/workspace/checkpoints', async (c) => {
+    const projectPath = c.req.query('cwd');
+    if (!projectPath) return c.json({ error: 'cwd query param required' }, 400);
+    const checkpoints = await checkpointService.list(projectPath);
+    return c.json(checkpoints);
+  });
+
+  app.post('/api/workspace/checkpoint', async (c) => {
+    const body = await c.req.json<{ cwd: string; label?: string }>();
+    if (!body.cwd) return c.json({ error: 'cwd required' }, 400);
+    try {
+      const cp = await checkpointService.create(body.cwd, body.label ?? 'Manual checkpoint');
+      return c.json(cp, 201);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Checkpoint failed' }, 500);
+    }
+  });
+
+  app.post('/api/workspace/revert-preview', async (c) => {
+    const body = await c.req.json<{ cwd: string; checkpointId: string }>();
+    try {
+      const preview = await checkpointService.revertPreview(body.cwd, body.checkpointId);
+      return c.json(preview);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Preview failed' }, 500);
+    }
+  });
+
+  app.post('/api/workspace/revert-apply', async (c) => {
+    const body = await c.req.json<{ cwd: string; checkpointId: string }>();
+    try {
+      await checkpointService.revertApply(body.cwd, body.checkpointId);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Revert failed' }, 500);
+    }
+  });
+
+  app.delete('/api/workspace/checkpoints/:id', async (c) => {
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ error: 'cwd query param required' }, 400);
+    const removed = await checkpointService.remove(cwd, c.req.param('id'));
+    if (!removed) return c.json({ error: 'Not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  // ── Web Push VAPID public key ─────────────────────────────────────
+  // Browsers need this to create a PushSubscription via
+  // pushManager.subscribe({ applicationServerKey: <publicKey> }).
+  app.get('/api/push/vapid-public', async (c) => {
+    const keys = await getVapidKeys();
+    return c.json({ publicKey: keys.publicKey });
+  });
+
   // Connect to Relay for remote access
   app.post('/api/relay/connect', async (c) => {
     const body = await c.req.json<{ relayUrl: string; token: string }>();
@@ -329,20 +1128,6 @@ export function createDaemon(port = DEFAULT_PORT) {
             } catch {
               /* session might not exist */
             }
-          } else if (clientMsg.type === 'chat_input' && clientMsg.sessionId) {
-            try {
-              agentManager.chatWrite(clientMsg.sessionId, clientMsg.content);
-            } catch {
-              /* session might not exist */
-            }
-          } else if (clientMsg.type === 'steer_input' && clientMsg.sessionId) {
-            try {
-              agentManager.steer(clientMsg.sessionId, clientMsg.content);
-            } catch {
-              /* session might not exist */
-            }
-          } else if (clientMsg.type === 'cancel_turn' && clientMsg.sessionId) {
-            agentManager.cancelTurn(clientMsg.sessionId).catch(() => {});
           }
         }
       },
@@ -376,51 +1161,105 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
     const fingerprint = keyToFingerprint(daemonKeyPair.publicKey);
     const relayUrl = c.req.query('relay') ?? `ws://localhost:${DEFAULT_PORT + 20}`;
+    const ips = getLocalIps();
+    const localIp = ips.ipv4 || '127.0.0.1';
+    const localHttpUrl = `http://${localIp}:${port}`;
+    const localWsUrl = `ws://${localIp}:${port + 1}`;
+    const hostname = os.hostname();
     const payload = JSON.stringify({
+      version: 1,
+      name: hostname,
+      localHttpUrl,
+      localWsUrl,
       daemonId: 'local',
       fp: fingerprint,
       relay: relayUrl,
     });
     const qrDataUrl = await QRCode.toDataURL(payload, { width: 256 });
-    return c.json({ qr: qrDataUrl, fingerprint, relayUrl });
+    const qrTerminal = await QRCode.toString(payload, { type: 'terminal', small: true });
+    return c.json({
+      qr: qrDataUrl,
+      qrTerminal,
+      fingerprint,
+      relayUrl,
+      localHttpUrl,
+      localWsUrl,
+      name: hostname,
+      payload,
+    });
   });
 
   return { app, agentManager, transport, port, watchers };
 }
 
 export async function main() {
+  // Load ~/.baton/.env as a fallback so API keys are available no matter how
+  // the daemon was launched (terminal / mobile pairing / launchd / reboot).
+  // Existing process.env values win. Must run before createDaemon().
+  try {
+    const { loaded } = await loadBatonEnv();
+    if (loaded > 0) console.log(`[baton] loaded ${loaded} env var(s) from ~/.baton/.env`);
+  } catch {
+    // Non-fatal — env loading must never block daemon startup.
+  }
+
   const port = parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
   const { app, transport } = createDaemon(port);
 
   transport.start();
 
-  const hostname = process.env.HOST || '0.0.0.0';
+  const hostname = process.env.HOST || '::';
+  const displayHost = formatHostForUrl(hostname);
+
+  // Write our PID so `baton daemon stop/status` and companions can find us.
+  // Refuses to start if a live daemon is already running on this host.
+  try {
+    await acquirePid();
+  } catch (err) {
+    if (err instanceof DaemonAlreadyRunningError) {
+      console.error(`\n  ✗ ${err.message}`);
+      console.error(`    Run \`baton daemon stop\` first, or remove ${err.pidfile} if stale.\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
 
   Bun.serve({
-    fetch: app.fetch,
+    // Expose the socket peer address to handlers (c.env.requestIP) — used by
+    // the local-only guard. Never trust X-Forwarded-For for this.
+    fetch: (req, server) => app.fetch(req, { requestIP: server.requestIP(req)?.address }),
     port,
     hostname,
   });
 
-  const localIp = getLocalIp();
-  console.log(`\n  Baton Daemon v0.0.1`);
-  console.log(`  HTTP:      http://${hostname}:${port}`);
-  console.log(`  WebSocket: ws://${hostname}:${port + 1}`);
-  if (localIp && hostname === '0.0.0.0') {
-    console.log(`  LAN HTTP:  http://${localIp}:${port}`);
-    console.log(`  LAN WS:    ws://${localIp}:${port + 1}`);
+  const localIps = getLocalIps();
+  console.log(`\n  Baton Daemon v${BATON_VERSION}`);
+  console.log(`  HTTP:      http://${displayHost}:${port}`);
+  console.log(`  WebSocket: ws://${displayHost}:${port + 1}`);
+  if (hostname === '::') {
+    if (localIps.ipv4) {
+      console.log(`  LAN HTTP:  http://${localIps.ipv4}:${port}`);
+      console.log(`  LAN WS:    ws://${localIps.ipv4}:${port + 1}`);
+    }
+    if (localIps.ipv6) {
+      console.log(`  LAN HTTP:  http://[${localIps.ipv6}]:${port}`);
+      console.log(`  LAN WS:    ws://[${localIps.ipv6}]:${port + 1}`);
+    }
   }
   console.log(`  Host: ${os.hostname()} (${process.platform})\n`);
 
   process.on('SIGINT', () => {
     transport.stop();
-    process.exit(0);
+    void releasePid().finally(() => process.exit(0));
   });
 
   process.on('SIGTERM', () => {
     transport.stop();
-    process.exit(0);
+    void releasePid().finally(() => process.exit(0));
   });
 }
 
-main();
+if (import.meta.main) {
+  void main();
+}
+

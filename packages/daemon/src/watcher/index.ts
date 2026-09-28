@@ -32,28 +32,18 @@ export class FileWatcher {
   start(): void {
     const ignore = [...DEFAULT_IGNORE, ...(this.options.ignorePatterns ?? [])];
 
+    // Use glob-based ignores (cheaper than a per-path function, which chokidar
+    // invokes for every entry during its initial traversal and which dominates
+    // CPU on large projects). Globs are matched against each path too, but the
+    // anymatch engine is markedly faster than the hand-written segment split.
     this.watcher = watch(this.options.projectPath, {
-      ignored: [
-        (path) => {
-          if (path === this.options.projectPath) return false;
-          const rel = path.slice(this.options.projectPath.length + 1);
-          const segs = rel.split('/');
-          return (
-            segs.includes('node_modules') ||
-            segs.includes('.git') ||
-            segs.includes('dist') ||
-            segs.includes('.turbo')
-          );
-        },
-        ...ignore,
-      ],
+      ignored: ignore,
       persistent: true,
       ignoreInitial: true,
       ignorePermissionErrors: true,
-      awaitWriteFinish: {
-        stabilityThreshold: 200,
-        pollInterval: 100,
-      },
+      // Disable awaitWriteFinish: its per-file polling adds significant overhead
+      // on large trees and is unnecessary for change-notification purposes here.
+      awaitWriteFinish: false,
     });
 
     this.watcher.on('add', (path) => this.handleChange(path, 'create'));

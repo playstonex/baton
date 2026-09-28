@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
+import { FontFamily } from '../../constants/theme';
 
 interface Props {
   toolName: string;
@@ -66,20 +67,20 @@ const styles = StyleSheet.create({
   toolName: {
     fontSize: 12,
     fontWeight: '500',
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
   },
   arrow: {
     fontSize: 12,
   },
   filePath: {
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     color: '#3b82f6',
     flexShrink: 1,
   },
   output: {
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     marginTop: 4,
     lineHeight: 15,
   },

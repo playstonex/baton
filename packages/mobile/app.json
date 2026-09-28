@@ -2,7 +2,7 @@
   "expo": {
     "name": "Baton",
     "slug": "baton",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "orientation": "default",
     "scheme": "baton",
     "userInterfaceStyle": "automatic",
@@ -23,7 +23,15 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-font"
+      "@react-native-vector-icons/ionicons",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan the pairing QR code shown by your Baton host.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -7,12 +7,14 @@ import type {
   AdapterMode,
   ThinkingConfig,
   ReasoningEffort,
-  AccessMode,
   ServiceTier,
 } from '../types/index.js';
+import type { HelloMessage, WelcomeMessage } from './handshake.js';
+// AccessMode is defined locally below (kept for backward compat with main).
 
 // WebSocket message types: Client → Daemon
 export type ClientMessage =
+  | HelloMessage
   | TerminalInputMessage
   | ChatInputMessage
   | SteerInputMessage
@@ -39,6 +41,8 @@ export interface TerminalInputMessage {
   sessionId: string;
   data: string;
 }
+
+// ── Chat / SDK input messages (Client → Daemon) ────────────────────
 
 /** Conversational message — routed to SDK messageQueue (preferred) or PTY stdin. */
 export interface ChatInputMessage {
@@ -154,7 +158,25 @@ export type ControlAction =
   | 'list_agents'
   | 'attach_session'
   | 'detach_session'
-  | 'resize';
+  | 'resume_session' // COMPAT(sessionResume): added in v2.1
+  | 'resize'
+  | 'claim_session'
+  | 'release_session'
+  | 'permission_response'
+  | 'register_push_token'
+  | 'unregister_push_token'
+  | 'set_access_mode'
+  | 'git_status'
+  | 'git_commit'
+  | 'git_push'
+  | 'git_pull'
+  | 'git_branches'
+  | 'git_checkout'
+  | 'git_create_branch'
+  | 'git_log'
+  | 'git_stash'
+  | 'git_stash_pop'
+  | 'git_remote_url';
 
 export interface ControlMessage {
   type: 'control';
@@ -165,10 +187,18 @@ export interface ControlMessage {
 
 // WebSocket message types: Daemon → Client
 export type DaemonMessage =
+  | WelcomeMessage
   | TerminalOutputMessage
+  | HistoryReplayMessage
   | ParsedEventMessage
+  | EventHistoryMessage
   | StatusUpdateMessage
   | AgentListMessage
+  | PermissionRequestMessage
+  | SessionOwnershipMessage
+  | HealthScoreMessage
+  | AccessModeMessage
+  | ResumeReplyMessage
   | ModelListMessage
   | GitBranchListMessage
   | GitStatusMessage
@@ -180,30 +210,76 @@ export interface TerminalOutputMessage {
   type: 'terminal_output';
   sessionId: string;
   data: string;
+  /** Monotonic per-session sequence number. Present when the daemon and client
+   * both support the `sessionResume` capability; used to resume after reconnect.
+   * COMPAT(sessionResume): added in v2.1, optional until floor >= v2.1 */
+  seq?: number;
+}
+
+export interface HistoryReplayMessage {
+  type: 'history_replay';
+  sessionId: string;
+  output: string;
 }
 
 export interface ParsedEventMessage {
   type: 'parsed_event';
   sessionId: string;
   event: ParsedEvent;
+  /** Monotonic per-session sequence number (see TerminalOutputMessage.seq). */
+  seq?: number;
+}
+
+export interface EventHistoryMessage {
+  type: 'event_history';
+  sessionId: string;
+  events: ParsedEvent[];
 }
 
 export interface StatusUpdateMessage {
   type: 'status_update';
   sessionId: string;
   status: AgentStatus | SessionStatus;
+  /** Monotonic per-session sequence number (see TerminalOutputMessage.seq). */
+  seq?: number;
 }
 
 export interface AgentListMessage {
   type: 'agent_list';
-  agents: { id: string; type: string; status: AgentStatus; projectPath: string }[];
+  agents: {
+    id: string;
+    type: string;
+    status: AgentStatus;
+    projectPath: string;
+    mode?: 'pty' | 'sdk';
+  }[];
 }
 
-export interface ModelListMessage {
-  type: 'model_list';
+export interface PermissionRequestMessage {
+  type: 'permission_request';
   sessionId: string;
-  models: string[];
-  selected?: string;
+  requestId: string;
+  tool: string;
+  action: string;
+  description: string;
+}
+
+export interface SessionOwnershipMessage {
+  type: 'session_ownership';
+  sessionId: string;
+  owner: 'local' | 'remote';
+  claimedBy: string;
+}
+
+export interface HealthScoreMessage {
+  type: 'health_score';
+  score: number;
+  metrics: {
+    successRate: number;
+    avgLatencyMs: number;
+    activeAgents: number;
+    errorCount24h: number;
+  };
 }
 
 export interface ErrorMessage {
@@ -221,6 +297,13 @@ export interface AckMessage {
   error?: string;
 }
 
+export interface ModelListMessage {
+  type: 'model_list';
+  sessionId: string;
+  models: string[];
+  selected?: string;
+}
+
 export interface GitBranchListMessage {
   type: 'git_branch_list';
   sessionId: string;
@@ -236,12 +319,45 @@ export interface GitStatusMessage {
   projectPath: string;
 }
 
+// Access control modes for agent permission handling
+export type AccessMode = 'on-request' | 'full-access';
+
+export interface AccessModeMessage {
+  type: 'access_mode';
+  mode: AccessMode;
+}
+
+/**
+ * Response to a `resume_session` control action. Tells the client the range of
+ * sequence numbers it has been caught up to, so it knows the next expected seq.
+ * If the requested lastSeq is older than what the buffer retains, `gap=true`
+ * and the client should fall back to a full re-attach (history replay).
+ */
+export interface ResumeReplyMessage {
+  type: 'resume_reply';
+  sessionId: string;
+  /** First seq number replayed (inclusive). */
+  fromSeq: number;
+  /** Last seq number replayed (inclusive). Equals currentSeq if nothing buffered. */
+  toSeq: number;
+  /** Highest seq the daemon has assigned for this session. */
+  currentSeq: number;
+  /** True when the requested lastSeq is behind the buffer's floor — caller must
+   * do a full re-attach to recover the missing gap. COMPAT(sessionResume). */
+  gap?: boolean;
+}
+
+// Git result message: Daemon → Client
 export interface GitResultMessage {
   type: 'git_result';
-  sessionId: string;
-  operation: string;
+  action: string;
   success: boolean;
+  data?: unknown;
   error?: string;
+  /** Optional for new chat-style per-session operations; absent on legacy broadcasts. */
+  sessionId?: string;
+  /** New unified operation tag (checkout/commit/push/pull/create_branch). */
+  operation?: string;
 }
 
 // Relay protocol (Phase 2)
@@ -283,3 +399,5 @@ export interface HostInfoResponse {
 
 export * from './channels.js';
 export * from './handshake.js';
+export * from './schemas.js';
+export * from './seq-buffer.js';
