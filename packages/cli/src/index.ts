@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { BATON_VERSION } from '@baton/shared';
 import { daemonCommand } from './commands/daemon.js';
 import { agentCommand } from './commands/agent.js';
 import { providerCommand } from './commands/provider.js';
@@ -48,6 +49,12 @@ async function main() {
       await agentCommand('stop', [args[1]]);
       break;
 
+    case 'version':
+    case '--version':
+    case '-v':
+      console.log(BATON_VERSION);
+      break;
+
     case 'help':
     default:
       printHelp();
@@ -57,7 +64,7 @@ async function main() {
 
 function printHelp() {
   console.log(`
-  Baton CLI v0.0.1
+  Baton CLI v${BATON_VERSION}
 
   Usage:
     baton daemon start [--foreground] [--json]  Start the daemon

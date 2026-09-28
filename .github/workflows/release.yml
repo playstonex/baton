@@ -1,15 +1,103 @@
 name: Release
 
+# Two channels, one pipeline:
+#
+#   git tag v1.2.3 && git push origin v1.2.3
+#     -> GitHub Release "v1.2.3" (stable; a tag like v1.2.3-rc.1 is published
+#        as a prerelease). Marked "latest".
+#
+#   git push origin develop
+#     -> rolling prerelease under the tag `develop-latest`, rebuilt on every
+#        push. Version string: <last stable tag>-dev.<run number>, e.g.
+#        0.0.2-dev.57. Never marked "latest".
+#
+# Assets (both channels): CLI, daemon (+ Rust PTY) and relay binaries for
+# linux-x64 and macos-arm64, each with a .sha256, plus the Android APK built
+# on EAS. iOS is intentionally not built here (TestFlight is handled outside CI).
+#
+# Nothing is published unless the full CI suite passes on the same commit.
+
 on:
   push:
     tags: ['v*']
+    branches: [develop]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  # A newer develop push supersedes an in-flight develop build; tag builds
+  # are never cancelled.
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
 jobs:
-  build-cli:
+  ci:
+    name: CI gate
+    uses: ./.github/workflows/ci.yml
+
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      name: ${{ steps.v.outputs.name }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      channel: ${{ steps.v.outputs.channel }}
+      previous: ${{ steps.v.outputs.previous }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags + history for version/changelog
+
+      - id: v
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse --short HEAD)
+          if [[ "$REF_TYPE" == tag ]]; then
+            if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Tag '$REF_NAME' is not semver (expected vX.Y.Z or vX.Y.Z-suffix)"
+              exit 1
+            fi
+            VERSION="${REF_NAME#v}"
+            TAG="$REF_NAME"
+            NAME="$REF_NAME"
+            CHANNEL=stable
+            [[ "$VERSION" == *-* ]] && PRERELEASE=true || PRERELEASE=false
+            PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${REF_NAME}^" 2>/dev/null || true)
+          else
+            # Highest stable vX.Y.Z anywhere in the repo (develop may not contain
+            # the commit a release tag points at, so don't rely on describe).
+            BASE=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+            BASE=${BASE:-v0.0.0}
+            VERSION="${BASE#v}-dev.${RUN_NUMBER}"
+            TAG=develop-latest
+            NAME="Develop build ${VERSION} (${SHA})"
+            CHANNEL=develop
+            PRERELEASE=true
+            PREV="$BASE"
+          fi
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "name=$NAME"
+            echo "prerelease=$PRERELEASE"
+            echo "channel=$CHANNEL"
+            echo "previous=$PREV"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved: channel=$CHANNEL version=$VERSION tag=$TAG previous=${PREV:-<none>}"
+
+  binaries:
+    name: Binaries (${{ matrix.target }})
+    needs: [ci, meta]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -19,6 +107,11 @@ jobs:
             target: macos-arm64
             bun_target: bun-darwin-arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      TARGET: ${{ matrix.target }}
+      BUN_TARGET: ${{ matrix.bun_target }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,109 +123,71 @@ jobs:
           cache: pnpm
 
       - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/daemon/pty
+          key: ${{ matrix.target }}
 
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm --filter @baton/shared build && pnpm --filter @baton/cli build
 
-      - name: Compile CLI binary
-        run: |
-          bun build ./packages/cli/dist/index.js \
-            --compile \
-            --target=${{ matrix.bun_target }} \
-            --outfile=baton-${{ matrix.target }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: baton-${{ matrix.target }}
-          path: baton-${{ matrix.target }}
-
-  build-daemon:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: linux-x64
-            bun_target: bun-linux-x64
-          - os: macos-latest
-            target: macos-arm64
-            bun_target: bun-darwin-arm64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: oven-sh/setup-bun@v2
-
-      - run: pnpm install --frozen-lockfile
-
       - name: Build Rust PTY
-        run: cargo build --release --manifest-path packages/daemon/pty/Cargo.toml
+        run: cargo build --locked --release --manifest-path packages/daemon/pty/Cargo.toml
 
-      - name: Bundle daemon + PTY binary
+      - name: Compile binaries
         run: |
-          mkdir -p bundle
+          set -euo pipefail
+          mkdir -p dist bundle
+          DEFINE="process.env.BATON_VERSION=\"${VERSION}\""
+          bun build ./packages/cli/dist/index.js --compile --target="$BUN_TARGET" \
+            --define "$DEFINE" --outfile="dist/baton-${TARGET}"
+          bun build ./packages/relay/src/index.ts --compile --target="$BUN_TARGET" \
+            --define "$DEFINE" --outfile="dist/baton-relay-${TARGET}"
+          bun build ./packages/daemon/src/index.ts --compile --target="$BUN_TARGET" \
+            --define "$DEFINE" --outfile=bundle/baton-daemon
           cp packages/daemon/pty/target/release/baton-pty bundle/
-          bun build ./packages/daemon/src/index.ts \
-            --compile \
-            --target=${{ matrix.bun_target }} \
-            --outfile=bundle/baton-daemon
+          tar -C bundle -czf "dist/baton-daemon-${TARGET}.tar.gz" baton-daemon baton-pty
 
-      - name: Create tarball
+      - name: Smoke test
         run: |
-          cd bundle
-          tar czf ../baton-daemon-${{ matrix.target }}.tar.gz baton-daemon baton-pty
+          set -euo pipefail
+          # Runners are native for their target, so the binaries execute here.
+          GOT=$("./dist/baton-${TARGET}" --version)
+          echo "baton --version -> $GOT"
+          [[ "$GOT" == "$VERSION" ]] || { echo "::error::CLI reports '$GOT', expected '$VERSION'"; exit 1; }
+          tar tzf "dist/baton-daemon-${TARGET}.tar.gz"
+          # baton-pty speaks JSON-lines on stdin, so don't run it — just check it.
+          test -x ./bundle/baton-pty && file ./bundle/baton-pty ./bundle/baton-daemon
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          for f in *; do
+            if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+          ls -lh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: baton-daemon-${{ matrix.target }}
-          path: baton-daemon-${{ matrix.target }}.tar.gz
+          name: binaries-${{ matrix.target }}
+          path: dist/*
+          retention-days: 14
 
-  build-relay:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: linux-x64
-            bun_target: bun-linux-x64
-          - os: macos-latest
-            target: macos-arm64
-            bun_target: bun-darwin-arm64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: oven-sh/setup-bun@v2
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Compile relay binary
-        run: |
-          bun build ./packages/relay/src/index.ts \
-            --compile \
-            --target=${{ matrix.bun_target }} \
-            --outfile=baton-relay-${{ matrix.target }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: baton-relay-${{ matrix.target }}
-          path: baton-relay-${{ matrix.target }}
-
-  build-android:
+  android:
+    name: Android APK (EAS)
+    needs: [ci, meta]
+    # Set the repo variable ANDROID_BUILD=false to skip (e.g. to save EAS quota).
+    if: vars.ANDROID_BUILD != 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 120 # EAS queue time is included
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      # Monotonic across tags and develop builds, so every APK upgrades the last.
+      VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
@@ -145,41 +200,111 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build Android APK
+      - name: Stamp version
         working-directory: packages/mobile
-        run: eas build --platform android --profile preview --no-wait
+        run: |
+          set -euo pipefail
+          # The native android/ project is committed, so EAS reads the version
+          # from build.gradle; app.json is kept in sync for the JS side.
+          sed -i -E \
+            -e "s/^(\s*)versionCode [0-9]+/\1versionCode ${VERSION_CODE}/" \
+            -e "s/^(\s*)versionName \"[^\"]*\"/\1versionName \"${VERSION}\"/" \
+            android/app/build.gradle
+          grep -nE 'versionCode|versionName' android/app/build.gradle
+          node -e '
+            const fs = require("fs");
+            const p = "app.json";
+            const j = JSON.parse(fs.readFileSync(p, "utf8"));
+            j.expo.version = process.env.VERSION;
+            j.expo.android = { ...(j.expo.android || {}), versionCode: Number(process.env.VERSION_CODE) };
+            fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+          '
 
-  release:
-    needs: [build-cli, build-daemon, build-relay]
-    if: startsWith(github.ref, 'refs/tags/v')
+      - name: Build on EAS
+        working-directory: packages/mobile
+        run: |
+          set -euo pipefail
+          eas build --platform android --profile preview \
+            --non-interactive --wait --json > eas-build.json
+          URL=$(node -e 'const b=require("./eas-build.json"); console.log((Array.isArray(b)?b[0]:b).artifacts.buildUrl)')
+          test -n "$URL"
+          mkdir -p ../../dist
+          curl -fsSL --retry 3 -o "../../dist/baton-android-${VERSION}.apk" "$URL"
+          cd ../../dist && sha256sum "baton-android-${VERSION}.apk" > "baton-android-${VERSION}.apk.sha256"
+          ls -lh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub release
+    needs: [meta, binaries, android]
+    # Binaries are required; a failed or skipped Android build does not block
+    # the release, but the notes say so.
+    if: always() && needs.meta.result == 'success' && needs.binaries.result == 'success'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.meta.outputs.tag }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      CHANNEL: ${{ needs.meta.outputs.channel }}
+      PREVIOUS: ${{ needs.meta.outputs.previous }}
+      ANDROID_RESULT: ${{ needs.android.result }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: false
+          merge-multiple: true
 
-      - name: Generate changelog
+      - name: Release notes
         run: |
-          echo "## Changes" > CHANGELOG.md
-          git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> CHANGELOG.md 2>/dev/null || echo "- Initial release" >> CHANGELOG.md
+          set -euo pipefail
+          SHA=$(git rev-parse --short HEAD)
+          RANGE="HEAD"
+          [[ -n "$PREVIOUS" ]] && git rev-parse -q --verify "$PREVIOUS" >/dev/null && RANGE="${PREVIOUS}..HEAD"
+          {
+            if [[ "$CHANNEL" == develop ]]; then
+              echo "**Test build** from \`develop\` @ \`${SHA}\` — version \`${VERSION}\`."
+              echo "Rebuilt on every push to develop; not for production. Use a \`v*\` release for that."
+              echo
+            fi
+            echo "## Changes${PREVIOUS:+ since ${PREVIOUS}}"
+            git log --no-merges --pretty='- %s (%h)' "$RANGE" | head -100
+            echo
+            echo "## Assets"
+            echo "- \`baton-<target>\` — CLI · \`baton-relay-<target>\` — relay · \`baton-daemon-<target>.tar.gz\` — daemon + PTY"
+            echo "- targets: \`linux-x64\`, \`macos-arm64\`; verify with the matching \`.sha256\`"
+            if [[ "$ANDROID_RESULT" == success ]]; then
+              echo "- \`baton-android-${VERSION}.apk\` — Android"
+            else
+              echo "- ⚠️ Android APK not included (android job: ${ANDROID_RESULT})"
+            fi
+          } > NOTES.md
+          cat NOTES.md
+          ls -lh artifacts
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Replace the rolling develop prerelease
+        if: needs.meta.outputs.channel == 'develop'
+        run: gh release delete "$TAG" --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+
+      - uses: softprops/action-gh-release@v2
         with:
-          body_path: CHANGELOG.md
-          draft: false
-          generate_release_notes: true
-          files: |
-            artifacts/baton-*/baton-*
-            artifacts/baton-daemon-*/*.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ needs.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.meta.outputs.name }}
+          body_path: NOTES.md
+          prerelease: ${{ needs.meta.outputs.prerelease }}
+          make_latest: ${{ needs.meta.outputs.channel == 'stable' && needs.meta.outputs.prerelease == 'false' }}
+          files: artifacts/*

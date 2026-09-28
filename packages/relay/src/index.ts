@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { BATON_VERSION } from '@baton/shared';
 import { MessageBuffer } from './buffer.js';
 import { PairingService } from './pairing.js';
 import {
@@ -79,7 +80,7 @@ export class RelayServer {
       },
       websocket: {
         open(ws: import('bun').ServerWebSocket<{ id: string }>) {
-          ws.send(JSON.stringify({ type: 'welcome', message: 'Baton Relay v0.0.1' }));
+          ws.send(JSON.stringify({ type: 'welcome', message: `Baton Relay v${BATON_VERSION}` }));
         },
         message(ws: import('bun').ServerWebSocket<{ id: string }>, message: string | Buffer) {
           try {

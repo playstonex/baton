@@ -27,7 +27,7 @@ import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
 import { previewCodexProviders } from './api-converter/codex-sync.js';
 import { loadBatonEnv } from './env.js';
 import type { ResponsesApiRequest } from './api-converter/types.js';
-import { acquirePid, releasePid, DaemonAlreadyRunningError } from '@baton/shared';
+import { acquirePid, releasePid, DaemonAlreadyRunningError, BATON_VERSION } from '@baton/shared';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
   StartAgentRequest,
@@ -166,7 +166,7 @@ export function createDaemon(port = DEFAULT_PORT) {
   app.get('/api/health', (c) => {
     return c.json({
       status: 'ok',
-      version: '0.0.1',
+      version: BATON_VERSION,
       relay: relayConnection?.connected ?? false,
     });
   });
@@ -1233,7 +1233,7 @@ export async function main() {
   });
 
   const localIps = getLocalIps();
-  console.log(`\n  Baton Daemon v0.0.1`);
+  console.log(`\n  Baton Daemon v${BATON_VERSION}`);
   console.log(`  HTTP:      http://${displayHost}:${port}`);
   console.log(`  WebSocket: ws://${displayHost}:${port + 1}`);
   if (hostname === '::') {
