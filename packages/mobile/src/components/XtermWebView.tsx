@@ -152,29 +152,49 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
   const systemScheme = useColorScheme();
   const isDark = isDarkProp ?? systemScheme === 'dark';
 
+  // ── Output coalescing ────────────────────────────────────────────
+  // Accumulate writes from multiple WS frames and flush them in a single
+  // injectJavaScript call per animation frame (~16ms), or immediately once
+  // the buffer crosses the chunk threshold. This dramatically reduces the
+  // bridge overhead under bursty agent output (N frames → ~1 inject instead
+  // of N).
+  const coalesceBuf = useRef<string>('');
+  const coalesceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const FLUSH_THRESHOLD = 8192;
+
+  const flushCoalesced = () => {
+    coalesceTimer.current = null;
+    const buf = coalesceBuf.current;
+    if (!buf) return;
+    coalesceBuf.current = '';
+    const CHUNK = 8192;
+    let offset = 0;
+    const writeNext = () => {
+      if (offset >= buf.length) return;
+      const chunk = buf.slice(offset, offset + CHUNK);
+      webViewRef.current?.injectJavaScript(`window._termWrite(${JSON.stringify(chunk)}); true;`);
+      offset += CHUNK;
+      if (offset < buf.length) setTimeout(writeNext, 16);
+    };
+    writeNext();
+  };
+
   useImperativeHandle(ref, () => ({
     write: (data: string) => {
-      const CHUNK_SIZE = 8192;
-      if (data.length <= CHUNK_SIZE) {
-        webViewRef.current?.injectJavaScript(
-          `window._termWrite(${JSON.stringify(data)}); true;`,
-        );
+      coalesceBuf.current += data;
+      // Flush immediately if over threshold (responsiveness for large writes).
+      if (coalesceBuf.current.length >= FLUSH_THRESHOLD) {
+        if (coalesceTimer.current) {
+          clearTimeout(coalesceTimer.current);
+          coalesceTimer.current = null;
+        }
+        flushCoalesced();
         return;
       }
-
-      let offset = 0;
-      const writeNext = () => {
-        if (offset >= data.length) return;
-        const chunk = data.slice(offset, offset + CHUNK_SIZE);
-        webViewRef.current?.injectJavaScript(
-          `window._termWrite(${JSON.stringify(chunk)}); true;`,
-        );
-        offset += CHUNK_SIZE;
-        if (offset < data.length) {
-          setTimeout(writeNext, 16);
-        }
-      };
-      writeNext();
+      // Otherwise schedule a frame-batched flush.
+      if (!coalesceTimer.current) {
+        coalesceTimer.current = setTimeout(flushCoalesced, 16);
+      }
     },
   }));
 
@@ -188,10 +208,18 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
   }, [termThemeName, isDark]);
 
   useEffect(() => {
-    webViewRef.current?.injectJavaScript(
-      `window._termSetFont(${termFontSize}); true;`,
-    );
+    webViewRef.current?.injectJavaScript(`window._termSetFont(${termFontSize}); true;`);
   }, [termFontSize]);
+
+  // Flush any pending coalesced output on unmount so nothing is dropped.
+  useEffect(() => {
+    return () => {
+      if (coalesceTimer.current) {
+        clearTimeout(coalesceTimer.current);
+        coalesceTimer.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     webViewRef.current?.injectJavaScript(
@@ -207,7 +235,11 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
           onInput(msg.data);
         } else if (msg.type === 'status') {
           onStatus?.(msg.loaded, msg.error);
-        } else if (msg.type === 'resize' && typeof msg.cols === 'number' && typeof msg.rows === 'number') {
+        } else if (
+          msg.type === 'resize' &&
+          typeof msg.cols === 'number' &&
+          typeof msg.rows === 'number'
+        ) {
           onResize?.(msg.cols, msg.rows);
         }
       } catch {
@@ -217,7 +249,14 @@ export const XtermWebView = forwardRef<XtermWebViewRef, XtermWebViewProps>(funct
     [onInput, onResize, onStatus],
   );
 
-  const html = buildHtml(isDark, termFontSize, termFontFamily, termThemeName, termScrollback, termCursorBlink);
+  const html = buildHtml(
+    isDark,
+    termFontSize,
+    termFontFamily,
+    termThemeName,
+    termScrollback,
+    termCursorBlink,
+  );
   const bg = (() => {
     const customTheme = getTerminalThemeColors(termThemeName, isDark);
     if (customTheme) return customTheme.background;

@@ -5,25 +5,22 @@ import {
   Text,
   Pressable,
   ScrollView,
-  TextInput,
-  ActivityIndicator,
   Linking,
   Share,
 } from 'react-native';
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AccessMode } from '@baton/shared';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useConnectionStore } from '../../src/stores/connection';
 import type { HostProfile } from '../../src/services/secure-storage';
-import { useRecentStore } from '../../src/stores/recent';
 import { wsService } from '../../src/services/websocket';
 import {
-  addHost as persistHost,
   removeHost as persistRemoveHost,
+  touchHost,
   hostToConnection,
-  clearCredentials,
 } from '../../src/services/secure-storage';
 import { useThemeStore, type ThemeMode } from '../../src/stores/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
@@ -82,22 +79,15 @@ function formatTime(ts: number): string {
 }
 
 export default function SettingsScreen() {
-  const mode = useConnectionStore((s) => s.mode);
-  const setMode = useConnectionStore((s) => s.setMode);
-  const relayUrl = useConnectionStore((s) => s.relayUrl);
+  const router = useRouter();
   const hostId = useConnectionStore((s) => s.hostId);
-  const localHttpUrl = useConnectionStore((s) => s.localHttpUrl);
-  const localWsUrl = useConnectionStore((s) => s.localWsUrl);
   const connected = useConnectionStore((s) => s.connected);
-  const setCredentials = useConnectionStore((s) => s.setCredentials);
   const setConnected = useConnectionStore((s) => s.setConnected);
   const hosts = useConnectionStore((s) => s.hosts);
   const activeHostId = useConnectionStore((s) => s.activeHostId);
-  const addHost = useConnectionStore((s) => s.addHost);
   const removeHost = useConnectionStore((s) => s.removeHost);
-
-  const recentConnections = useRecentStore((s) => s.connections);
-  const addRecentConnection = useRecentStore((s) => s.addConnection);
+  const setHosts = useConnectionStore((s) => s.setHosts);
+  const setActiveHost = useConnectionStore((s) => s.setActiveHost);
 
   const themeMode = useThemeStore((s) => s.theme);
   const setThemeMode = useThemeStore((s) => s.setTheme);
@@ -106,97 +96,36 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
 
-  const [inputRelayUrl, setInputRelayUrl] = useState(relayUrl);
-  const [inputPairingCode, setInputPairingCode] = useState('');
-  const [inputLocalHttp, setInputLocalHttp] = useState(localHttpUrl);
-  const [inputLocalWs, setInputLocalWs] = useState(localWsUrl);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [accessMode, setAccessModeState] = useState<AccessMode>('on-request');
 
-  async function pairAndConnect() {
-    if (!inputRelayUrl.trim() || !inputPairingCode.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      const gatewayUrl = inputRelayUrl.replace(/^wss?/, 'http').replace(/:\d+/, ':3220');
-      const res = await fetch(`${gatewayUrl}/api/v1/auth/verify-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: inputPairingCode.trim() }),
-      });
-      const data = (await res.json()) as {
-        token?: string;
-        hostId?: string;
-        error?: string;
-      };
-      if (!res.ok) {
-        setError(data.error ?? 'Pairing failed');
-        return;
-      }
-      const config = {
-        mode: 'remote' as const,
-        relayUrl: inputRelayUrl.trim(),
-        hostId: data.hostId,
-        token: data.token,
-      };
-      const host = await persistHost(config);
-      addHost(host);
-      addRecentConnection(config);
-      wsService.configure(config);
-      wsService.connect();
-      setInputPairingCode('');
-    } catch (err) {
-      setError(`Connection failed: ${err}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function connectLocal() {
-    if (!inputLocalHttp.trim()) return;
-    setLoading(true);
-    setError('');
-    const config = {
-      mode: 'local' as const,
-      localHttpUrl: inputLocalHttp.trim(),
-      localWsUrl:
-        inputLocalWs.trim() ||
-        inputLocalHttp.trim().replace(/^http/, 'ws').replace(/:\d+/, ':3211'),
-    };
-    const host = await persistHost(config);
-    addHost(host);
-    addRecentConnection(config);
-    wsService.configure(config);
-    wsService.connect();
-    setLoading(false);
-  }
-
-  /** Switch to an already-paired host: configure WS and reconnect. */
-  function switchToHost(host: HostProfile) {
-    const config = hostToConnection(host);
-    setCredentials(config);
-    wsService.configure(config);
+  /** Switch to an already-paired host: mark active, configure WS, reconnect. */
+  async function switchToHost(host: HostProfile) {
+    const updatedHosts = await touchHost(host.id);
+    setHosts(updatedHosts);
+    setActiveHost(host.id);
+    wsService.configure(hostToConnection(host));
     wsService.connect();
   }
 
   async function deleteHost(host: HostProfile) {
     await persistRemoveHost(host.id);
     removeHost(host.id);
-    // If we just removed the active host, clear the connection.
+    // If we just removed the active host, drop the connection. With no
+    // servers left, return to the connection-first entry screen.
     if (activeHostId === host.id) {
       wsService.disconnect();
       setConnected(false);
-      if (hosts.length <= 1) {
-        await clearCredentials();
-      }
+    }
+    if (hosts.length <= 1) {
+      router.replace('/connect');
     }
   }
 
-  async function disconnect() {
+  /** Disconnect but keep saved servers; the connect screen takes over. */
+  function disconnect() {
     wsService.disconnect();
     setConnected(false);
-    await clearCredentials();
+    router.replace('/connect');
   }
 
   function setAccessMode(mode: AccessMode) {
@@ -242,18 +171,101 @@ export default function SettingsScreen() {
           </View>
         </GlassCard>
 
-        <GlassSectionHeader c={c} title="Connection" />
-        <GlassCard c={c}>
-          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-            {(['local', 'remote'] as const).map((m) => (
-              <GlassPill
-                key={m}
-                c={c}
-                label={m === 'remote' ? 'Remote' : 'Local'}
-                active={mode === m}
-                onPress={() => setMode(m)}
-              />
-            ))}
+        <GlassSectionHeader c={c} title="Servers" />
+        <GlassCard c={c} style={{ padding: 0 }}>
+          {hosts.map((host, i) => {
+            const isActive = host.id === activeHostId;
+            return (
+              <View key={host.id}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: Spacing.lg,
+                    gap: Spacing.sm,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                    }}
+                  >
+                    <Ionicons
+                      name={host.mode === 'local' ? 'home-outline' : 'globe-outline'}
+                      size={18}
+                      color={Colors.primary[500]}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[Typography.mono, { color: c.textPrimary, fontSize: 13 }]}
+                      numberOfLines={1}
+                    >
+                      {host.label}
+                    </Text>
+                    <Text style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}>
+                      {isActive && connected
+                        ? 'Connected'
+                        : isActive
+                          ? 'Last used server'
+                          : formatTime(host.lastUsed)}
+                    </Text>
+                  </View>
+                  {!isActive && (
+                    <Pressable
+                      onPress={() => switchToHost(host)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 12,
+                        backgroundColor: c.accentBg,
+                        borderWidth: 1,
+                        borderColor: c.accentBorder,
+                      }}
+                    >
+                      <Text
+                        style={[
+                          Typography.caption2,
+                          { color: Colors.primary[500], fontWeight: '600' },
+                        ]}
+                      >
+                        Connect
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => deleteHost(host)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="close" size={14} color={c.textTertiary} />
+                  </Pressable>
+                </View>
+                {i < hosts.length - 1 && <GlassDivider c={c} />}
+              </View>
+            );
+          })}
+          <View style={{ padding: Spacing.md }}>
+            <GlassButton
+              c={c}
+              label="Add Server"
+              icon="add"
+              onPress={() => router.push('/connect')}
+              variant="secondary"
+            />
           </View>
         </GlassCard>
 
@@ -327,272 +339,6 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {hosts.length > 0 && (
-          <>
-            <GlassSectionHeader c={c} title="Hosts" />
-            <GlassCard c={c} style={{ padding: 0 }}>
-              {hosts.map((host, i) => {
-                const isActive = host.id === activeHostId;
-                return (
-                  <View key={host.id}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingVertical: 10,
-                        paddingHorizontal: Spacing.lg,
-                        gap: Spacing.sm,
-                      }}
-                    >
-                      <Text style={{ fontSize: 18 }}>
-                        {host.mode === 'local' ? '\u{1F3E0}' : '\u{1F310}'}
-                      </Text>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[Typography.subhead, { color: c.textPrimary }]}
-                          numberOfLines={1}
-                        >
-                          {host.label}
-                        </Text>
-                        <Text
-                          style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}
-                        >
-                          {isActive && connected
-                            ? 'Connected'
-                            : isActive
-                              ? 'Active'
-                              : formatTime(host.lastUsed)}
-                        </Text>
-                      </View>
-                      {!isActive && (
-                        <Pressable
-                          onPress={() => switchToHost(host)}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          style={{
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 12,
-                            backgroundColor: c.accentBg,
-                            borderWidth: 1,
-                            borderColor: c.accentBorder,
-                          }}
-                        >
-                          <Text
-                            style={[
-                              Typography.caption2,
-                              { color: Colors.primary[500], fontWeight: '600' },
-                            ]}
-                          >
-                            Connect
-                          </Text>
-                        </Pressable>
-                      )}
-                      <Pressable
-                        onPress={() => deleteHost(host)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 12,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Ionicons name="close" size={14} color={c.textTertiary} />
-                      </Pressable>
-                    </View>
-                    {i < hosts.length - 1 && <GlassDivider c={c} />}
-                  </View>
-                );
-              })}
-            </GlassCard>
-          </>
-        )}
-
-        {recentConnections.length > 0 && hosts.length === 0 && (
-          <>
-            <GlassSectionHeader c={c} title="Recent Connections" />
-            <GlassCard c={c} style={{ padding: 0 }}>
-              {recentConnections.map((conn, i) => (
-                <View key={i}>
-                  <Pressable
-                    onPress={() => {
-                      if (conn.mode === 'local') {
-                        setMode('local');
-                        setInputLocalHttp(conn.localHttpUrl ?? '');
-                        setInputLocalWs(conn.localWsUrl ?? '');
-                      } else {
-                        setMode('remote');
-                        setInputRelayUrl(conn.relayUrl ?? '');
-                      }
-                    }}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 10,
-                      paddingHorizontal: Spacing.lg,
-                      gap: Spacing.sm,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
-                  >
-                    <Text style={{ fontSize: 18 }}>
-                      {conn.mode === 'local' ? '\u{1F3E0}' : '\u{1F310}'}
-                    </Text>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[Typography.subhead, { color: c.textPrimary }]}
-                        numberOfLines={1}
-                      >
-                        {conn.label}
-                      </Text>
-                      <Text style={[Typography.caption2, { color: c.textTertiary, marginTop: 2 }]}>
-                        {formatTime(conn.lastUsed)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                  {i < recentConnections.length - 1 && <GlassDivider c={c} />}
-                </View>
-              ))}
-            </GlassCard>
-          </>
-        )}
-
-        {mode === 'remote' ? (
-          <>
-            <GlassSectionHeader c={c} title="Remote Setup" />
-            <GlassCard c={c}>
-              <View style={{ gap: 6 }}>
-                <Text style={[Typography.footnote, { color: c.textSecondary }]}>Relay URL</Text>
-                <TextInput
-                  placeholder="ws://host:3230"
-                  value={inputRelayUrl}
-                  onChangeText={setInputRelayUrl}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  readOnly={connected}
-                  placeholderTextColor={c.textTertiary}
-                  style={{
-                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
-                    borderWidth: 1,
-                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
-                    borderRadius: 12,
-                    paddingVertical: Spacing.md,
-                    paddingHorizontal: Spacing.md,
-                    color: c.textPrimary,
-                    ...Typography.subhead,
-                    fontWeight: '500',
-                  }}
-                />
-              </View>
-              <View style={{ gap: 6 }}>
-                <Text style={[Typography.footnote, { color: c.textSecondary }]}>
-                  Pairing Code ({inputPairingCode.length}/6)
-                </Text>
-                <TextInput
-                  placeholder="000000"
-                  value={inputPairingCode}
-                  onChangeText={setInputPairingCode}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  readOnly={connected}
-                  placeholderTextColor={c.textTertiary}
-                  style={{
-                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
-                    borderWidth: 1,
-                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
-                    borderRadius: 12,
-                    paddingVertical: Spacing.md,
-                    paddingHorizontal: Spacing.md,
-                    color: c.textPrimary,
-                    ...Typography.subhead,
-                    fontWeight: '500',
-                  }}
-                />
-              </View>
-              {!connected && (
-                <GlassButton
-                  c={c}
-                  label={loading ? '' : 'Pair & Connect'}
-                  onPress={pairAndConnect}
-                  loading={loading}
-                  disabled={loading || !inputRelayUrl.trim() || inputPairingCode.length < 6}
-                  variant="primary"
-                />
-              )}
-            </GlassCard>
-          </>
-        ) : (
-          <>
-            <GlassSectionHeader c={c} title="Local Setup" />
-            <GlassCard c={c}>
-              <View style={{ gap: 6 }}>
-                <Text style={[Typography.footnote, { color: c.textSecondary }]}>HTTP URL</Text>
-                <TextInput
-                  placeholder="http://localhost:3210"
-                  value={inputLocalHttp}
-                  onChangeText={setInputLocalHttp}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  readOnly={connected}
-                  placeholderTextColor={c.textTertiary}
-                  style={{
-                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
-                    borderWidth: 1,
-                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
-                    borderRadius: 12,
-                    paddingVertical: Spacing.md,
-                    paddingHorizontal: Spacing.md,
-                    color: c.textPrimary,
-                    ...Typography.subhead,
-                    fontWeight: '500',
-                  }}
-                />
-              </View>
-              <View style={{ gap: 6 }}>
-                <Text style={[Typography.footnote, { color: c.textSecondary }]}>
-                  WebSocket URL (optional)
-                </Text>
-                <TextInput
-                  placeholder="Auto-derived"
-                  value={inputLocalWs}
-                  onChangeText={setInputLocalWs}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  readOnly={connected}
-                  placeholderTextColor={c.textTertiary}
-                  style={{
-                    backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
-                    borderWidth: 1,
-                    borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
-                    borderRadius: 12,
-                    paddingVertical: Spacing.md,
-                    paddingHorizontal: Spacing.md,
-                    color: c.textPrimary,
-                    ...Typography.subhead,
-                    fontWeight: '500',
-                  }}
-                />
-              </View>
-              {!connected && (
-                <GlassButton
-                  c={c}
-                  label={loading ? '' : 'Connect'}
-                  onPress={connectLocal}
-                  loading={loading}
-                  disabled={loading || !inputLocalHttp.trim()}
-                  variant="primary"
-                />
-              )}
-            </GlassCard>
-          </>
-        )}
-
-        {error ? (
-          <GlassCard c={c}>
-            <Text style={[Typography.footnote, { color: Colors.danger[400] }]}>{error}</Text>
-          </GlassCard>
-        ) : null}
-
         {connected && hostId ? (
           <GlassCard c={c}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
@@ -611,10 +357,7 @@ export default function SettingsScreen() {
                   Connected
                 </Text>
                 <Text
-                  style={[
-                    Typography.caption1,
-                    { color: Colors.success[400], fontFamily: 'Courier' },
-                  ]}
+                  style={[Typography.monoSemiBold, { color: Colors.success[400], fontSize: 12 }]}
                 >
                   {hostId.slice(0, 8)}...
                 </Text>

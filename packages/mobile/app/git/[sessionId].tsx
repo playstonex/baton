@@ -28,12 +28,7 @@ import type {
 import { gitService } from '../../src/services/git';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useAgentStore } from '../../src/stores/agents';
-import {
-  Typography,
-  Spacing,
-  CornerRadius,
-  Colors,
-} from '../../src/constants/theme';
+import { FontFamily, Typography, Spacing, CornerRadius, Colors, Glass } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import {
   GlassCard,
@@ -596,7 +591,21 @@ function EmptyCard({ text }: { text: string }) {
   const c = useThemeColors();
   return (
     <GlassCard c={c}>
-      <Text style={[Typography.footnote, { color: c.textSecondary }]}>{text}</Text>
+      <View style={{ alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.sm }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
+          }}
+        >
+          <Ionicons name="git-branch-outline" size={20} color={c.textTertiary} />
+        </View>
+        <Text style={[Typography.footnote, { color: c.textSecondary }]}>{text}</Text>
+      </View>
     </GlassCard>
   );
 }
@@ -656,7 +665,7 @@ function ChangesTab({
             fontSize: Typography.body.fontSize,
             color: c.textPrimary,
             minHeight: 44,
-            fontFamily: 'Menlo',
+            fontFamily: FontFamily.mono,
           }}
           placeholder="Commit message (optional)"
           placeholderTextColor={c.textTertiary}
@@ -779,7 +788,7 @@ function FileRow({
         </Text>
         {dir.length > 0 && (
           <Text
-            style={[Typography.caption2, { color: c.textTertiary, fontFamily: 'Menlo' }]}
+            style={[Typography.caption2, { color: c.textTertiary, fontFamily: FontFamily.mono }]}
             numberOfLines={1}
           >
             {dir}/
@@ -983,7 +992,7 @@ function CommitRow({
           <Text
             style={[
               Typography.caption2,
-              { color: Colors.primary[500], fontFamily: 'Menlo', fontWeight: '600' },
+              { color: Colors.primary[500], fontFamily: FontFamily.mono, fontWeight: '600' },
             ]}
           >
             {row.commit.shortHash}
@@ -1268,7 +1277,7 @@ function FileDiffBlock({ file }: { file: GitFileDiff }) {
           </Text>
           {dir.length > 0 && (
             <Text
-              style={[Typography.caption2, { color: c.textTertiary, fontFamily: 'Menlo' }]}
+              style={[Typography.caption2, { color: c.textTertiary, fontFamily: FontFamily.mono }]}
               numberOfLines={1}
             >
               {dir}/
@@ -1297,7 +1306,7 @@ function FileDiffBlock({ file }: { file: GitFileDiff }) {
             }}
           >
             <Text
-              style={[Typography.caption2, { color: c.textTertiary, fontFamily: 'Menlo' }]}
+              style={[Typography.caption2, { color: c.textTertiary, fontFamily: FontFamily.mono }]}
               numberOfLines={1}
             >
               {hunk.header}
@@ -1345,7 +1354,7 @@ function DiffLineRow({ line }: { line: GitDiffLine }) {
           paddingVertical: 2,
         }}
       >
-        <Text style={[Typography.caption2, { color: c.textTertiary, fontFamily: 'Menlo', fontSize: 10 }]}>
+        <Text style={[Typography.caption2, { color: c.textTertiary, fontFamily: FontFamily.mono, fontSize: 10 }]}>
           {line.oldLine ?? ''}
         </Text>
       </View>
@@ -1359,7 +1368,7 @@ function DiffLineRow({ line }: { line: GitDiffLine }) {
           borderRightColor: c.separator,
         }}
       >
-        <Text style={[Typography.caption2, { color: c.textTertiary, fontFamily: 'Menlo', fontSize: 10 }]}>
+        <Text style={[Typography.caption2, { color: c.textTertiary, fontFamily: FontFamily.mono, fontSize: 10 }]}>
           {line.newLine ?? ''}
         </Text>
       </View>
@@ -1367,7 +1376,7 @@ function DiffLineRow({ line }: { line: GitDiffLine }) {
         <Text
           style={{
             color: textColor,
-            fontFamily: 'Menlo',
+            fontFamily: FontFamily.mono,
             fontSize: 12,
             lineHeight: 18,
           }}

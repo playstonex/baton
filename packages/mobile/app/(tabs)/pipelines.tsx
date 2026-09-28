@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { AgentType } from '@baton/shared';
 import { apiFetch } from '../../src/services/api';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Typography, Spacing, CornerRadius, Colors } from '../../src/constants/theme';
+import { FontFamily, Typography, Spacing, CornerRadius, Colors } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLayoutStore } from '../../src/stores/layout';
@@ -211,7 +211,7 @@ export default function PipelinesScreen() {
                             paddingHorizontal: Spacing.md,
                             color: c.textSecondary,
                             ...Typography.footnote,
-                            fontFamily: 'monospace',
+                            fontFamily: FontFamily.mono,
                             fontWeight: '500',
                           }}
                         />

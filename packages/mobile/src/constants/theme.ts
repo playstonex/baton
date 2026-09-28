@@ -1,4 +1,4 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform, type TextStyle } from 'react-native';
 
 // ── Liquid Glass Design Tokens ─────────────────────────────────
 export const Glass = {
@@ -211,6 +211,18 @@ export const Spacing = {
   '4xl': 48,
 } as const;
 
+/**
+ * Display face for large titles / big numerals; mono for machine data
+ * (URLs, ids, counters). Loaded via useFonts in app/_layout.tsx — falls
+ * back to the system font until ready.
+ */
+export const FontFamily = {
+  display: 'SpaceGrotesk_700Bold',
+  displayMedium: 'SpaceGrotesk_500Medium',
+  mono: 'JetBrainsMono_400Regular',
+  monoSemiBold: 'JetBrainsMono_600SemiBold',
+} as const;
+
 export const Typography = {
   caption2: { fontSize: 11, lineHeight: 13 },
   caption1: { fontSize: 12, lineHeight: 16 },
@@ -221,7 +233,36 @@ export const Typography = {
   title3: { fontSize: 20, lineHeight: 25, fontWeight: '600' as const },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' as const },
   title1: { fontSize: 28, lineHeight: 34, fontWeight: '700' as const },
-  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' as const },
+  largeTitle: {
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700' as const,
+    letterSpacing: -0.8,
+    fontFamily: FontFamily.display,
+  },
+  /** Big numerals (stats, counters) — tabular so they don't jitter. */
+  statValue: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontFamily: FontFamily.display,
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+    letterSpacing: -0.5,
+  },
+  /** Machine data: daemon URLs, session ids, timestamps. */
+  mono: { fontSize: 13, lineHeight: 18, fontFamily: FontFamily.mono },
+  monoSemiBold: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FontFamily.monoSemiBold,
+  },
+  /** Tiny uppercase label for section eyebrows. */
+  overline: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600' as const,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase' as const,
+  },
 } as const;
 
 export const Radius = {
@@ -264,19 +305,21 @@ export const InsetGrouped = {
 } as const;
 
 export const Shadows = {
+  // Tinted toward the cool background hue instead of pure black, so cards
+  // sit in the scene rather than floating on it.
   card: {
-    shadowColor: '#000',
+    shadowColor: '#0b1220',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 2,
   },
   elevated: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#0b1220',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 5,
   },
 } as const;
 

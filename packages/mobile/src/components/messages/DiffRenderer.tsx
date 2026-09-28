@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
+import { FontFamily } from '../../constants/theme';
 
 type DiffLineKind = 'addition' | 'deletion' | 'hunk' | 'meta' | 'neutral';
 
@@ -82,14 +83,14 @@ const styles = StyleSheet.create({
     width: 2,
   },
   lineText: {
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     fontSize: 11,
     paddingHorizontal: 10,
     paddingVertical: 1,
   },
   moreLines: {
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: FontFamily.mono,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },

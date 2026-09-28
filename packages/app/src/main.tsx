@@ -10,6 +10,7 @@ import { SettingsScreen } from './screens/Settings.js';
 import { FilesScreen } from './screens/Files.js';
 import { GitScreen } from './screens/Git.js';
 import { PullRequestsScreen } from './screens/PullRequests.js';
+import { WorktreesScreen } from './screens/Worktrees.js';
 import { PipelinesScreen } from './screens/Pipelines.js';
 import { AnalyticsScreen } from './screens/Analytics.js';
 import { OrchestrationScreen } from './screens/Orchestration.js';
@@ -32,6 +33,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="analytics" element={<AnalyticsScreen />} />
           <Route path="orchestration" element={<OrchestrationScreen />} />
           <Route path="pull-requests" element={<PullRequestsScreen />} />
+          <Route path="worktrees" element={<WorktreesScreen />} />
           <Route path="api-providers" element={<ApiProvidersScreen />} />
           <Route path="settings" element={<SettingsScreen />} />
         </Route>

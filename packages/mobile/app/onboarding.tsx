@@ -20,7 +20,7 @@ import {
   GlassButton,
   GlassDivider,
 } from '../src/components/GlassKit';
-import { Typography, Spacing, Glass, Colors } from '../src/constants/theme';
+import { Typography, Spacing, Glass, Colors, FontFamily } from '../src/constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -195,7 +195,9 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.title1,
+    fontFamily: FontFamily.display,
     fontWeight: '700',
+    letterSpacing: -0.5,
     textAlign: 'center',
   },
   subtitle: {

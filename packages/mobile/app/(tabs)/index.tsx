@@ -1,6 +1,6 @@
 import { Alert, FlatList, Modal, Pressable, TextInput, View, Text, StyleSheet } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useFocusEffect, type Href } from 'expo-router';
+import { useRouter, useFocusEffect, Redirect, type Href } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from 'heroui-native';
@@ -23,7 +23,7 @@ import {
   GlassPill,
   GlassDivider,
 } from '../../src/components/GlassKit';
-import { Typography, Spacing, Glass, Colors, STATUS_COLORS } from '../../src/constants/theme';
+import { FontFamily, Typography, Spacing, Glass, Colors, STATUS_COLORS } from '../../src/constants/theme';
 import { DirectoryPicker } from '../../src/components/DirectoryPicker';
 import { ResourceMonitor } from '../../src/components/ResourceMonitor';
 
@@ -112,6 +112,7 @@ export default function DashboardScreen() {
   const addAgent = useAgentStore((s) => s.addAgent);
   const removeAgent = useAgentStore((s) => s.removeAgent);
   const connected = useConnectionStore((s) => s.connected);
+  const hasSavedServers = useConnectionStore((s) => s.hosts.length > 0);
   const { sessions, addSession, removeSession } = useRecentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
@@ -193,6 +194,12 @@ export default function DashboardScreen() {
   );
 
   const selectedAgent = AGENT_OPTIONS.find((o) => o.type === agentType) ?? AGENT_OPTIONS[0];
+
+  // Connection-first flow: with no saved servers, the connect screen is home.
+  // Declared here (inside the mounted tab) so the navigator is ready.
+  if (!hasSavedServers) {
+    return <Redirect href="/connect" />;
+  }
 
   function togglePin(id: string) {
     setPinnedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -311,7 +318,7 @@ export default function DashboardScreen() {
                   {label}
                 </Text>
                 <Text
-                  style={[Typography.caption1, { color: c.textTertiary, fontFamily: 'Menlo' }]}
+                  style={[Typography.caption1, { color: c.textTertiary, fontFamily: FontFamily.mono }]}
                   numberOfLines={1}
                 >
                   {agent.projectPath}
@@ -383,7 +390,7 @@ export default function DashboardScreen() {
                 </Pressable>
               </View>
               <Text
-                style={[Typography.caption1, { color: c.textTertiary, marginTop: 2 }]}
+                style={[Typography.mono, { color: c.textTertiary, marginTop: 2, fontSize: 12 }]}
                 numberOfLines={1}
               >
                 {session.projectPath || 'terminal session'}
@@ -429,7 +436,11 @@ export default function DashboardScreen() {
                     color={showSearch ? Colors.primary[500] : c.textSecondary}
                   />
                 </Pressable>
-                <View
+                {/* Offline badge doubles as a shortcut to the connect screen. */}
+                <Pressable
+                  onPress={() => {
+                    if (!connected) router.push('/connect');
+                  }}
                   style={[
                     styles.connectionBadge,
                     { backgroundColor: connected ? c.successBg : c.dangerBg },
@@ -452,7 +463,7 @@ export default function DashboardScreen() {
                   >
                     {connected ? 'Online' : 'Offline'}
                   </Text>
-                </View>
+                </Pressable>
               </View>
             </View>
 
@@ -724,14 +735,28 @@ export default function DashboardScreen() {
             {agents.length === 0 && (
               <GlassCard c={c}>
                 <View
-                  style={{ alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.sm }}
+                  style={{ alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm }}
                 >
-                  <Ionicons name="cube-outline" size={32} color={c.textTertiary} />
-                  <Text style={[Typography.subhead, { color: c.textSecondary, fontWeight: '500' }]}>
+                  <View
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: c.isDark
+                        ? Glass.opacity.dark.subtle
+                        : Glass.opacity.light.subtle,
+                      marginBottom: Spacing.xs,
+                    }}
+                  >
+                    <Ionicons name="cube-outline" size={26} color={c.textTertiary} />
+                  </View>
+                  <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
                     No active sessions
                   </Text>
-                  <Text style={[Typography.caption1, { color: c.textTertiary }]}>
-                    Launch a new agent to get started
+                  <Text style={[Typography.footnote, { color: c.textTertiary }]}>
+                    Pick an agent above and launch your first run
                   </Text>
                 </View>
               </GlassCard>
@@ -749,19 +774,7 @@ export default function DashboardScreen() {
               />
               {pinned.length > 0 && (
                 <View style={{ marginBottom: Spacing.md }}>
-                  <Text
-                    style={[
-                      Typography.caption2,
-                      {
-                        color: Colors.primary[500],
-                        fontWeight: '600',
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        marginBottom: Spacing.sm,
-                        paddingHorizontal: 2,
-                      },
-                    ]}
-                  >
+                  <Text style={[Typography.overline, { color: Colors.primary[500], marginBottom: Spacing.sm, paddingHorizontal: 2 }]}>
                     Pinned
                   </Text>
                   {pinned.map((s) => renderSessionRow(s, true))}
@@ -875,9 +888,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
-    ...Typography.body,
+    ...Typography.mono,
     minHeight: 44,
-    fontFamily: 'Menlo',
   },
   browseBtn: {
     borderRadius: 10,

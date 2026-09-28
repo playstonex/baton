@@ -8,7 +8,7 @@ import { useAgentStore } from '../../src/stores/agents';
 import { apiFetch, getDaemonUrl } from '../../src/services/api';
 import { FilePreview } from '../../src/components/FilePreview';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { Colors, Typography, Spacing, CornerRadius } from '../../src/constants/theme';
+import { FontFamily, Colors, Typography, Spacing, CornerRadius, Glass } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -144,7 +144,7 @@ export default function FilesScreen() {
           }}
         >
           <Text
-            style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: 'monospace' }]}
+            style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: FontFamily.mono }]}
             numberOfLines={1}
           >
             {fileName}
@@ -182,7 +182,7 @@ export default function FilesScreen() {
           }}
         >
           <Text
-            style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: 'monospace' }]}
+            style={[Typography.headline, { color: c.textPrimary, flex: 1, fontFamily: FontFamily.mono }]}
             numberOfLines={1}
           >
             {fileName}
@@ -247,8 +247,28 @@ export default function FilesScreen() {
           keyExtractor={(item) => item.path}
           contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: insets.bottom, flexGrow: items.length === 0 ? 1 : undefined }}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', paddingVertical: Spacing['4xl'] }}>
-              <Text style={[Typography.subhead, { color: c.textSecondary }]}>No files</Text>
+            <View style={{ alignItems: 'center', paddingVertical: Spacing['4xl'], gap: Spacing.sm }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: c.isDark
+                    ? Glass.opacity.dark.subtle
+                    : Glass.opacity.light.subtle,
+                  marginBottom: Spacing.xs,
+                }}
+              >
+                <Ionicons name="folder-open-outline" size={24} color={c.textTertiary} />
+              </View>
+              <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
+                No files here
+              </Text>
+              <Text style={[Typography.footnote, { color: c.textTertiary }]}>
+                This directory is empty
+              </Text>
             </View>
           }
           renderItem={({ item }) => {

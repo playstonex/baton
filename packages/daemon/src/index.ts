@@ -20,6 +20,7 @@ import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
 import { GitService } from './git/index.js';
 import { createDefaultForgeRegistry, parseRepoRef, checkoutPullRequest } from './forge/index.js';
+import { listWorktrees, createWorktree, archiveWorktree } from './worktree/core.js';
 import { ApiProviderRegistry } from './api-converter/index.js';
 import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
 import { previewCodexProviders } from './api-converter/codex-sync.js';
@@ -610,6 +611,57 @@ export function createDaemon(port = DEFAULT_PORT) {
       return c.json(await checkoutPullRequest(body.projectPath, target));
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Forge checkout failed' }, 500);
+    }
+  });
+
+  // Worktree API (parallel git worktrees for isolated agent branches)
+  app.get('/api/worktree/list', async (c) => {
+    const status = c.req.query('status');
+    try {
+      const all = await listWorktrees(
+        status === 'active' || status === 'archived' ? status : undefined,
+      );
+      return c.json(all);
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Worktree list failed' },
+        500,
+      );
+    }
+  });
+
+  app.post('/api/worktree/create', async (c) => {
+    const body = await c.req
+      .json<{ basePath?: string; branch?: string }>()
+      .catch(() => ({}) as { basePath?: string; branch?: string });
+    if (!body.basePath || !body.branch) {
+      return c.json({ error: 'Missing basePath or branch' }, 400);
+    }
+    if (!isPathAllowed(body.basePath)) return c.json({ error: 'Path not allowed' }, 403);
+    try {
+      return c.json(await createWorktree(body.basePath, body.branch));
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Worktree create failed' },
+        500,
+      );
+    }
+  });
+
+  app.post('/api/worktree/archive', async (c) => {
+    const body = await c.req
+      .json<{ path?: string }>()
+      .catch(() => ({}) as { path?: string });
+    if (!body.path) return c.json({ error: 'Missing path' }, 400);
+    try {
+      const result = await archiveWorktree(body.path);
+      if (!result) return c.json({ error: 'Worktree not found or already archived' }, 404);
+      return c.json(result);
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Worktree archive failed' },
+        500,
+      );
     }
   });
 
