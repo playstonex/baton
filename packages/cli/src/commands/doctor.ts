@@ -1,6 +1,7 @@
 import { apiFetch, DAEMON_URL, WS_URL } from '../client/api.js';
 import { execSync } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface CheckResult {
@@ -19,6 +20,7 @@ export async function doctorCommand(): Promise<void> {
   checks.push(checkBun());
   checks.push(checkNode());
   checks.push(checkGh());
+  checks.push(checkProviderPlugins());
   checks.push(await checkPtyBinary());
   checks.push(await checkBatonHome());
 
@@ -112,6 +114,44 @@ function checkGh(): CheckResult {
       name: 'GitHub CLI',
       pass: true,
       detail: 'Not installed (optional — required only for Forge / Pull Requests features)',
+    };
+  }
+}
+
+function checkProviderPlugins(): CheckResult {
+  // Third-party provider plugins are OPTIONAL — list what's installed in
+  // $BATON_HOME/plugins so users can confirm their provider was picked up.
+  // Purely informational: pass is always true.
+  const dir = join(process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`, 'plugins');
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true }).filter((e) =>
+      e.isDirectory(),
+    );
+    const manifests = entries
+      .map((e) => {
+        try {
+          const m = JSON.parse(readFileSync(join(dir, e.name, 'plugin.json'), 'utf-8')) as {
+            type?: string;
+            version?: string;
+          };
+          return `${e.name} (${m.type ?? '?'}${m.version ? ` v${m.version}` : ''})`;
+        } catch {
+          return `${e.name} (invalid manifest)`;
+        }
+      });
+    return {
+      name: 'Provider Plugins',
+      pass: true,
+      detail:
+        manifests.length > 0
+          ? manifests.join(', ')
+          : 'None installed (drop a plugin dir under ~/.baton/plugins to extend agents)',
+    };
+  } catch {
+    return {
+      name: 'Provider Plugins',
+      pass: true,
+      detail: 'No plugins directory (none installed)',
     };
   }
 }

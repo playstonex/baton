@@ -1203,6 +1203,21 @@ export async function main() {
     // Non-fatal — env loading must never block daemon startup.
   }
 
+  // Load third-party provider plugins from ~/.baton/plugins/. Each broken
+  // plugin is skipped with a log line; never blocks startup.
+  try {
+    const { loadProviderPlugins } = await import('./plugins/loader.js');
+    const plugins = await loadProviderPlugins();
+    for (const p of plugins.loaded) {
+      console.log(`[baton] plugin loaded: ${p.name} (${p.type})`);
+    }
+    for (const f of plugins.failed) {
+      console.warn(`[baton] plugin skipped: ${f.name} — ${f.reason}`);
+    }
+  } catch (err) {
+    console.warn('[baton] plugin loading failed:', err instanceof Error ? err.message : err);
+  }
+
   const port = parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
   const { app, transport } = createDaemon(port);
 
