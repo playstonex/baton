@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { wsService } from './websocket';
 
 // Configure notification handler for foreground notifications.
@@ -49,9 +50,15 @@ class NotificationService {
     }
 
     try {
-      const token = await Notifications.getExpoPushTokenAsync({
-        projectId: 'com.playstone.baton',
-      });
+      // getExpoPushTokenAsync needs the EAS project UUID (app.json →
+      // extra.eas.projectId), NOT the bundle identifier.
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (!projectId) {
+        console.log('[Push] No EAS projectId configured; skipping push registration');
+        return null;
+      }
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
       this.expoPushToken = token.data;
       console.log(`[Push] Expo push token: ${this.expoPushToken?.slice(0, 20)}...`);
       return this.expoPushToken;

@@ -18,6 +18,11 @@ function isBinaryData(data: unknown): data is ArrayBuffer {
   return typeof ArrayBuffer !== 'undefined' && data instanceof ArrayBuffer;
 }
 
+/** Identity of the daemon a config points at (credentials excluded). */
+function targetKey(c: Partial<ConnectionConfig>): string {
+  return [c.mode, c.relayUrl, c.hostId, c.localWsUrl, c.localHttpUrl].join('|');
+}
+
 export class WebSocketService {
   private ws: WebSocket | null = null;
   private handlers = new Map<string, Set<MessageHandler>>();
@@ -57,7 +62,14 @@ export class WebSocketService {
   }
 
   configure(config: Partial<ConnectionConfig>): void {
-    this.config = { ...this.config, ...config };
+    const next = { ...this.config, ...config };
+    // Seq numbers and advertised features belong to ONE daemon. Switching hosts
+    // must not resume_session a new daemon with the previous host's lastSeq.
+    if (targetKey(next) !== targetKey(this.config)) {
+      this.lastSeq.clear();
+      this.serverFeatures = undefined;
+    }
+    this.config = next;
   }
 
   onError(cb: (attempt: number) => void): void {

@@ -20,7 +20,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
-      "esbuild"
+      "esbuild",
+      "sharp"
     ],
     "overrides": {
       "react": "19.2.3",

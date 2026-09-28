@@ -233,10 +233,7 @@ export default function DashboardScreen() {
         body: JSON.stringify({
           agentType,
           projectPath: projectPath.trim(),
-          // Codex must run via the SDK adapter (codex app-server / JSON-RPC).
-          // The default PTY path spawns the interactive `codex` TUI, whose render
-          // frames flood the daemon and freeze the event loop. Chat mode requires SDK.
-          mode: agentType === 'codex' ? 'sdk' : 'pty',
+          mode: chatMode === 'chat' ? 'sdk' : 'pty',
         }),
       });
       addAgent({
@@ -251,11 +248,9 @@ export default function DashboardScreen() {
         type: agentType,
         projectPath: projectPath.trim(),
         lastActivity: Date.now(),
-        // codex chat sessions remember their mode so re-entry reopens the chat
-        // view instead of falling back to the terminal.
-        chatMode: agentType === 'codex' ? chatMode : undefined,
+        chatMode,
       });
-      const route = agentType === 'codex' && chatMode === 'chat' ? 'chat' : 'terminal';
+      const route = chatMode === 'chat' ? 'chat' : 'terminal';
       router.push(`/${route}/${data.sessionId}` as Href);
     } catch (err) {
       Alert.alert('Error', `Failed: ${err}`);
@@ -275,19 +270,18 @@ export default function DashboardScreen() {
 
   /**
    * Open a session, routing to chat vs terminal based on the stored mode.
-   * codex sessions created in chat mode reopen in chat; everything else
-   * (and codex terminal sessions) opens in the terminal.
+   * Sessions created in chat mode reopen in chat; terminal sessions open in terminal.
    */
   function openSession(sessionId: string, agentType: AgentType) {
     const stored = sessions.find((s) => s.id === sessionId);
-    const isChat = agentType === 'codex' && stored?.chatMode === 'chat';
+    const isChat = stored?.chatMode === 'chat' || (!stored?.chatMode && chatMode === 'chat');
     const route = isChat ? 'chat' : 'terminal';
     addSession({
       id: sessionId,
       type: agentType,
       projectPath: stored?.projectPath ?? '',
       lastActivity: Date.now(),
-      chatMode: stored?.chatMode,
+      chatMode: stored?.chatMode ?? (isChat ? 'chat' : 'terminal'),
     });
     router.push(`/${route}/${sessionId}` as Href);
   }
@@ -569,70 +563,68 @@ export default function DashboardScreen() {
                 {selectedAgent.desc}
               </Text>
 
-              {/* Interaction mode — only Codex supports chat */}
-              {agentType === 'codex' && (
-                <View style={styles.modeRow}>
-                  <Text
-                    style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}
-                  >
-                    Mode
-                  </Text>
-                  <View
-                    style={[
-                      styles.modeSegmented,
-                      {
-                        backgroundColor: c.isDark
-                          ? Glass.opacity.dark.subtle
-                          : Glass.opacity.light.subtle,
-                        borderColor: c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                      },
-                    ]}
-                  >
-                    {(
-                      [
-                        { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
-                        { key: 'terminal', label: 'Terminal', icon: 'terminal-outline' },
-                      ] as const
-                    ).map((opt) => {
-                      const active = chatMode === opt.key;
-                      return (
-                        <Pressable
-                          key={opt.key}
-                          onPress={() => setChatMode(opt.key)}
+              {/* Interaction mode — all agents support structured Chat (SDK/ACP) or Terminal (PTY) */}
+              <View style={styles.modeRow}>
+                <Text
+                  style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}
+                >
+                  Mode
+                </Text>
+                <View
+                  style={[
+                    styles.modeSegmented,
+                    {
+                      backgroundColor: c.isDark
+                        ? Glass.opacity.dark.subtle
+                        : Glass.opacity.light.subtle,
+                      borderColor: c.isDark
+                        ? Glass.opacity.dark.border
+                        : Glass.opacity.light.border,
+                    },
+                  ]}
+                >
+                  {(
+                    [
+                      { key: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
+                      { key: 'terminal', label: 'Terminal', icon: 'terminal-outline' },
+                    ] as const
+                  ).map((opt) => {
+                    const active = chatMode === opt.key;
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        onPress={() => setChatMode(opt.key)}
+                        style={[
+                          styles.modeSegment,
+                          active && { backgroundColor: Colors.primary[500] + '20' },
+                        ]}
+                      >
+                        <Ionicons
+                          name={opt.icon as any}
+                          size={13}
+                          color={active ? Colors.primary[500] : c.textTertiary}
+                        />
+                        <Text
                           style={[
-                            styles.modeSegment,
-                            active && { backgroundColor: Colors.primary[500] + '20' },
+                            Typography.caption1,
+                            {
+                              color: active ? Colors.primary[500] : c.textTertiary,
+                              fontWeight: active ? '600' : '500',
+                            },
                           ]}
                         >
-                          <Ionicons
-                            name={opt.icon as any}
-                            size={13}
-                            color={active ? Colors.primary[500] : c.textTertiary}
-                          />
-                          <Text
-                            style={[
-                              Typography.caption1,
-                              {
-                                color: active ? Colors.primary[500] : c.textTertiary,
-                                fontWeight: active ? '600' : '500',
-                              },
-                            ]}
-                          >
-                            {opt.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <Text style={[Typography.caption2, { color: c.textTertiary }]}>
-                    {chatMode === 'chat'
-                      ? 'Structured chat with tool calls & approvals'
-                      : 'Raw PTY terminal'}
-                  </Text>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              )}
+                <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+                  {chatMode === 'chat'
+                    ? 'Structured chat / ACP mode with tool cards & approvals'
+                    : 'Raw PTY terminal'}
+                </Text>
+              </View>
 
               <GlassButton
                 c={c}

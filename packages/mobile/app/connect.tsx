@@ -1,4 +1,5 @@
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   View,
@@ -29,6 +30,7 @@ import {
   GlassPill,
 } from '../src/components/GlassKit';
 import { Typography, Spacing, Colors } from '../src/constants/theme';
+import { QrScannerModal, type ScannedPairingData } from '../src/components/QrScannerModal';
 
 function formatTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -76,6 +78,108 @@ export default function ConnectScreen() {
   const [inputPairingCode, setInputPairingCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [scannerVisible, setScannerVisible] = useState(false);
+
+  /**
+   * A QR code is untrusted input: anyone can show one. Validate the URL schemes
+   * and make the user confirm the exact host before we persist it, connect, or
+   * send a pairing code anywhere.
+   */
+  function handleScanResult(data: ScannedPairingData) {
+    const target = data.localHttpUrl ?? data.relayUrl;
+    if (!target) {
+      setError('QR code does not contain a Baton host address');
+      return;
+    }
+    const scheme = data.localHttpUrl ? /^https?:\/\//i : /^wss?:\/\//i;
+    let hostLabel: string;
+    try {
+      if (!scheme.test(target)) throw new Error('bad scheme');
+      hostLabel = new URL(target).host;
+    } catch {
+      setError(`Unsupported address in QR code: ${target}`);
+      return;
+    }
+    const lines = [
+      data.name ? `Name: ${data.name}` : null,
+      `Host: ${hostLabel}`,
+      data.fingerprint ? `Fingerprint: ${data.fingerprint}` : null,
+      '',
+      'Only continue if this matches the host shown on your computer.',
+    ].filter((l): l is string => l !== null);
+    Alert.alert('Connect to this host?', lines.join('\n'), [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Connect', onPress: () => void applyScanResult(data) },
+    ]);
+  }
+
+  async function applyScanResult(data: ScannedPairingData) {
+    if (data.localHttpUrl) {
+      setMode('local');
+      setInputLocalHttp(data.localHttpUrl);
+      const wsUrl =
+        data.localWsUrl ||
+        data.localHttpUrl.replace(/^http/, 'ws').replace(/:\d+$/, ':3211');
+      setInputLocalWs(wsUrl);
+      setLoading(true);
+      setError('');
+      try {
+        const config = {
+          mode: 'local' as const,
+          localHttpUrl: data.localHttpUrl,
+          localWsUrl: wsUrl,
+        };
+        const host = await persistHost(config);
+        addHost(host);
+        wsService.configure(config);
+        wsService.connect();
+        pendingNavigation.current = true;
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (data.relayUrl) {
+      setMode('remote');
+      setInputRelayUrl(data.relayUrl);
+      if (data.pairingCode) {
+        setInputPairingCode(data.pairingCode);
+        setLoading(true);
+        setError('');
+        try {
+          const gatewayUrl = data.relayUrl.replace(/^wss?/, 'http').replace(/:\d+/, ':3220');
+          const res = await fetch(`${gatewayUrl}/api/v1/auth/verify-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: data.pairingCode.trim() }),
+          });
+          const authData = (await res.json()) as { token?: string; hostId?: string; error?: string };
+          if (!res.ok) {
+            setError(authData.error ?? 'Pairing failed');
+            return;
+          }
+          const config = {
+            mode: 'remote' as const,
+            relayUrl: data.relayUrl.trim(),
+            hostId: authData.hostId,
+            token: authData.token,
+          };
+          const host = await persistHost(config);
+          addHost(host);
+          wsService.configure(config);
+          wsService.connect();
+          pendingNavigation.current = true;
+        } catch (err) {
+          setError(`Connection failed: ${err}`);
+        } finally {
+          setLoading(false);
+        }
+      }
+    }
+  }
 
   // Only auto-advance to the tabs for a connection this screen initiated —
   // arriving here from Settings while already connected must not bounce back.
@@ -313,6 +417,28 @@ export default function ConnectScreen() {
         )}
 
         <GlassSectionHeader c={c} title="New Server" />
+        <Pressable
+          onPress={() => setScannerVisible(true)}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: Spacing.sm,
+            paddingVertical: 14,
+            paddingHorizontal: Spacing.lg,
+            borderRadius: 14,
+            backgroundColor: c.isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 1,
+            borderColor: 'rgba(59, 130, 246, 0.3)',
+            opacity: pressed ? 0.8 : 1,
+            marginBottom: Spacing.xs,
+          })}
+        >
+          <Ionicons name="qr-code-outline" size={20} color={Colors.primary[500]} />
+          <Text style={[Typography.subhead, { color: Colors.primary[500], fontWeight: '600' }]}>
+            Scan Pairing QR Code
+          </Text>
+        </Pressable>
         <GlassCard c={c} style={{ gap: Spacing.md }}>
           <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
             {(['local', 'remote'] as const).map((m) => (
@@ -416,6 +542,12 @@ export default function ConnectScreen() {
           </Text>
         )}
       </ScrollView>
+
+      <QrScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleScanResult}
+      />
     </KeyboardAvoidingView>
   );
 }

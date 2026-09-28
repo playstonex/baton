@@ -26,3 +26,15 @@ export async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> 
   }
   return res.json() as Promise<T>;
 }
+
+export async function searchProjectFiles(projectPath: string, query = ''): Promise<string[]> {
+  try {
+    const res = await apiFetch<{ files: string[] }>(
+      `/api/files/search?path=${encodeURIComponent(projectPath)}&q=${encodeURIComponent(query)}`,
+    );
+    return res.files ?? [];
+  } catch {
+    return [];
+  }
+}
+

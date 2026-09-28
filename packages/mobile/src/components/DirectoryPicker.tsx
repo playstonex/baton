@@ -122,9 +122,14 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
         ) : error ? (
           <View style={styles.center}>
             <Text style={[styles.errorText, { color: '#dc2626' }]}>{error}</Text>
-            <Pressable onPress={() => loadDir(currentPath)} style={styles.retryBtn}>
-              <Text style={[styles.retryText, { color: '#2383e2' }]}>Retry</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable onPress={() => loadDir(currentPath)} style={styles.retryBtn}>
+                <Text style={[styles.retryText, { color: '#2383e2' }]}>Retry</Text>
+              </Pressable>
+              <Pressable onPress={() => loadDir('/')} style={styles.retryBtn}>
+                <Text style={[styles.retryText, { color: '#2383e2' }]}>Go to /</Text>
+              </Pressable>
+            </View>
           </View>
         ) : (
           <FlatList

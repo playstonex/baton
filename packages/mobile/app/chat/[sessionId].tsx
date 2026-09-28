@@ -14,6 +14,7 @@ import {
   Clipboard,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -24,8 +25,16 @@ import Svg, { Circle } from 'react-native-svg';
 import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
 import { apiFetch } from '../../src/services/api';
-import { FontFamily, STATUS_COLORS } from '../../src/constants/theme';
+import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import {
+  AgentQuestionCard,
+  type QuestionItem,
+  type PermissionItem,
+} from '../../src/components/AgentQuestionCard';
+import { AgentInputAutocomplete } from '../../src/components/AgentInputAutocomplete';
+import { AllFilesDiffView } from '../../src/components/AllFilesDiffView';
+import type { SessionOwnershipMessage } from '@baton/shared';
 import {
   MarkdownText,
   ThinkingBlock,
@@ -169,14 +178,79 @@ export default function ChatScreen() {
   const router = useRouter();
   const messages = useChatStore((s) => s.messages);
   const agentStatus = useChatStore((s) => s.agentStatus);
+  const running = isRunning(agentStatus);
   const waitingApproval = useChatStore((s) => s.waitingApproval);
+  const activePrompt = useChatStore((s) => s.activePrompt);
+  const activePermission = useChatStore((s) => s.activePermission);
+  const promptQueue = useChatStore((s) => s.promptQueue);
+  const enqueuePrompt = useChatStore((s) => s.enqueuePrompt);
+  const dequeuePrompt = useChatStore((s) => s.dequeuePrompt);
+  const removeQueuedPrompt = useChatStore((s) => s.removeQueuedPrompt);
+  const clearQueue = useChatStore((s) => s.clearQueue);
   const addEvent = useChatStore((s) => s.addEvent);
   const addUserMessage = useChatStore((s) => s.addUserMessage);
   const setStatus = useChatStore((s) => s.setStatus);
   const setWaitingApproval = useChatStore((s) => s.setWaitingApproval);
   const clear = useChatStore((s) => s.clear);
+  const sessionOwner = useChatStore((s) => s.sessionOwner);
+  const setSessionOwner = useChatStore((s) => s.setSessionOwner);
+  const [showDiffReview, setShowDiffReview] = useState(false);
   const [input, setInput] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
+
+  const autocomplete = useMemo<{
+    type: 'file' | 'command';
+    query: string;
+  } | null>(() => {
+    if (!inputFocused && !input) return null;
+    const fileMatch = input.match(/@([a-zA-Z0-9_\-./\\]*)$/);
+    if (fileMatch) {
+      return { type: 'file', query: fileMatch[1] };
+    }
+    const cmdMatch = input.match(/^\/([a-zA-Z0-9_\-]*)$/);
+    if (cmdMatch) {
+      return { type: 'command', query: cmdMatch[1] };
+    }
+    return null;
+  }, [input, inputFocused]);
+
+  const handleAutocompleteSelect = useCallback(
+    (replacement: string, action?: string) => {
+      if (action === 'review') {
+        setInput('');
+        setShowDiffReview(true);
+        return;
+      }
+      if (autocomplete?.type === 'file') {
+        const next = input.replace(/@([a-zA-Z0-9_\-./\\]*)$/, replacement);
+        setInput(next);
+      } else if (autocomplete?.type === 'command') {
+        setInput(`${replacement} `);
+      }
+    },
+    [autocomplete, input],
+  );
+
+  const toggleSessionControl = useCallback(() => {
+    if (!sessionId) return;
+    if (sessionOwner === 'remote') {
+      showActionSheet(
+        'Device Control',
+        ['Yield Control to Desktop', 'Cancel'],
+        1,
+        (idx) => {
+          if (idx === 0) {
+            wsService.send({ type: 'control', action: 'release_session', sessionId });
+            setSessionOwner('local');
+          }
+        },
+      );
+    } else {
+      wsService.send({ type: 'control', action: 'claim_session', sessionId });
+      setSessionOwner('remote');
+    }
+  }, [sessionId, sessionOwner, setSessionOwner]);
+
   const [models, setModels] = useState<string[]>([]);
   /** Models from the user's configured API Providers (Settings > API
    * Providers), merged ahead of the adapter's built-in list so custom models
@@ -310,6 +384,13 @@ export default function ChatScreen() {
       }
     });
 
+    const unsubOwnership = wsService.on('session_ownership', (msg) => {
+      const m = msg as SessionOwnershipMessage;
+      if (m.sessionId === sessionId) {
+        setSessionOwner(m.owner);
+      }
+    });
+
     const unsubGitResult = wsService.on('git_result', (msg) => {
       if (msg.type === 'git_result' && msg.sessionId === sessionId) {
         if (msg.success) {
@@ -350,8 +431,9 @@ export default function ChatScreen() {
       unsubGitBranches();
       unsubGitStatus();
       unsubGitResult();
+      unsubOwnership();
     };
-  }, [sessionId, addEvent, setStatus, clear, attachSession]);
+  }, [sessionId, addEvent, setStatus, setSessionOwner, clear, attachSession]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -470,6 +552,15 @@ export default function ChatScreen() {
 
   function sendChat() {
     if (!input.trim() || !sessionId) return;
+    if (input.trim() === '/review') {
+      setInput('');
+      setShowDiffReview(true);
+      return;
+    }
+    if (sessionOwner !== 'remote') {
+      wsService.send({ type: 'control', action: 'claim_session', sessionId });
+      setSessionOwner('remote');
+    }
     addUserMessage(input.trim());
     sendThinkingConfig(thinkingMode, thinkingLevel);
     if (serviceTier !== 'default') {
@@ -498,19 +589,78 @@ export default function ChatScreen() {
     wsService.send({ type: 'cancel_turn', sessionId });
   }
 
-  function approveAction() {
+  function approveAction(requestId?: string) {
     if (!sessionId) return;
+    const reqId = requestId ?? activePermission?.requestId;
+    if (reqId) {
+      wsService.send({
+        type: 'control',
+        action: 'permission_response',
+        sessionId,
+        payload: { requestId: reqId, approved: true },
+      });
+    }
     wsService.send({ type: 'approve_input', sessionId });
     setWaitingApproval(false);
+    useChatStore.getState().setActivePermission(null);
     setApprovalDetail(null);
   }
 
-  function rejectAction() {
+  function rejectAction(requestId?: string) {
     if (!sessionId) return;
+    const reqId = requestId ?? activePermission?.requestId;
+    if (reqId) {
+      wsService.send({
+        type: 'control',
+        action: 'permission_response',
+        sessionId,
+        payload: { requestId: reqId, approved: false },
+      });
+    }
     wsService.send({ type: 'reject_input', sessionId });
     setWaitingApproval(false);
+    useChatStore.getState().setActivePermission(null);
     setApprovalDetail(null);
   }
+
+  function answerQuestion(answerText: string) {
+    if (!sessionId || !answerText.trim()) return;
+    addUserMessage(answerText.trim());
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: answerText.trim(),
+      model: selectedModel ?? undefined,
+    });
+    useChatStore.getState().setActivePrompt(null);
+  }
+
+  function sendQueuedPrompt(promptText: string) {
+    if (!promptText.trim() || !sessionId) return;
+    addUserMessage(promptText.trim());
+    sendThinkingConfig(thinkingMode, thinkingLevel);
+    if (serviceTier !== 'default') {
+      wsService.send({ type: 'service_tier_select', sessionId, tier: serviceTier });
+    }
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: promptText.trim(),
+      model: selectedModel ?? undefined,
+      messageId,
+    });
+  }
+
+  // Feature 2: Continuous Prompt Queue auto-dispatch effect
+  useEffect(() => {
+    if (!running && (agentStatus === 'idle' || agentStatus === 'unknown') && promptQueue.length > 0) {
+      const nextPrompt = dequeuePrompt();
+      if (nextPrompt) {
+        sendQueuedPrompt(nextPrompt);
+      }
+    }
+  }, [running, agentStatus, promptQueue]);
 
   async function openAttachmentMenu() {
     const anchor = await measureAnchor(attachBtnRef);
@@ -706,12 +856,21 @@ export default function ChatScreen() {
     setMenu({
       title: 'Git Actions',
       anchor,
-      options: [{ label: 'Status' }, { label: 'Commit...' }, { label: 'Push' }, { label: 'Pull' }],
+      options: [
+        { label: 'Review All Changes' },
+        { label: 'Status' },
+        { label: 'Commit...' },
+        { label: 'Push' },
+        { label: 'Pull' },
+      ],
       onSelect: (index) => {
         if (index === 0) {
-          wsService.send({ type: 'git_status_request', sessionId });
+          setShowDiffReview(true);
         }
         if (index === 1) {
+          wsService.send({ type: 'git_status_request', sessionId });
+        }
+        if (index === 2) {
           setPromptModal({
             visible: true,
             title: 'Commit',
@@ -723,17 +882,16 @@ export default function ChatScreen() {
             },
           });
         }
-        if (index === 2) {
+        if (index === 3) {
           wsService.send({ type: 'git_push', sessionId });
         }
-        if (index === 3) {
+        if (index === 4) {
           wsService.send({ type: 'git_pull', sessionId });
         }
       },
     });
   }
 
-  const running = isRunning(agentStatus);
   const statusColor = STATUS_COLORS[agentStatus] ?? '#a8a29e';
   const sendDisabled = !input.trim();
 
@@ -749,7 +907,14 @@ export default function ChatScreen() {
       );
     }
     return (
-      <MessageBubble msg={item.msg} colors={c} onLongPress={() => showMessageActions(item.msg)} />
+      <MessageBubble
+        msg={item.msg}
+        colors={c}
+        onLongPress={() => showMessageActions(item.msg)}
+        onAnswerQuestion={answerQuestion}
+        onApprovePermission={() => approveAction(item.msg.meta?.requestId as string | undefined)}
+        onRejectPermission={() => rejectAction(item.msg.meta?.requestId as string | undefined)}
+      />
     );
   }
 
@@ -769,16 +934,72 @@ export default function ChatScreen() {
               )}
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             </View>
-            <View style={styles.headerTitles}>
+            <Pressable
+              onPress={() => setShowDiffReview(true)}
+              style={styles.headerTitles}
+            >
               <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
                 {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
               </Text>
               <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
                 {agentStatus.replace('_', ' ')}
-                {gitStatus ? ` \u2022 ${gitStatus.split('\n').length} changed` : ''}
+                {gitStatus ? ` \u2022 ${gitStatus.split('\n').filter(Boolean).length} changed` : ''}
               </Text>
-            </View>
+            </Pressable>
             <View style={styles.spacer} />
+
+            {gitStatus.trim().length > 0 && (
+              <Pressable
+                onPress={() => setShowDiffReview(true)}
+                style={({ pressed }) => [
+                  styles.headerDiffPill,
+                  {
+                    backgroundColor: pressed
+                      ? c.subtle
+                      : c.isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(0,0,0,0.05)',
+                  },
+                ]}
+                hitSlop={4}
+              >
+                <Ionicons name="document-text-outline" size={13} color={Colors.primary[500]} />
+                <Text style={[styles.headerDiffPillText, { color: Colors.primary[500] }]}>
+                  {gitStatus.split('\n').filter(Boolean).length}
+                </Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={toggleSessionControl}
+              style={({ pressed }) => [
+                styles.headerControlPill,
+                {
+                  backgroundColor: pressed
+                    ? c.subtle
+                    : sessionOwner === 'remote'
+                      ? 'rgba(34,197,94,0.14)'
+                      : c.isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(0,0,0,0.05)',
+                },
+              ]}
+              hitSlop={4}
+            >
+              <Ionicons
+                name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
+                size={12}
+                color={sessionOwner === 'remote' ? Colors.success[400] : c.textTertiary}
+              />
+              <Text
+                style={[
+                  styles.headerControlText,
+                  { color: sessionOwner === 'remote' ? Colors.success[400] : c.textTertiary },
+                ]}
+              >
+                {sessionOwner === 'remote' ? 'Mobile' : 'Take Control'}
+              </Text>
+            </Pressable>
             <Pressable
               ref={gitActionsBtnRef}
               onPress={openGitActionsMenu}
@@ -849,50 +1070,97 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {waitingApproval && (
+      {(activePermission || waitingApproval) && (
+        <View style={styles.dockedCardWrapper}>
+          <AgentQuestionCard
+            permission={
+              activePermission ?? {
+                requestId: 'legacy',
+                tool: approvalDetail?.toolName ?? 'Action',
+                action: approvalDetail?.detail ?? 'Command approval requested',
+                description: approvalDetail?.detail ?? 'The agent needs your approval to proceed.',
+              }
+            }
+            onApprove={() => approveAction(activePermission?.requestId)}
+            onReject={() => rejectAction(activePermission?.requestId)}
+            compact
+          />
+        </View>
+      )}
+
+      {activePrompt && activePrompt.questions?.length > 0 && (
+        <View style={styles.dockedCardWrapper}>
+          <AgentQuestionCard
+            question={activePrompt.questions[0]}
+            onAnswer={answerQuestion}
+            compact
+          />
+        </View>
+      )}
+
+      {promptQueue.length > 0 && (
         <View
-          style={[styles.approvalBanner, { backgroundColor: c.card, borderColor: c.cardBorder }]}
+          style={[
+            styles.queueStrip,
+            {
+              backgroundColor: c.isDark ? 'rgba(44,44,46,0.85)' : 'rgba(235,235,240,0.85)',
+              borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            },
+          ]}
         >
-          <Text style={[styles.approvalTitle, { color: c.textPrimary }]}>
-            {'\uD83D\uDEE1'} Approval Required
-          </Text>
-          {approvalDetail && (
-            <View style={styles.approvalDetailContainer}>
-              {approvalDetail.toolName ? (
-                <Text style={[styles.approvalTool, { color: c.textSecondary }]}>
-                  {approvalDetail.toolName}
-                </Text>
-              ) : null}
-              {approvalDetail.detail ? (
-                <Text
-                  style={[styles.approvalDetailText, { color: c.textTertiary }]}
-                  numberOfLines={3}
-                >
-                  {approvalDetail.detail}
-                </Text>
-              ) : null}
+          <View style={styles.queueHeaderRow}>
+            <View style={styles.queueTitleGroup}>
+              <Ionicons name="time-outline" size={14} color={Colors.primary[500]} />
+              <Text style={[styles.queueCountText, { color: c.textPrimary }]}>
+                Queue ({promptQueue.length})
+              </Text>
             </View>
-          )}
-          <View style={styles.approvalButtons}>
-            <Pressable
-              style={[styles.approvalBtn, { backgroundColor: '#22c55e' }]}
-              onPress={approveAction}
-              hitSlop={4}
-            >
-              <Text style={styles.approvalBtnText}>{'\u2713'} Approve</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.approvalBtn, { backgroundColor: '#ef4444' }]}
-              onPress={rejectAction}
-              hitSlop={4}
-            >
-              <Text style={styles.approvalBtnText}>{'\u2717'} Reject</Text>
+            <Pressable onPress={clearQueue} hitSlop={6}>
+              <Text style={[Typography.caption2, { color: Colors.danger[400], fontWeight: '600' }]}>
+                Clear
+              </Text>
             </Pressable>
           </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.queueChipsContainer}
+          >
+            {promptQueue.map((item, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.queueChip,
+                  {
+                    backgroundColor: c.isDark ? '#1c1c1e' : '#fff',
+                    borderColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+                  },
+                ]}
+              >
+                <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
+                <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
+                  {item}
+                </Text>
+                <Pressable onPress={() => removeQueuedPrompt(idx)} hitSlop={6}>
+                  <Ionicons name="close-circle" size={14} color={c.textTertiary} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
 
       <View style={[styles.composerWrapper, { paddingBottom: insets.bottom }]}>
+        {autocomplete && (
+          <AgentInputAutocomplete
+            type={autocomplete.type}
+            query={autocomplete.query}
+            projectPath={projectPath}
+            colors={c}
+            onSelect={handleAutocompleteSelect}
+            onClose={() => setInputFocused(false)}
+          />
+        )}
         <View
           style={[
             styles.composerCard,
@@ -927,9 +1195,18 @@ export default function ChatScreen() {
               onChangeText={setInput}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
-              onSubmitEditing={running ? sendSteer : sendChat}
+              onSubmitEditing={() => {
+                if (running) {
+                  if (input.trim()) {
+                    enqueuePrompt(input.trim());
+                    setInput('');
+                  }
+                } else {
+                  sendChat();
+                }
+              }}
               returnKeyType="send"
-              placeholder={running ? 'Steer the agent...' : 'Ask anything...'}
+              placeholder={running ? 'Type to queue next prompt...' : 'Ask anything...'}
               placeholderTextColor={c.textTertiary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -1032,8 +1309,34 @@ export default function ChatScreen() {
               </Pressable>
             )}
 
+            {running && input.trim().length > 0 && (
+              <Pressable
+                onPress={sendSteer}
+                style={[
+                  styles.steerButton,
+                  {
+                    backgroundColor: c.isDark ? '#3a3a3c' : '#e5e5ea',
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Steer immediately"
+              >
+                <Ionicons name="flash" size={12} color="#f59e0b" />
+                <Text style={[styles.steerLabel, { color: c.textPrimary }]}>Steer</Text>
+              </Pressable>
+            )}
+
             <Pressable
-              onPress={running ? sendSteer : sendChat}
+              onPress={() => {
+                if (running) {
+                  if (input.trim()) {
+                    enqueuePrompt(input.trim());
+                    setInput('');
+                  }
+                } else {
+                  sendChat();
+                }
+              }}
               style={[
                 styles.sendButton,
                 {
@@ -1041,20 +1344,30 @@ export default function ChatScreen() {
                     ? c.isDark
                       ? '#3a3a3c'
                       : '#d1d1d6'
-                    : c.isDark
-                      ? '#e8e8e8'
-                      : '#1c1917',
+                    : running
+                      ? Colors.primary[500]
+                      : c.isDark
+                        ? '#e8e8e8'
+                        : '#1c1917',
                 },
               ]}
               disabled={sendDisabled}
               hitSlop={4}
-              accessibilityLabel="Send"
+              accessibilityLabel={running ? 'Queue prompt' : 'Send'}
             >
               <Ionicons
-                name="arrow-up"
+                name={running ? 'add' : 'arrow-up'}
                 size={14}
                 color={
-                  sendDisabled ? (c.isDark ? '#636366' : '#aeaeb2') : c.isDark ? '#1c1917' : '#fff'
+                  sendDisabled
+                    ? c.isDark
+                      ? '#8e8e93'
+                      : '#8e8e93'
+                    : running
+                      ? '#ffffff'
+                      : c.isDark
+                        ? '#1c1917'
+                        : '#ffffff'
                 }
               />
             </Pressable>
@@ -1174,6 +1487,16 @@ export default function ChatScreen() {
         }}
         onClose={() => setMenu(null)}
       />
+
+      <AllFilesDiffView
+        visible={showDiffReview}
+        sessionId={sessionId ?? ''}
+        projectPath={projectPath}
+        onClose={() => setShowDiffReview(false)}
+        onCommitSuccess={() => {
+          wsService.send({ type: 'git_status_request', sessionId });
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1248,11 +1571,49 @@ function MessageBubble({
   msg,
   colors: c,
   onLongPress,
+  onAnswerQuestion,
+  onApprovePermission,
+  onRejectPermission,
 }: {
   msg: ChatMessage;
   colors: ThemeColors;
   onLongPress?: () => void;
+  onAnswerQuestion?: (ans: string) => void;
+  onApprovePermission?: () => void;
+  onRejectPermission?: () => void;
 }) {
+  if (msg.eventType === 'user_input_prompt') {
+    const rawQuestions = msg.meta?.questions as QuestionItem[] | undefined;
+    const q: QuestionItem = rawQuestions?.[0] ?? { question: msg.content };
+    return (
+      <View style={styles.systemRow}>
+        <AgentQuestionCard
+          question={q}
+          onAnswer={onAnswerQuestion}
+          style={{ width: '100%' }}
+        />
+      </View>
+    );
+  }
+
+  if (msg.eventType === 'permission_request') {
+    const perm: PermissionItem = {
+      requestId: (msg.meta?.requestId as string) ?? '',
+      tool: (msg.meta?.tool as string) ?? '',
+      action: (msg.meta?.action as string) ?? '',
+      description: (msg.meta?.description as string) ?? msg.content,
+    };
+    return (
+      <View style={styles.systemRow}>
+        <AgentQuestionCard
+          permission={perm}
+          onApprove={onApprovePermission}
+          onReject={onRejectPermission}
+          style={{ width: '100%' }}
+        />
+      </View>
+    );
+  }
   if (msg.role === 'user') {
     const isLong = msg.content.length > 360 || (msg.content.match(/\n/g) ?? []).length > 8;
     return (
@@ -1471,6 +1832,31 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerDiffPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: CornerRadius.small,
+  },
+  headerDiffPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: FontFamily.mono,
+  },
+  headerControlPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: CornerRadius.small,
+  },
+  headerControlText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 
   statusDotOuter: {
@@ -1715,9 +2101,68 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  approvalButtons: { flexDirection: 'row', gap: 12 },
-  approvalBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
-  approvalBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  dockedCardWrapper: {
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
+  queueStrip: {
+    marginHorizontal: 12,
+    marginBottom: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  queueHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  queueTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  queueCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  queueChipsContainer: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  queueChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    maxWidth: 200,
+  },
+  queueChipNum: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  queueChipText: {
+    fontSize: 12,
+    maxWidth: 140,
+  },
+  steerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 9,
+    height: 32,
+    borderRadius: 16,
+  },
+  steerLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
 
   modalOverlay: {
     flex: 1,

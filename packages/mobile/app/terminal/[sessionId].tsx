@@ -18,6 +18,8 @@ import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWe
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTerminalSettingsStore } from '../../src/stores/terminal-settings';
+import { useChatStore } from '../../src/stores/chat';
+import { AgentQuestionCard } from '../../src/components/AgentQuestionCard';
 import {
   GlassCard,
   GlassButton,
@@ -194,6 +196,10 @@ export default function TerminalScreen() {
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const termSettings = useTerminalSettingsStore();
+  const activePrompt = useChatStore((s) => s.activePrompt);
+  const activePermission = useChatStore((s) => s.activePermission);
+  const sessionOwner = useChatStore((s) => s.sessionOwner);
+  const setSessionOwner = useChatStore((s) => s.setSessionOwner);
 
   const handleResize = useCallback(
     (cols: number, rows: number) => {
@@ -256,14 +262,22 @@ export default function TerminalScreen() {
       }
     });
 
+    const unsubOwnership = wsService.on('session_ownership', (msg) => {
+      const m = msg as { type: string; sessionId?: string; owner?: 'local' | 'remote' };
+      if (m.sessionId === sessionId && m.owner) {
+        setSessionOwner(m.owner);
+      }
+    });
+
     return () => {
       unsubOutput();
       unsubHistory();
       unsubStatus();
       unsubState();
       unsubError();
+      unsubOwnership();
     };
-  }, [sessionId]);
+  }, [sessionId, setSessionOwner]);
 
   useEffect(() => {
     if (!sessionId || !wsConnected) return;
@@ -383,6 +397,32 @@ export default function TerminalScreen() {
             </Pressable>
 
             <Pressable
+              onPress={() => {
+                if (sessionOwner === 'remote') {
+                  wsService.send({ type: 'control', action: 'release_session', sessionId });
+                  setSessionOwner('local');
+                } else {
+                  wsService.send({ type: 'control', action: 'claim_session', sessionId });
+                  setSessionOwner('remote');
+                }
+              }}
+              style={[
+                styles.navIconButton,
+                {
+                  backgroundColor: sessionOwner === 'remote' ? 'rgba(34,197,94,0.15)' : c.elevated,
+                  borderRadius: CornerRadius.small,
+                },
+              ]}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            >
+              <Ionicons
+                name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
+                size={16}
+                color={sessionOwner === 'remote' ? Colors.success[400] : c.textSecondary}
+              />
+            </Pressable>
+
+            <Pressable
               onPress={() => setFullscreen(true)}
               style={[styles.navIconButton, { backgroundColor: c.elevated, borderRadius: CornerRadius.small }]}
               hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
@@ -424,6 +464,54 @@ export default function TerminalScreen() {
             <GlassButton c={c} label="Go Back" onPress={() => router.back()} variant="secondary" />
             <GlassButton c={c} label="Dashboard" onPress={() => router.replace('/(tabs)')} variant="primary" />
           </GlassCard>
+        </View>
+      )}
+
+      {activePermission && (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
+          <AgentQuestionCard
+            permission={activePermission}
+            onApprove={() => {
+              if (sessionId) {
+                wsService.send({
+                  type: 'control',
+                  action: 'permission_response',
+                  sessionId,
+                  payload: { requestId: activePermission.requestId, approved: true },
+                });
+                wsService.send({ type: 'terminal_input', sessionId, data: 'y\r' });
+              }
+              useChatStore.getState().setActivePermission(null);
+            }}
+            onReject={() => {
+              if (sessionId) {
+                wsService.send({
+                  type: 'control',
+                  action: 'permission_response',
+                  sessionId,
+                  payload: { requestId: activePermission.requestId, approved: false },
+                });
+                wsService.send({ type: 'terminal_input', sessionId, data: 'n\r' });
+              }
+              useChatStore.getState().setActivePermission(null);
+            }}
+            compact
+          />
+        </View>
+      )}
+
+      {activePrompt && activePrompt.questions?.length > 0 && (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
+          <AgentQuestionCard
+            question={activePrompt.questions[0]}
+            onAnswer={(ans) => {
+              if (sessionId) {
+                wsService.send({ type: 'terminal_input', sessionId, data: ans + '\r' });
+              }
+              useChatStore.getState().setActivePrompt(null);
+            }}
+            compact
+          />
         </View>
       )}
 
