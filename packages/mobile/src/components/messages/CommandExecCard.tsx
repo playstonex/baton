@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
 import { TypingIndicator } from './TypingIndicator';
 import { humanizeCommand } from './CommandHumanizer';
-import { FontFamily } from '../../constants/theme';
+import { FontFamily, Colors } from '../../constants/theme';
 
 interface Props {
   command: string;
@@ -49,10 +49,10 @@ const statusStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   doneCircle: {
-    backgroundColor: '#34C759',
+    backgroundColor: Colors.success[400],
   },
   failedCircle: {
-    backgroundColor: '#F04545',
+    backgroundColor: Colors.danger[400],
   },
   running: {
     backgroundColor: 'rgba(120,120,128,0.2)',
@@ -61,7 +61,7 @@ const statusStyles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#8E8E93',
+    backgroundColor: Colors.surface[400],
   },
   checkMark: {
     color: '#fff',

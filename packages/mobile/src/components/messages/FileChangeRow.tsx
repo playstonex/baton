@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
-import { FontFamily } from '../../constants/theme';
+import { FontFamily, Colors } from '../../constants/theme';
 
 const CHANGE_COLORS: Record<string, string> = {
-  create: '#21C45E',
-  modify: '#FF9500',
-  delete: '#F04545',
+  create: Colors.success[400],
+  modify: Colors.warning[400],
+  delete: Colors.danger[400],
 };
 
 const CHANGE_LABELS: Record<string, string> = {
@@ -34,7 +34,7 @@ function parseDiffCounts(diff: string): { added: number; removed: number } | nul
 }
 
 export const FileChangeRow = React.memo(function FileChangeRow({ path, changeType, diff, colors: _colors }: Props) {
-  const color = CHANGE_COLORS[changeType] ?? '#FF9500';
+  const color = CHANGE_COLORS[changeType] ?? Colors.warning[400];
   const label = CHANGE_LABELS[changeType] ?? changeType;
   const counts = diff ? parseDiffCounts(diff) : null;
 
@@ -47,9 +47,9 @@ export const FileChangeRow = React.memo(function FileChangeRow({ path, changeTyp
       </Text>
       {counts && (
         <Text style={styles.counts}>
-          <Text style={{ color: '#21C45E' }}>+{counts.added}</Text>
+          <Text style={{ color: Colors.success[400] }}>+{counts.added}</Text>
           {' '}
-          <Text style={{ color: '#F04545' }}>-{counts.removed}</Text>
+          <Text style={{ color: Colors.danger[400] }}>-{counts.removed}</Text>
         </Text>
       )}
     </View>
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   filePath: {
     fontSize: 12,
     fontFamily: FontFamily.mono,
-    color: '#3b82f6',
+    color: Colors.primary[500],
     flexShrink: 1,
   },
   counts: {

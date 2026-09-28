@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { Colors } from '../../constants/theme';
 import type { ThemeColors } from './TypingIndicator';
 
 const STATUS_COLORS: Record<string, string> = {
-  completed: '#21C45E',
-  in_progress: '#FF9500',
-  pending: '#78716c',
+  completed: Colors.success[400],
+  in_progress: Colors.warning[400],
+  pending: Colors.surface[500],
 };
 
 interface Props {

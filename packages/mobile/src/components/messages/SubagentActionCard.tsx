@@ -84,7 +84,7 @@ export const SubagentActionCard = React.memo(function SubagentActionCard({
         )}
       </Pressable>
       {expanded && content && (
-        <View style={styles.body}>
+        <View style={[styles.body, { borderTopColor: c.subtle }]}>
           <Text style={[styles.bodyText, { color: c.textSecondary }]}>{content}</Text>
         </View>
       )}
@@ -134,7 +134,6 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingTop: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.15)',
   },
   bodyText: {
     fontSize: 12,

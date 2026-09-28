@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from './TypingIndicator';
-import { FontFamily } from '../../constants/theme';
+import { FontFamily, Colors } from '../../constants/theme';
 
 type DiffLineKind = 'addition' | 'deletion' | 'hunk' | 'meta' | 'neutral';
 
@@ -11,9 +11,9 @@ interface DiffLine {
 }
 
 const LINE_COLORS: Record<DiffLineKind, { text: string; bg: string; indicator: string }> = {
-  addition: { text: '#21C45E', bg: 'rgba(33,196,94,0.12)', indicator: '#21C45E' },
-  deletion: { text: '#F04545', bg: 'rgba(140,46,46,0.12)', indicator: '#F04545' },
-  hunk: { text: 'rgb(179,189,217)', bg: 'transparent', indicator: 'transparent' },
+  addition: { text: Colors.success[400], bg: Colors.success[400] + '1F', indicator: Colors.success[400] },
+  deletion: { text: Colors.danger[400], bg: Colors.danger[400] + '1F', indicator: Colors.danger[400] },
+  hunk: { text: 'tertiary', bg: 'transparent', indicator: 'transparent' },
   meta: { text: 'transparent', bg: 'transparent', indicator: 'transparent' },
   neutral: { text: 'inherit', bg: 'transparent', indicator: 'transparent' },
 };
@@ -52,7 +52,14 @@ export const DiffRenderer = React.memo(function DiffRenderer({ diff, colors, max
             <Text
               style={[
                 styles.lineText,
-                { color: lc.text === 'inherit' ? colors.textPrimary : lc.text },
+                {
+                  color:
+                    lc.text === 'inherit'
+                      ? colors.textPrimary
+                      : lc.text === 'tertiary'
+                        ? colors.textTertiary
+                        : lc.text,
+                },
               ]}
             >
               {line.text}

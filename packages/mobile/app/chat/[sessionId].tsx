@@ -893,7 +893,7 @@ export default function ChatScreen() {
     });
   }
 
-  const statusColor = STATUS_COLORS[agentStatus] ?? '#a8a29e';
+  const statusColor = STATUS_COLORS[agentStatus] ?? Colors.surface[400];
   const sendDisabled = !input.trim();
 
   function renderGroupedItem({ item }: { item: GroupedItem }) {
@@ -1273,7 +1273,7 @@ export default function ChatScreen() {
               style={[
                 styles.planBadge,
                 {
-                  backgroundColor: c.isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)',
+                  backgroundColor: Colors.warning[400] + (c.isDark ? '26' : '1A'),
                 },
               ]}
             >
@@ -2294,7 +2294,7 @@ const styles = StyleSheet.create({
 
   spacer: { flex: 1 },
 
-  errorBubble: { backgroundColor: 'rgba(239,68,68,0.1)' },
+  errorBubble: { backgroundColor: Colors.danger[400] + '1A' },
   errorText: { color: Colors.danger[400], ...Typography.caption2, fontWeight: '500' },
 
   dockedCardWrapper: {
