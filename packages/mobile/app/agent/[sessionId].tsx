@@ -24,12 +24,12 @@ const CHANGE_COLORS: Record<string, { bg: string; text: string; border: string }
 };
 
 const EVENT_TYPE_ICON: Record<string, string> = {
-  status_change: '\u{21BB}',
-  thinking: '\u{1F4AD}',
-  tool_use: '\u{1F527}',
-  file_change: '\u{1F4C4}',
-  command_exec: '\u{2318}',
-  error: '\u{26A0}',
+  status_change: 'swap-horizontal',
+  thinking: 'chatbubble-ellipses-outline',
+  tool_use: 'construct-outline',
+  file_change: 'document-text-outline',
+  command_exec: 'terminal-outline',
+  error: 'warning-outline',
 };
 
 export default function AgentDetailScreen() {
@@ -97,7 +97,7 @@ export default function AgentDetailScreen() {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
           <View style={{ width: 36, height: 36, borderRadius: CornerRadius.medium, alignItems: 'center', justifyContent: 'center', backgroundColor: c.accentBg }}>
-            <Text style={{ fontSize: 16 }}>{'\u{1F916}'}</Text>
+            <Ionicons name="cube-outline" size={19} color={Colors.primary[500]} />
           </View>
           <View>
             <Text style={[Typography.headline, { color: c.textPrimary }]}>Agent Detail</Text>
@@ -206,12 +206,12 @@ export default function AgentDetailScreen() {
         }
         renderItem={({ item: event, index }) => {
           const desc = eventDescription(event);
-          const icon = EVENT_TYPE_ICON[event.type] ?? '\u{25CF}';
+          const icon = EVENT_TYPE_ICON[event.type] ?? 'ellipse-outline';
           return (
             <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
               <View style={{ width: 24, alignItems: 'center' }}>
                 <View style={{ width: 24, height: 24, borderRadius: CornerRadius.medium, alignItems: 'center', justifyContent: 'center', backgroundColor: c.subtle }}>
-                  <Text style={{ fontSize: 10 }}>{icon}</Text>
+                  <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={12} color={c.textSecondary} />
                 </View>
                 {index < allEvents.length - 1 && <View style={{ width: 1.5, flex: 1, minHeight: Spacing.md, backgroundColor: c.separator }} />}
               </View>

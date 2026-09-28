@@ -25,8 +25,9 @@ import Svg, { Circle } from 'react-native-svg';
 import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
 import { apiFetch } from '../../src/services/api';
-import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius } from '../../src/constants/theme';
+import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Radius, Glass, Shadows } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import { GlassButton } from '../../src/components/GlassKit';
 import {
   AgentQuestionCard,
   type QuestionItem,
@@ -88,8 +89,8 @@ function ContextProgressRing({ fraction, color }: { fraction: number; color: str
   const pct = Math.round(fraction * 100);
 
   let ringColor = color;
-  if (fraction > 0.85) ringColor = '#ef4444';
-  else if (fraction > 0.65) ringColor = '#ff9500';
+  if (fraction > 0.85) ringColor = Colors.danger[400];
+  else if (fraction > 0.65) ringColor = Colors.warning[400];
 
   return (
     <View style={progressStyles.container}>
@@ -925,7 +926,11 @@ export default function ChatScreen() {
       keyboardVerticalOffset={0}
     >
       <View style={styles.headerOverlay}>
-        <BlurView tint={c.isDark ? 'dark' : 'light'} intensity={60} style={styles.headerBlur}>
+        <BlurView
+          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+          intensity={Glass.blur.nav}
+          style={styles.headerBlur}
+        >
           <View style={{ height: insets.top }} />
           <View style={styles.headerContent}>
             <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
@@ -936,7 +941,7 @@ export default function ChatScreen() {
             </View>
             <Pressable
               onPress={() => setShowDiffReview(true)}
-              style={styles.headerTitles}
+              style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
             >
               <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
                 {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
@@ -957,8 +962,13 @@ export default function ChatScreen() {
                     backgroundColor: pressed
                       ? c.subtle
                       : c.isDark
-                        ? 'rgba(255,255,255,0.08)'
-                        : 'rgba(0,0,0,0.05)',
+                        ? Glass.opacity.dark.subtle
+                        : Glass.opacity.light.subtle,
+                    borderColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                    opacity: pressed ? 0.8 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
                   },
                 ]}
                 hitSlop={4}
@@ -978,10 +988,18 @@ export default function ChatScreen() {
                   backgroundColor: pressed
                     ? c.subtle
                     : sessionOwner === 'remote'
-                      ? 'rgba(34,197,94,0.14)'
+                      ? c.successBg
                       : c.isDark
-                        ? 'rgba(255,255,255,0.08)'
-                        : 'rgba(0,0,0,0.05)',
+                        ? Glass.opacity.dark.subtle
+                        : Glass.opacity.light.subtle,
+                  borderColor:
+                    sessionOwner === 'remote'
+                      ? 'transparent'
+                      : c.isDark
+                        ? Glass.opacity.dark.border
+                        : Glass.opacity.light.border,
+                  opacity: pressed ? 0.8 : 1,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
               ]}
               hitSlop={4}
@@ -1003,33 +1021,68 @@ export default function ChatScreen() {
             <Pressable
               ref={gitActionsBtnRef}
               onPress={openGitActionsMenu}
-              style={styles.headerAction}
+              style={({ pressed }) => [
+                styles.headerAction,
+                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+              ]}
               hitSlop={4}
             >
               <Ionicons name="git-branch-outline" size={16} color={c.textTertiary} />
             </Pressable>
             <Pressable
               onPress={() => router.push(`/terminal/${sessionId}`)}
-              style={styles.headerAction}
+              style={({ pressed }) => [
+                styles.headerAction,
+                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+              ]}
               hitSlop={4}
             >
               <Ionicons name="terminal-outline" size={18} color={c.textTertiary} />
             </Pressable>
             <Pressable
               onPress={() => router.back()}
-              style={[styles.headerAction, { marginLeft: 2 }]}
+              style={({ pressed }) => [
+                styles.headerAction,
+                { marginLeft: 2, opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+              ]}
               hitSlop={4}
             >
               <Ionicons name="chevron-down" size={20} color={c.textTertiary} />
             </Pressable>
           </View>
+          {/* Hairline under the glass nav — separates it from scrolling content. */}
+          <View
+            style={[
+              styles.headerHairline,
+              {
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.border
+                  : Glass.opacity.light.border,
+              },
+            ]}
+          />
         </BlurView>
       </View>
 
       {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyIcon, { color: c.textTertiary }]}>{'\u{1F4AC}'}</Text>
-          <Text style={[styles.emptyTitle, { color: c.textSecondary }]}>Start a conversation</Text>
+          <View
+            style={[
+              styles.emptyIconWrap,
+              {
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.subtle
+                  : Glass.opacity.light.subtle,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: c.isDark
+                  ? Glass.opacity.dark.border
+                  : Glass.opacity.light.border,
+              },
+            ]}
+          >
+            <Ionicons name="chatbubble-outline" size={26} color={c.textTertiary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>Start a conversation</Text>
           <Text style={[styles.emptySub, { color: c.textTertiary }]}>
             Type a message below to interact with the agent
           </Text>
@@ -1049,7 +1102,13 @@ export default function ChatScreen() {
             removeClippedSubviews={true}
             ListHeaderComponent={
               hasMore ? (
-                <Pressable style={styles.loadEarlierBtn} onPress={loadEarlier}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.loadEarlierBtn,
+                    { opacity: pressed ? 0.6 : 1 },
+                  ]}
+                  onPress={loadEarlier}
+                >
                   <Ionicons name="chevron-up" size={14} color={c.textTertiary} />
                   <Text style={[styles.loadEarlierText, { color: c.textTertiary }]}>
                     Load earlier messages
@@ -1060,11 +1119,29 @@ export default function ChatScreen() {
           />
           {!isNearBottom && (
             <Pressable
-              style={[styles.scrollToBottomBtn, { bottom: insets.bottom + 140 }]}
+              style={({ pressed }) => [
+                styles.scrollToBottomBtn,
+                {
+                  bottom: insets.bottom + 140,
+                  backgroundColor: c.isDark
+                    ? Glass.opacity.dark.elevated
+                    : Glass.opacity.light.elevated,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: c.isDark
+                    ? Glass.opacity.dark.border
+                    : Glass.opacity.light.border,
+                  transform: [{ scale: pressed ? 0.92 : 1 }],
+                },
+              ]}
               onPress={scrollToBottom}
               hitSlop={4}
             >
-              <Ionicons name="chevron-down" size={16} color="#fff" />
+              <BlurView
+                tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+                intensity={Glass.blur.tooltip}
+                style={StyleSheet.absoluteFill}
+              />
+              <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
             </Pressable>
           )}
         </View>
@@ -1103,11 +1180,20 @@ export default function ChatScreen() {
           style={[
             styles.queueStrip,
             {
-              backgroundColor: c.isDark ? 'rgba(44,44,46,0.85)' : 'rgba(235,235,240,0.85)',
-              borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              backgroundColor: c.isDark
+                ? Glass.opacity.dark.elevated
+                : Glass.opacity.light.surface,
+              borderColor: c.isDark
+                ? Glass.opacity.dark.border
+                : Glass.opacity.light.border,
             },
           ]}
         >
+          <BlurView
+            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+            intensity={Glass.blur.card}
+            style={StyleSheet.absoluteFill}
+          />
           <View style={styles.queueHeaderRow}>
             <View style={styles.queueTitleGroup}>
               <Ionicons name="time-outline" size={14} color={Colors.primary[500]} />
@@ -1132,8 +1218,12 @@ export default function ChatScreen() {
                 style={[
                   styles.queueChip,
                   {
-                    backgroundColor: c.isDark ? '#1c1c1e' : '#fff',
-                    borderColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.subtle
+                      : Glass.opacity.light.elevated,
+                    borderColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
                   },
                 ]}
               >
@@ -1165,14 +1255,16 @@ export default function ChatScreen() {
           style={[
             styles.composerCard,
             {
-              backgroundColor: c.isDark ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.72)',
-              borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              backgroundColor: c.isDark
+                ? Glass.opacity.dark.surface
+                : Glass.opacity.light.surface,
+              borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
             },
           ]}
         >
           <BlurView
-            tint={c.isDark ? 'dark' : 'light'}
-            intensity={40}
+            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+            intensity={Glass.blur.card}
             style={StyleSheet.absoluteFill}
           />
 
@@ -1180,11 +1272,13 @@ export default function ChatScreen() {
             <View
               style={[
                 styles.planBadge,
-                { backgroundColor: c.isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)' },
+                {
+                  backgroundColor: c.isDark ? 'rgba(255,149,0,0.15)' : 'rgba(255,149,0,0.1)',
+                },
               ]}
             >
-              <Ionicons name="list-outline" size={11} color="#ff9500" />
-              <Text style={styles.planBadgeText}>Plan</Text>
+              <Ionicons name="list-outline" size={11} color={Colors.warning[400]} />
+              <Text style={[styles.planBadgeText, { color: Colors.warning[400] }]}>Plan</Text>
             </View>
           )}
 
@@ -1217,7 +1311,10 @@ export default function ChatScreen() {
           <View style={styles.bottomBar}>
             <Pressable
               ref={attachBtnRef}
-              style={styles.metaButton}
+              style={({ pressed }) => [
+                styles.metaButton,
+                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] },
+              ]}
               hitSlop={4}
               accessibilityLabel="Attach"
               onPress={openAttachmentMenu}
@@ -1227,7 +1324,10 @@ export default function ChatScreen() {
 
             <Pressable
               ref={modelBtnRef}
-              style={styles.modelButton}
+              style={({ pressed }) => [
+                styles.modelButton,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
               hitSlop={4}
               accessibilityLabel="Select model"
               onPress={async () => {
@@ -1253,7 +1353,7 @@ export default function ChatScreen() {
               }}
             >
               {serviceTier === 'fast' && (
-                <Ionicons name="flash" size={10} color="#ff9500" style={{ marginRight: 2 }} />
+                <Ionicons name="flash" size={10} color={Colors.warning[400]} style={{ marginRight: 2 }} />
               )}
               <Text style={[styles.modelLabel, { color: c.textTertiary }]}>
                 {shortModelName(selectedModel)}
@@ -1268,7 +1368,10 @@ export default function ChatScreen() {
 
             <Pressable
               ref={reasoningBtnRef}
-              style={styles.metaButton}
+              style={({ pressed }) => [
+                styles.metaButton,
+                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] },
+              ]}
               hitSlop={4}
               accessibilityLabel="Reasoning effort"
               onPress={openReasoningMenu}
@@ -1277,10 +1380,10 @@ export default function ChatScreen() {
                 <Ionicons
                   name="bulb-outline"
                   size={16}
-                  color={thinkingMode === 'level' ? '#ff9500' : c.textTertiary}
+                  color={thinkingMode === 'level' ? Colors.warning[400] : c.textTertiary}
                 />
                 {thinkingMode === 'level' && (
-                  <Text style={[styles.reasoningBadge, { color: '#ff9500' }]}>
+                  <Text style={[styles.reasoningBadge, { color: Colors.warning[400] }]}>
                     {THINKING_LEVEL_SHORT[thinkingLevel]}
                   </Text>
                 )}
@@ -1290,7 +1393,10 @@ export default function ChatScreen() {
             <View style={styles.spacer} />
 
             <Pressable
-              style={styles.metaButton}
+              style={({ pressed }) => [
+                styles.metaButton,
+                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] },
+              ]}
               hitSlop={4}
               accessibilityLabel="Voice input"
               onPress={() => {}}
@@ -1301,27 +1407,46 @@ export default function ChatScreen() {
             {running && (
               <Pressable
                 onPress={cancelTurn}
-                style={styles.stopButton}
+                style={({ pressed }) => [
+                  styles.stopButton,
+                  {
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.elevated
+                      : Glass.opacity.light.elevated,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                    transform: [{ scale: pressed ? 0.92 : 1 }],
+                  },
+                ]}
                 hitSlop={4}
                 accessibilityLabel="Stop"
               >
-                <Ionicons name="stop" size={12} color="#fff" />
+                <Ionicons name="stop" size={12} color={Colors.danger[400]} />
               </Pressable>
             )}
 
             {running && input.trim().length > 0 && (
               <Pressable
                 onPress={sendSteer}
-                style={[
+                style={({ pressed }) => [
                   styles.steerButton,
                   {
-                    backgroundColor: c.isDark ? '#3a3a3c' : '#e5e5ea',
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.elevated
+                      : Glass.opacity.light.elevated,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                    transform: [{ scale: pressed ? 0.95 : 1 }],
                   },
                 ]}
                 hitSlop={4}
                 accessibilityLabel="Steer immediately"
               >
-                <Ionicons name="flash" size={12} color="#f59e0b" />
+                <Ionicons name="flash" size={12} color={Colors.warning[400]} />
                 <Text style={[styles.steerLabel, { color: c.textPrimary }]}>Steer</Text>
               </Pressable>
             )}
@@ -1337,18 +1462,19 @@ export default function ChatScreen() {
                   sendChat();
                 }
               }}
-              style={[
+              style={({ pressed }) => [
                 styles.sendButton,
                 {
                   backgroundColor: sendDisabled
                     ? c.isDark
-                      ? '#3a3a3c'
-                      : '#d1d1d6'
+                      ? Glass.opacity.dark.subtle
+                      : Glass.opacity.light.subtle
                     : running
                       ? Colors.primary[500]
                       : c.isDark
-                        ? '#e8e8e8'
-                        : '#1c1917',
+                        ? Colors.surface[50]
+                        : Colors.surface[900],
+                  transform: [{ scale: pressed ? 0.9 : 1 }],
                 },
               ]}
               disabled={sendDisabled}
@@ -1360,13 +1486,11 @@ export default function ChatScreen() {
                 size={14}
                 color={
                   sendDisabled
-                    ? c.isDark
-                      ? '#8e8e93'
-                      : '#8e8e93'
+                    ? c.textTertiary
                     : running
                       ? '#ffffff'
                       : c.isDark
-                        ? '#1c1917'
+                        ? Colors.surface[900]
                         : '#ffffff'
                 }
               />
@@ -1377,7 +1501,17 @@ export default function ChatScreen() {
         <View style={styles.secondaryBar}>
           <Pressable
             ref={runtimeBtnRef}
-            style={styles.secondaryPill}
+            style={({ pressed }) => [
+              styles.secondaryPill,
+              {
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.subtle
+                  : Glass.opacity.light.subtle,
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              },
+            ]}
             hitSlop={4}
             onPress={openRuntimePicker}
           >
@@ -1394,7 +1528,17 @@ export default function ChatScreen() {
 
           <Pressable
             ref={accessBtnRef}
-            style={styles.secondaryPill}
+            style={({ pressed }) => [
+              styles.secondaryPill,
+              {
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.subtle
+                  : Glass.opacity.light.subtle,
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              },
+            ]}
             hitSlop={4}
             onPress={openAccessModeMenu}
           >
@@ -1410,12 +1554,24 @@ export default function ChatScreen() {
 
           <Pressable
             ref={branchBtnRef}
-            style={styles.secondaryPill}
+            style={({ pressed }) => [
+              styles.secondaryPill,
+              {
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.subtle
+                  : Glass.opacity.light.subtle,
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              },
+            ]}
             hitSlop={4}
             onPress={openGitBranchMenu}
           >
             <Ionicons name="git-branch-outline" size={13} color={c.textTertiary} />
-            <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>{currentBranch}</Text>
+            <Text style={[styles.secondaryLabel, { color: c.textTertiary, fontFamily: FontFamily.mono, fontSize: 11 }]}>
+              {currentBranch}
+            </Text>
             <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
           </Pressable>
 
@@ -1428,13 +1584,42 @@ export default function ChatScreen() {
       {promptModal?.visible && (
         <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
           <Pressable style={styles.modalOverlay} onPress={() => setPromptModal(null)}>
-            <Pressable style={[styles.promptSheet, { backgroundColor: c.bg }]} onPress={() => {}}>
+            <Pressable
+              style={[
+                styles.promptSheet,
+                {
+                  backgroundColor: c.isDark
+                    ? Glass.opacity.dark.elevated
+                    : Glass.opacity.light.surface,
+                  borderColor: c.isDark
+                    ? Glass.opacity.dark.border
+                    : Glass.opacity.light.border,
+                },
+              ]}
+              onPress={() => {}}
+            >
+              <BlurView
+                tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+                intensity={Glass.blur.sheet}
+                style={StyleSheet.absoluteFill}
+              />
               <Text style={[styles.promptTitle, { color: c.textPrimary }]}>
                 {promptModal.title}
               </Text>
               <TextInput
                 autoFocus
-                style={[styles.promptInput, { color: c.textPrimary, borderColor: c.subtle }]}
+                style={[
+                  styles.promptInput,
+                  {
+                    color: c.textPrimary,
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.subtle
+                      : Glass.opacity.light.subtle,
+                    borderColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                  },
+                ]}
                 placeholder={promptModal.placeholder}
                 placeholderTextColor={c.textTertiary}
                 onSubmitEditing={(e) => {
@@ -1447,22 +1632,22 @@ export default function ChatScreen() {
                 returnKeyType="done"
               />
               <View style={styles.promptActions}>
-                <Pressable onPress={() => setPromptModal(null)} style={styles.promptCancelBtn}>
-                  <Text style={{ color: c.textTertiary, fontSize: 14 }}>Cancel</Text>
-                </Pressable>
                 <Pressable
-                  onPress={() => {
-                    setPromptModal(null);
-                  }}
-                  style={[
-                    styles.promptDoneBtn,
-                    { backgroundColor: c.isDark ? '#e8e8e8' : '#1c1917' },
+                  onPress={() => setPromptModal(null)}
+                  style={({ pressed }) => [
+                    styles.promptCancelBtn,
+                    { opacity: pressed ? 0.6 : 1 },
                   ]}
                 >
-                  <Text style={[styles.promptDoneText, { color: c.isDark ? '#1c1917' : '#fff' }]}>
-                    Done
-                  </Text>
+                  <Text style={[styles.promptCancelText, { color: c.textSecondary }]}>Cancel</Text>
                 </Pressable>
+                <GlassButton
+                  c={c}
+                  label="Done"
+                  onPress={() => setPromptModal(null)}
+                  variant="primary"
+                  style={styles.promptDoneBtn}
+                />
               </View>
             </Pressable>
           </Pressable>
@@ -1470,8 +1655,26 @@ export default function ChatScreen() {
       )}
 
       {errorToast && (
-        <View style={[styles.errorToast, { backgroundColor: '#F04545' }]}>
-          <Text style={styles.errorToastText}>{errorToast}</Text>
+        <View style={styles.errorToast}>
+          <BlurView
+            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+            intensity={Glass.blur.modal}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: Colors.danger[400] + '22',
+                borderRadius: CornerRadius.medium,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: Colors.danger[400] + '55',
+              },
+            ]}
+            pointerEvents="none"
+          />
+          <Ionicons name="warning-outline" size={14} color={Colors.danger[400]} />
+          <Text style={[styles.errorToastText, { color: Colors.danger[400] }]}>{errorToast}</Text>
         </View>
       )}
 
@@ -1619,7 +1822,7 @@ function MessageBubble({
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.userRow}>
-          <View style={[styles.userBubble, { backgroundColor: '#3b82f6' }]}>
+          <View style={[styles.userBubble, { backgroundColor: Colors.primary[500] }]}>
             <Text
               style={styles.userText}
               numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
@@ -1811,20 +2014,24 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    gap: 8,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+  },
+  headerHairline: {
+    height: StyleSheet.hairlineWidth,
   },
   headerTitles: {
     flexShrink: 1,
   },
   headerTitle: {
     fontSize: 13,
+    lineHeight: 16,
     fontWeight: '600',
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.monoSemiBold,
   },
   headerSubtitle: {
-    fontSize: 10,
-    marginTop: 0,
+    ...Typography.caption2,
+    marginTop: 1,
   },
   headerAction: {
     width: 32,
@@ -1840,22 +2047,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: CornerRadius.small,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
   },
   headerDiffPillText: {
-    fontSize: 11,
+    ...Typography.caption2,
     fontWeight: '700',
     fontFamily: FontFamily.mono,
+    fontVariant: ['tabular-nums'],
   },
   headerControlPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: CornerRadius.small,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
   },
   headerControlText: {
-    fontSize: 11,
+    ...Typography.caption2,
     fontWeight: '600',
   },
 
@@ -1885,23 +2097,31 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
-    gap: 8,
+    padding: Spacing['3xl'],
+    gap: Spacing.sm,
   },
-  emptyIcon: { fontSize: 40 },
-  emptyTitle: { fontSize: 16, fontWeight: '600' },
-  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  emptyIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  emptyTitle: { ...Typography.subhead, fontWeight: '600' },
+  emptySub: { ...Typography.footnote, textAlign: 'center', lineHeight: 18 },
 
   listContainer: {
     flex: 1,
   },
   scrollToBottomBtn: {
     position: 'absolute',
-    right: 16,
+    right: Spacing.lg,
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(60,60,67,0.85)',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
@@ -1910,62 +2130,63 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: Spacing.md,
     gap: 4,
   },
   loadEarlierText: {
-    fontSize: 13,
+    ...Typography.footnote,
     fontWeight: '500',
   },
 
   messageList: {
-    paddingHorizontal: 12,
-    paddingBottom: 20,
-    gap: 8,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.sm,
   },
   userRow: { alignItems: 'flex-end' },
   userBubble: {
     maxWidth: '80%',
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg - 2,
     paddingVertical: 10,
     borderRadius: 18,
     borderBottomRightRadius: 4,
     borderCurve: 'continuous',
   },
-  userText: { fontSize: 14, color: '#fff', lineHeight: 19 },
+  userText: { ...Typography.subhead, fontSize: 14, color: '#fff', lineHeight: 19 },
   userCollapseHint: {
-    fontSize: 11,
+    ...Typography.caption2,
     color: 'rgba(255,255,255,0.6)',
     marginTop: 4,
   },
   assistantRow: { alignItems: 'flex-start' },
   assistantBubble: {
     maxWidth: '80%',
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg - 2,
     paddingVertical: 10,
     borderRadius: 18,
     borderBottomLeftRadius: 4,
     borderCurve: 'continuous',
     borderWidth: 1,
   },
-  assistantText: { fontSize: 14, lineHeight: 19 },
+  assistantText: { ...Typography.subhead, fontSize: 14, lineHeight: 19 },
   systemRow: { alignItems: 'center' },
   systemBubble: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: CornerRadius.medium,
     borderCurve: 'continuous',
   },
-  systemText: { fontSize: 11, fontWeight: '500' },
+  systemText: { ...Typography.caption2, fontWeight: '500' },
 
   composerWrapper: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
+    paddingHorizontal: Spacing.md + 2,
+    paddingTop: Spacing.sm + 2,
   },
 
   composerCard: {
     borderRadius: 28,
     borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
     overflow: 'hidden',
   },
 
@@ -1973,38 +2194,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    marginLeft: 16,
-    marginTop: 8,
-    paddingHorizontal: 8,
+    marginLeft: Spacing.lg,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: CornerRadius.small,
     gap: 4,
   },
   planBadgeText: {
-    fontSize: 11,
+    ...Typography.caption2,
     fontWeight: '600',
-    color: '#ff9500',
   },
 
   composerInputRow: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: 4,
   },
   composerInput: {
-    fontSize: 15,
+    ...Typography.subhead,
     minHeight: 36,
     maxHeight: 120,
-    lineHeight: 20,
     padding: 0,
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg - 2,
     paddingTop: 2,
-    paddingBottom: 8,
-    gap: 8,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
 
   metaButton: {
@@ -2021,8 +2240,8 @@ const styles = StyleSheet.create({
     paddingRight: 2,
   },
   modelLabel: {
-    fontSize: 13,
-    fontWeight: '400',
+    ...Typography.caption1,
+    fontFamily: FontFamily.mono,
   },
   reasoningButtonInner: {
     flexDirection: 'row',
@@ -2030,14 +2249,15 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   reasoningBadge: {
+    ...Typography.caption2,
     fontSize: 9,
     fontWeight: '600',
+    fontFamily: FontFamily.mono,
   },
   stopButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#e8e8e8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2052,66 +2272,44 @@ const styles = StyleSheet.create({
   secondaryBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingTop: 8,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingTop: Spacing.sm,
     paddingBottom: 2,
-    gap: 6,
+    gap: Spacing.sm - 2,
   },
   secondaryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: Spacing.md - 2,
+    paddingVertical: Spacing.sm - 2,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
     gap: 4,
   },
   secondaryLabel: {
-    fontSize: 12,
-    fontWeight: '400',
+    ...Typography.caption1,
+    fontWeight: '500',
   },
 
   spacer: { flex: 1 },
 
   errorBubble: { backgroundColor: 'rgba(239,68,68,0.1)' },
-  errorText: { color: '#ef4444', fontSize: 11, fontWeight: '500' },
+  errorText: { color: Colors.danger[400], ...Typography.caption2, fontWeight: '500' },
 
-  approvalBanner: {
-    position: 'absolute',
-    bottom: 120,
-    left: 16,
-    right: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    alignItems: 'center',
-    gap: 10,
-    zIndex: 20,
-  },
-  approvalTitle: { fontSize: 15, fontWeight: '600', textAlign: 'center' },
-  approvalDetailContainer: {
-    width: '100%',
-    gap: 4,
-  },
-  approvalTool: {
-    fontSize: 13,
-    fontWeight: '500',
-    fontFamily: FontFamily.mono,
-  },
-  approvalDetailText: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
   dockedCardWrapper: {
-    paddingHorizontal: 12,
-    paddingBottom: 6,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm - 2,
   },
   queueStrip: {
-    marginHorizontal: 12,
-    marginBottom: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm - 2,
+    borderRadius: CornerRadius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    paddingVertical: Spacing.sm - 2,
+    paddingHorizontal: Spacing.md - 2,
     gap: 4,
   },
   queueHeaderRow: {
@@ -2125,30 +2323,32 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   queueCountText: {
-    fontSize: 12,
+    ...Typography.caption1,
     fontWeight: '600',
   },
   queueChipsContainer: {
     flexDirection: 'row',
-    gap: 6,
+    gap: Spacing.sm - 2,
     paddingVertical: 2,
   },
   queueChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: CornerRadius.small,
+    borderWidth: StyleSheet.hairlineWidth,
     gap: 4,
     maxWidth: 200,
   },
   queueChipNum: {
-    fontSize: 11,
+    ...Typography.caption2,
     fontWeight: '700',
+    fontFamily: FontFamily.mono,
+    fontVariant: ['tabular-nums'],
   },
   queueChipText: {
-    fontSize: 12,
+    ...Typography.caption1,
     maxWidth: 140,
   },
   steerButton: {
@@ -2160,7 +2360,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   steerLabel: {
-    fontSize: 11,
+    ...Typography.caption2,
     fontWeight: '600',
   },
 
@@ -2168,41 +2368,56 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   promptSheet: {
     width: '85%',
     maxWidth: 340,
-    borderRadius: 14,
-    padding: 20,
-    gap: 16,
+    borderRadius: CornerRadius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+    ...Shadows.elevated,
   },
-  promptTitle: { fontSize: 17, fontWeight: '600', textAlign: 'center' },
+  promptTitle: { ...Typography.headline, textAlign: 'center' },
   promptInput: {
-    fontSize: 15,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    ...Typography.subhead,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: CornerRadius.medium,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md - 2,
   },
   promptActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 10,
+    alignItems: 'center',
+    gap: Spacing.md - 2,
   },
-  promptCancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  promptDoneBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 8 },
-  promptDoneText: { fontSize: 14, fontWeight: '600' },
+  promptCancelBtn: {
+    paddingHorizontal: Spacing.lg - 2,
+    paddingVertical: Spacing.sm,
+    borderRadius: CornerRadius.small,
+  },
+  promptCancelText: { ...Typography.subhead, fontSize: 14, fontWeight: '500' },
+  promptDoneBtn: { minWidth: 88 },
   errorToast: {
     position: 'absolute',
     bottom: 120,
-    left: 16,
-    right: 16,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    left: Spacing.lg,
+    right: Spacing.lg,
+    borderRadius: CornerRadius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 100,
+    justifyContent: 'center',
+    gap: Spacing.sm - 2,
+    paddingHorizontal: Spacing.lg - 2,
+    paddingVertical: Spacing.md - 2,
+    ...Shadows.elevated,
   },
-  errorToastText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  errorToastText: { ...Typography.footnote, fontWeight: '500' },
 });
