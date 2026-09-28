@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { useChatStore } from '../stores/chat.js';
 import { wsService } from '../services/websocket.js';
 import { Button } from '../lib/ui.js';
+import { IconAlertCircle } from '../lib/icons.js';
 
 const STATUS_DOT: Record<string, string> = {
   running: 'bg-geist-green-600',
@@ -167,7 +168,7 @@ export function ChatScreen() {
         <div className="border-t border-geist-amber-100 bg-geist-amber-100 px-4 py-3 dark:border-geist-amber-1000 dark:bg-geist-amber-1000">
           <div className="mx-auto flex max-w-3xl items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-lg">⚠️</span>
+              <IconAlertCircle className="h-4 w-4 shrink-0 text-geist-amber-900 dark:text-geist-amber-600" />
               <div>
                 <p className="text-sm font-medium text-geist-amber-900 dark:text-geist-amber-600">
                   Agent requests approval: {approvalDetail?.toolName ?? 'action'}
@@ -253,8 +254,9 @@ function MessageBubble({ msg }: { msg: { role: string; content: string; eventTyp
   if (msg.eventType === 'waiting_approval') {
     return (
       <div className="flex justify-center">
-        <div className="inline-block max-w-[90%] rounded-[var(--radius-sm)] border border-geist-amber-100 bg-geist-amber-100 px-4 py-2 text-center text-sm text-geist-amber-900 dark:border-geist-amber-1000 dark:bg-geist-amber-1000 dark:text-geist-amber-600">
-          ⚠️ {msg.content}
+        <div className="inline-flex max-w-[90%] items-start gap-2 rounded-[var(--radius-sm)] border border-geist-amber-100 bg-geist-amber-100 px-4 py-2 text-center text-sm text-geist-amber-900 dark:border-geist-amber-1000 dark:bg-geist-amber-1000 dark:text-geist-amber-600">
+          <IconAlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{msg.content}</span>
         </div>
       </div>
     );

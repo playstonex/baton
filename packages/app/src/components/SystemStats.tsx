@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, ProgressBar } from '../lib/ui.js';
+import { IconActivity, IconCpu, IconDisk, IconMemory } from '../lib/icons.js';
 import { usePolling } from '../lib/hooks.js';
 
 interface SystemStats {
@@ -69,7 +70,7 @@ export function SystemStats() {
       <Card padding={false} className="p-6">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-geist-gray-alpha-200">
-            <span className="text-sm">📊</span>
+            <IconActivity className="h-4 w-4 text-geist-gray-800" />
           </div>
           <h3 className="text-sm font-semibold text-geist-gray-1000">System Status</h3>
         </div>
@@ -93,7 +94,7 @@ export function SystemStats() {
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-geist-blue-100 dark:bg-geist-blue-1000">
-            <span className="text-sm">📊</span>
+            <IconActivity className="h-4 w-4 text-geist-blue-700 dark:text-geist-blue-900" />
           </div>
           <h3 className="text-sm font-semibold text-geist-gray-1000">System Status</h3>
         </div>
@@ -121,33 +122,33 @@ export function SystemStats() {
           value={`${stats.cpu.usage.toFixed(1)}%`}
           pct={stats.cpu.usage}
           color="blue"
-          icon="⚡"
+          icon={<IconCpu className="h-3.5 w-3.5 text-geist-gray-700" />}
         />
         <StatBar
           label="Memory"
           value={`${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`}
           pct={stats.memory.percentage}
           color="green"
-          icon="🧠"
+          icon={<IconMemory className="h-3.5 w-3.5 text-geist-gray-700" />}
         />
         <StatBar
           label="Disk"
           value={`${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)}`}
           pct={stats.disk.percentage}
           color="amber"
-          icon="💾"
+          icon={<IconDisk className="h-3.5 w-3.5 text-geist-gray-700" />}
         />
       </div>
     </Card>
   );
 }
 
-function StatBar({ label, value, pct, color, icon }: { label: string; value: string; pct: number; color: 'blue' | 'green' | 'amber'; icon: string }) {
+function StatBar({ label, value, pct, color, icon }: { label: string; value: string; pct: number; color: 'blue' | 'green' | 'amber'; icon: React.ReactNode }) {
   return (
     <div>
       <div className="mb-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs">{icon}</span>
+          {icon}
           <span className="text-xs font-medium text-geist-gray-800">{label}</span>
         </div>
         <span className="font-mono text-[11px] tabular-nums text-geist-gray-700">{value}</span>
