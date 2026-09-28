@@ -47,29 +47,29 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
   }, [oldContent, newContent]);
 
   return (
-    <div className="overflow-hidden rounded-lg bg-[#1e1e1e] font-mono text-xs leading-relaxed">
+    <div className="overflow-hidden rounded-[var(--radius-sm)] bg-geist-gray-100 font-mono text-xs leading-relaxed">
       <div className="overflow-x-auto">
         {diffLines.map((line, idx) => (
           <div
             key={idx}
             className={`flex ${
               line.type === 'add'
-                ? 'bg-green-500/15'
+                ? 'bg-geist-green-700/15'
                 : line.type === 'remove'
-                  ? 'bg-red-500/15'
+                  ? 'bg-geist-red-700/15'
                   : ''
             }`}
           >
-            <div className="w-10 shrink-0 select-none bg-black/20 px-2 py-1 text-right text-gray-500">
+            <div className="w-10 shrink-0 select-none bg-geist-gray-alpha-1000/20 px-2 py-1 text-right text-geist-gray-600">
               {line.lineNumber}
             </div>
             <div
-              className={`w-5 shrink-0 select-none bg-black/20 px-1 py-1 text-center ${
+              className={`w-5 shrink-0 select-none bg-geist-gray-alpha-1000/20 px-1 py-1 text-center ${
                 line.type === 'add'
-                  ? 'text-green-400'
+                  ? 'text-geist-green-900'
                   : line.type === 'remove'
-                    ? 'text-red-400'
-                    : 'text-gray-500'
+                    ? 'text-geist-red-900'
+                    : 'text-geist-gray-600'
               }`}
             >
               {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
@@ -77,10 +77,10 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
             <pre
               className={`whitespace-pre-wrap break-all px-2.5 py-1 ${
                 line.type === 'add'
-                  ? 'text-green-300'
+                  ? 'text-geist-green-900'
                   : line.type === 'remove'
-                    ? 'text-red-300'
-                    : 'text-gray-300'
+                    ? 'text-geist-red-900'
+                    : 'text-geist-gray-900'
               }`}
             >
               {line.content}

@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, memo } from 'react';
-import { Button } from '@heroui/react';
 import { wsService } from '../services/websocket.js';
-import { Card, EmptyState, StatusBadge, StatusDot, LoadingSpinner } from '../lib/ui.js';
+import { Card, EmptyState, StatusBadge, StatusDot, LoadingSpinner, Button } from '../lib/ui.js';
 import { IconArrowRight, IconPlay } from '../lib/icons.js';
 import { usePolling } from '../lib/hooks.js';
 
@@ -25,6 +24,14 @@ const AGENT_LABELS: Record<string, string> = {
   codex: 'Codex',
   opencode: 'OpenCode',
   'kiro-cli': 'Kiro',
+};
+
+const STEP_STATUS_STYLES: Record<string, string> = {
+  running:
+    'border-geist-blue-200 bg-geist-blue-100 dark:border-geist-blue-1000 dark:bg-geist-blue-1000',
+  completed:
+    'border-geist-green-200 bg-geist-green-100 dark:border-geist-green-1000 dark:bg-geist-green-1000',
+  failed: 'border-geist-red-200 bg-geist-red-100 dark:border-geist-red-1000 dark:bg-geist-red-1000',
 };
 
 export function OrchestrationScreen() {
@@ -51,15 +58,17 @@ export function OrchestrationScreen() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10">
+    <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Orchestration</h2>
-        <p className="mt-1 text-sm text-gray-400">Multi-agent pipeline execution and sub-agent tree</p>
+        <h2 className="text-xl font-bold text-geist-gray-1000">Orchestration</h2>
+        <p className="mt-1 text-sm text-geist-gray-700">
+          Multi-agent pipeline execution and sub-agent tree
+        </p>
       </div>
 
       {pipelines.length === 0 ? (
         <EmptyState
-          icon={<IconPlay className="h-6 w-6 text-gray-400" />}
+          icon={<IconPlay className="h-6 w-6 text-geist-gray-700" />}
           title="No pipelines configured"
           description="Create a pipeline via the API to see it here."
         />
@@ -74,7 +83,13 @@ export function OrchestrationScreen() {
   );
 }
 
-const PipelineCard = memo(function PipelineCard({ pipeline, httpUrl }: { pipeline: Pipeline; httpUrl: string }) {
+const PipelineCard = memo(function PipelineCard({
+  pipeline,
+  httpUrl,
+}: {
+  pipeline: Pipeline;
+  httpUrl: string;
+}) {
   const runPipeline = async () => {
     await fetch(`${httpUrl}/api/pipelines/${pipeline.id}/run`, { method: 'POST' });
   };
@@ -83,11 +98,11 @@ const PipelineCard = memo(function PipelineCard({ pipeline, httpUrl }: { pipelin
     <Card>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">{pipeline.name}</span>
+          <span className="text-sm font-semibold text-geist-gray-1000">{pipeline.name}</span>
           <StatusBadge status={pipeline.status} />
         </div>
         {pipeline.status === 'pending' && (
-          <Button size="sm" variant="primary" onPress={runPipeline}>
+          <Button size="sm" variant="primary" onClick={runPipeline}>
             <IconPlay className="mr-1.5 h-3.5 w-3.5" />
             Run
           </Button>
@@ -97,26 +112,21 @@ const PipelineCard = memo(function PipelineCard({ pipeline, httpUrl }: { pipelin
       <div className="flex flex-wrap items-center gap-1.5">
         {pipeline.steps.map((step, idx) => (
           <div key={step.id} className="flex items-center gap-1.5">
-            {idx > 0 && (
-              <IconArrowRight className="h-3 w-3 text-gray-300 dark:text-gray-600" />
-            )}
+            {idx > 0 && <IconArrowRight className="h-3 w-3 text-geist-gray-alpha-500" />}
             <div
-              className={`flex items-center gap-2.5 rounded-lg border px-4 py-2.5 ${
-                step.status === 'running'
-                  ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-950/40'
-                  : step.status === 'completed'
-                    ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
-                    : step.status === 'failed'
-                      ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
-                      : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800/50'
+              className={`flex items-center gap-2.5 rounded-[var(--radius-sm)] border px-4 py-2.5 ${
+                STEP_STATUS_STYLES[step.status] ??
+                'border-geist-gray-alpha-400 bg-geist-background-100'
               }`}
             >
               <StatusDot status={step.status} />
               <div>
-                <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                <div className="text-xs font-medium text-geist-gray-900">
                   {AGENT_LABELS[step.agentType] ?? step.agentType}
                 </div>
-                <div className="text-[10px] text-gray-400">{step.projectPath.split('/').pop()}</div>
+                <div className="text-[10px] text-geist-gray-700">
+                  {step.projectPath.split('/').pop()}
+                </div>
               </div>
             </div>
           </div>

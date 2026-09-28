@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Button, Input } from '@heroui/react';
 import type { AgentProcess, AgentType } from '@baton/shared';
 import { SystemStats } from '../components/SystemStats.js';
 import { wsService } from '../services/websocket.js';
 import { useAgentStore } from '../stores/connection.js';
-import { PageHeader, Card, EmptyState, StatusBadge, StatusDot } from '../lib/ui.js';
+import { PageHeader, Card, EmptyState, StatusBadge, StatusDot, Button, Input } from '../lib/ui.js';
 import { IconServer } from '../lib/icons.js';
 
 const AGENT_OPTIONS: {
@@ -41,6 +40,7 @@ export function DashboardScreen() {
   const { addAgent, removeAgent, setAgents, updateAgentStatus } = useAgentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
+  const [mode, setMode] = useState<'chat' | 'terminal'>('chat');
   const [loading, setLoading] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
 
@@ -65,6 +65,7 @@ export function DashboardScreen() {
             projectPath: agent.projectPath,
             status: agent.status as AgentProcess['status'],
             startedAt: '',
+            mode: agent.mode,
           })),
         );
       }
@@ -97,7 +98,11 @@ export function DashboardScreen() {
       const res = await fetch('/api/agents/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentType, projectPath: projectPath.trim() }),
+        body: JSON.stringify({
+          agentType,
+          projectPath: projectPath.trim(),
+          mode: mode === 'chat' ? 'sdk' : 'pty',
+        }),
       });
 
       if (!res.ok) {
@@ -113,8 +118,9 @@ export function DashboardScreen() {
         projectPath: projectPath.trim(),
         status: 'running',
         startedAt: new Date().toISOString(),
+        mode: mode === 'chat' ? 'sdk' : 'pty',
       });
-      navigate(`/terminal/${data.sessionId}`);
+      navigate(`/${mode}/${data.sessionId}`);
     } catch (err) {
       console.error(`Failed to connect to Daemon: ${err}`);
     } finally {
@@ -135,29 +141,27 @@ export function DashboardScreen() {
     AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
 
   return (
-    <div className="space-y-10 max-w-5xl">
+    <div className="max-w-5xl space-y-8">
       <PageHeader title="Baton" description="Agent orchestration dashboard" />
 
       <Card>
-        <div className="mb-5 flex items-center gap-2">
+        <div className="mb-4 flex items-center gap-2">
           <StatusBadge status={daemonOnline ? 'connected' : 'disconnected'} />
         </div>
 
         <div className="mb-6 grid gap-6 md:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-600 dark:text-gray-400">
-              Agent
-            </label>
-            <div className="flex gap-4">
+            <label className="mb-1.5 block text-sm font-medium text-geist-gray-800">Agent</label>
+            <div className="grid grid-cols-2 gap-2">
               {AGENT_OPTIONS.map((opt) => (
                 <button
                   key={opt.type}
                   type="button"
                   onClick={() => setAgentType(opt.type)}
-                  className={`flex-1 rounded-lg border px-5 py-3.5 text-left text-sm transition-colors ${
+                  className={`rounded-[var(--radius-sm)] border px-4 py-3 text-left text-sm font-medium transition-colors ${
                     agentType === opt.type
-                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300 dark:hover:border-gray-600'
+                      ? 'border-geist-gray-1000 bg-geist-gray-alpha-100 text-geist-gray-1000'
+                      : 'border-geist-gray-alpha-400 text-geist-gray-800 hover:border-geist-gray-alpha-600'
                   }`}
                 >
                   {opt.label}
@@ -167,32 +171,54 @@ export function DashboardScreen() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-600 dark:text-gray-400">
+            <label className="mb-1.5 block text-sm font-medium text-geist-gray-800">
               Project Path
             </label>
             <Input
               placeholder="/path/to/project"
               value={projectPath}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setProjectPath(e.target.value)
-              }
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProjectPath(e.target.value)}
               onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && startAgent()}
-              className="font-mono text-sm [&>div]:bg-gray-50 [&>div]:dark:bg-gray-950 [&>div]:border-gray-200 [&>div]:dark:border-gray-700"
+              className="font-mono"
             />
           </div>
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {selectedAgent.desc}
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-geist-gray-800">{selectedAgent.desc}</p>
+            <div className="flex shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-geist-gray-alpha-400">
+              <button
+                type="button"
+                onClick={() => setMode('chat')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === 'chat'
+                    ? 'bg-geist-gray-1000 text-geist-background-100'
+                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100'
+                }`}
+              >
+                Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('terminal')}
+                className={`border-l border-geist-gray-alpha-400 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === 'terminal'
+                    ? 'bg-geist-gray-1000 text-geist-background-100'
+                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100'
+                }`}
+              >
+                Terminal
+              </button>
+            </div>
+          </div>
           <Button
             variant="primary"
-            isDisabled={loading || !projectPath.trim() || !daemonOnline}
-            onPress={startAgent}
+            disabled={loading || !projectPath.trim() || !daemonOnline}
+            onClick={startAgent}
             className="min-w-[140px]"
           >
-            {loading ? 'Starting...' : `Launch ${selectedAgent.label}`}
+            {loading ? 'Starting…' : `Launch ${selectedAgent.label}`}
           </Button>
         </div>
       </Card>
@@ -201,17 +227,13 @@ export function DashboardScreen() {
 
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Active Sessions
-          </h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {agents.length} total
-          </span>
+          <h2 className="text-lg font-semibold text-geist-gray-1000">Active Sessions</h2>
+          <span className="text-sm text-geist-gray-800">{agents.length} total</span>
         </div>
 
         {agents.length === 0 ? (
           <EmptyState
-            icon={<IconServer className="h-6 w-6 text-gray-400" />}
+            icon={<IconServer className="h-6 w-6 text-geist-gray-700" />}
             title="No active sessions"
             description="Launch an agent to get started."
           />
@@ -221,7 +243,13 @@ export function DashboardScreen() {
               <AgentCard
                 key={agent.id}
                 agent={agent}
-                onOpen={() => navigate(`/terminal/${agent.id}`)}
+                onOpen={() =>
+                  navigate(
+                    agent.mode === 'sdk'
+                      ? `/chat/${agent.id}`
+                      : `/terminal/${agent.id}`,
+                  )
+                }
                 onStop={() => stopAgent(agent.id)}
               />
             ))}
@@ -245,30 +273,30 @@ function AgentCard({
   const label = AGENT_OPTIONS.find((option) => option.type === agent.type)?.label ?? agent.type;
 
   return (
-    <Card className="flex items-center justify-between px-6 py-5">
+    <Card className="flex items-center justify-between px-5 py-4" padding={false}>
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-5 text-left"
       >
         <StatusDot status={agent.status} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {label}
-            </span>
+            <span className="text-sm font-medium text-geist-gray-1000">{label}</span>
             <StatusBadge status={agent.status} />
           </div>
-          <div className="mt-1 truncate font-mono text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-0.5 truncate font-mono text-xs text-geist-gray-800">
             {agent.projectPath}
           </div>
         </div>
       </button>
 
       {!isStopped && (
-        <Button size="sm" variant="danger" onPress={onStop}>
-          Stop
-        </Button>
+        <div className="px-5">
+          <Button size="sm" variant="error" onClick={onStop}>
+            Stop
+          </Button>
+        </div>
       )}
     </Card>
   );

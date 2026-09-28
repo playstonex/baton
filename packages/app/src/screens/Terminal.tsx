@@ -1,57 +1,57 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Button } from '@heroui/react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { wsService } from '../services/websocket.js';
-import { StatusBadge, StatusDot } from '../lib/ui.js';
+import { StatusBadge, StatusDot, Button } from '../lib/ui.js';
 import { IconFile, IconGitBranch, IconActivity, IconStop } from '../lib/icons.js';
 import '@xterm/xterm/css/xterm.css';
 
+// Terminal ANSI colors are self-contained (not theme tokens).
 const LIGHT_THEME = {
-  background: '#fafaf9',
-  foreground: '#1c1917',
-  cursor: '#2383e2',
-  selectionBackground: 'rgba(35, 131, 226, 0.2)',
+  background: '#ffffff',
+  foreground: '#171717',
+  cursor: '#006bff',
+  selectionBackground: 'rgba(0, 107, 255, 0.2)',
   black: '#78716c',
-  red: '#dc2626',
-  green: '#16a34a',
-  yellow: '#ca8a04',
-  blue: '#2383e2',
-  magenta: '#9333ea',
-  cyan: '#0891b2',
-  white: '#292524',
-  brightBlack: '#a8a29e',
-  brightRed: '#ef4444',
-  brightGreen: '#22c55e',
-  brightYellow: '#eab308',
-  brightBlue: '#3b82f6',
-  brightMagenta: '#a855f7',
-  brightCyan: '#06b6d4',
-  brightWhite: '#1c1917',
+  red: '#ea001d',
+  green: '#28a948',
+  yellow: '#ffae00',
+  blue: '#006bff',
+  magenta: '#a000f8',
+  cyan: '#00ac96',
+  white: '#4d4d4d',
+  brightBlack: '#a8a8a8',
+  brightRed: '#ff676d',
+  brightGreen: '#4ce15e',
+  brightYellow: '#ffc543',
+  brightBlue: '#48aeff',
+  brightMagenta: '#c979ff',
+  brightCyan: '#00e3c4',
+  brightWhite: '#171717',
 };
 
 const DARK_THEME = {
   background: '#191919',
   foreground: '#e8e8e8',
-  cursor: '#4193ef',
-  selectionBackground: 'rgba(65, 147, 239, 0.3)',
+  cursor: '#47a8ff',
+  selectionBackground: 'rgba(71, 168, 255, 0.3)',
   black: '#383838',
-  red: '#f87171',
-  green: '#4ade80',
-  yellow: '#fbbf24',
-  blue: '#60a5fa',
-  magenta: '#c084fc',
-  cyan: '#22d3ee',
-  white: '#e8e8e8',
+  red: '#ff565f',
+  green: '#00ca50',
+  yellow: '#ff9300',
+  blue: '#47a8ff',
+  magenta: '#c472fb',
+  cyan: '#00cfb7',
+  white: '#ededed',
   brightBlack: '#6b6b6b',
-  brightRed: '#fca5a5',
-  brightGreen: '#86efac',
-  brightYellow: '#fcd34d',
-  brightBlue: '#93c5fd',
-  brightMagenta: '#d8b4fe',
-  brightCyan: '#a5f3fc',
+  brightRed: '#ff676d',
+  brightGreen: '#4ce15e',
+  brightYellow: '#ffc543',
+  brightBlue: '#48aeff',
+  brightMagenta: '#c979ff',
+  brightCyan: '#00e3c4',
   brightWhite: '#ffffff',
 };
 
@@ -72,7 +72,7 @@ export function TerminalScreen() {
 
   const attachSession = useCallback(() => {
     if (!sessionId) return;
-    wsService.send({ type: 'control', action: 'attach_session', sessionId });
+    wsService.attachOrResume(sessionId);
   }, [sessionId]);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function TerminalScreen() {
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace",
+      fontFamily: "'Geist Mono', 'JetBrains Mono', Menlo, Monaco, monospace",
       theme: isDark ? DARK_THEME : LIGHT_THEME,
       scrollback: 10000,
     });
@@ -204,6 +204,7 @@ export function TerminalScreen() {
       mql.removeEventListener('change', handleThemeChange);
       term.dispose();
       wsService.send({ type: 'control', action: 'detach_session', sessionId });
+      wsService.clearResume(sessionId);
     };
   }, [sessionId, attachSession]);
 
@@ -225,11 +226,11 @@ export function TerminalScreen() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white px-5 py-3.5 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <StatusDot status={status} />
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Agent</span>
-          <span className="font-mono text-xs text-gray-400">{sessionId?.slice(0, 8)}</span>
+          <span className="text-sm font-medium text-geist-gray-900">Agent</span>
+          <span className="font-mono text-xs text-geist-gray-700">{sessionId?.slice(0, 8)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {sessionOwner && (
@@ -239,34 +240,34 @@ export function TerminalScreen() {
             />
           )}
           {sessionOwner && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-geist-gray-800">
               {sessionOwner === 'local' ? 'You control' : 'Remote control'}
             </span>
           )}
           {sessionOwner === 'remote' && (
-            <Button size="sm" variant="primary" onPress={claimSession}>
+            <Button size="sm" variant="primary" onClick={claimSession}>
               Take Control
             </Button>
           )}
           {isClaimed && sessionOwner === 'local' && (
-            <Button size="sm" variant="ghost" onPress={releaseSession}>
+            <Button size="sm" variant="tertiary" onClick={releaseSession}>
               Release
             </Button>
           )}
           <StatusBadge status={connected ? 'connected' : 'disconnected'} dot={false} />
-          <Button size="sm" variant="outline" onPress={() => navigate(`/files/${sessionId}`)}>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/files/${sessionId}`)}>
             <IconFile className="mr-1.5 h-3.5 w-3.5" />
             Files
           </Button>
-          <Button size="sm" variant="outline" onPress={() => navigate(`/git/${sessionId}`)}>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/git/${sessionId}`)}>
             <IconGitBranch className="mr-1.5 h-3.5 w-3.5" />
             Git
           </Button>
-          <Button size="sm" variant="outline" onPress={() => navigate(`/agent/${sessionId}`)}>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/agent/${sessionId}`)}>
             <IconActivity className="mr-1.5 h-3.5 w-3.5" />
             Events
           </Button>
-          <Button size="sm" variant="danger" onPress={stopAgent}>
+          <Button size="sm" variant="error" onClick={stopAgent}>
             <IconStop className="mr-1.5 h-3.5 w-3.5" />
             Stop
           </Button>
@@ -275,7 +276,8 @@ export function TerminalScreen() {
 
       <div
         ref={termContainerRef}
-        className="flex-1 overflow-hidden rounded border border-gray-200 dark:border-gray-800"
+        className="flex-1 overflow-hidden rounded-[var(--radius-sm)] border border-geist-gray-alpha-400"
+        style={{ background: 'var(--terminal-bg)' }}
       />
     </div>
   );

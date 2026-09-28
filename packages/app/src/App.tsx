@@ -46,6 +46,18 @@ export function App() {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
 
+  // With no explicit choice stored, keep following the OS light/dark setting
+  // live (the old useTheme 'system' mode did this). An explicit toggle writes
+  // localStorage, after which OS changes are ignored.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('baton-theme')) setDark(e.matches);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   useEffect(() => {
     const unsub = wsService.on('_state', () => setConnected(wsService.connected));
     setConnected(wsService.connected);
@@ -67,36 +79,34 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-[100dvh] bg-geist-background-200 dark:bg-geist-background-100">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm md:hidden transition-opacity duration-200"
+          className="fixed inset-0 z-30 bg-black/30 transition-opacity duration-200 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed z-40 flex h-full w-[260px] flex-col border-r border-gray-200 bg-white/90 backdrop-blur-xl dark:border-gray-800 dark:bg-gray-950/90 transition-transform duration-200 md:static md:translate-x-0 ${
+        className={`fixed z-40 flex h-full w-[260px] flex-col border-r border-geist-gray-alpha-400 bg-geist-background-100 transition-transform duration-200 md:static md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-2.5 px-5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white shadow-sm">
+          <div className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-geist-gray-1000 text-xs font-bold text-geist-background-100">
             B
           </div>
-          <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
-            Baton
-          </span>
+          <span className="text-sm font-semibold tracking-tight text-geist-gray-1000">Baton</span>
         </div>
 
-        <div className="mx-5 mb-2 h-px bg-gray-100 dark:bg-gray-800" />
+        <div className="mx-5 mb-2 h-px bg-geist-gray-alpha-200" />
 
         {/* Navigation */}
         <nav className="flex flex-1 flex-col space-y-0.5 px-3">
-          <div className="mb-2 px-3 pt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+          <div className="mb-2 px-3 pt-2 text-[10px] font-semibold uppercase tracking-widest text-geist-gray-800">
             Main
           </div>
           {NAV_ITEMS_MAIN.map(({ to, label, end, icon: Icon }) => (
@@ -106,10 +116,10 @@ export function App() {
               end={end}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                `flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-gray-200'
+                    ? 'bg-geist-gray-alpha-200 text-geist-gray-1000'
+                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100 hover:text-geist-gray-1000'
                 }`
               }
             >
@@ -118,9 +128,9 @@ export function App() {
             </NavLink>
           ))}
 
-          <div className="mx-2 my-3 h-px bg-gray-100 dark:bg-gray-800" />
+          <div className="mx-2 my-3 h-px bg-geist-gray-alpha-200" />
 
-          <div className="mb-2 px-3 pt-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+          <div className="mb-2 px-3 pt-1 text-[10px] font-semibold uppercase tracking-widest text-geist-gray-800">
             System
           </div>
           {NAV_ITEMS_SYSTEM.map(({ to, label, end, icon: Icon }) => (
@@ -130,10 +140,10 @@ export function App() {
               end={end}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                `flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-gray-200'
+                    ? 'bg-geist-gray-alpha-200 text-geist-gray-1000'
+                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100 hover:text-geist-gray-1000'
                 }`
               }
             >
@@ -144,14 +154,12 @@ export function App() {
 
           {/* Status + Theme toggle */}
           <div className="mt-auto px-1 pt-4">
-            <div className="flex items-center justify-between rounded-lg bg-gray-50/80 px-3 py-2.5 dark:bg-gray-800/40">
+            <div className="flex items-center justify-between rounded-[var(--radius-sm)] bg-geist-gray-alpha-100 px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <StatusDot status={connected ? 'connected' : 'disconnected'} />
                 <span
                   className={`text-xs font-medium ${
-                    connected
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-red-600 dark:text-red-400'
+                    connected ? 'text-geist-green-700' : 'text-geist-red-700'
                   }`}
                 >
                   {connected ? 'Online' : 'Offline'}
@@ -161,7 +169,7 @@ export function App() {
                 type="button"
                 onClick={toggleDark}
                 aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] text-geist-gray-800 transition-colors hover:bg-geist-gray-alpha-200 hover:text-geist-gray-1000 focus-visible:focus-ring"
               >
                 <span className="relative h-4 w-4">
                   <IconMoon
@@ -184,21 +192,19 @@ export function App() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="flex h-14 items-center gap-3 border-b border-gray-200/80 bg-white/80 px-4 backdrop-blur-xl dark:border-gray-800/50 dark:bg-gray-950/80 md:hidden">
+        <header className="flex h-14 items-center gap-3 border-b border-geist-gray-alpha-400 bg-geist-background-100 px-4 md:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-geist-gray-800 transition-colors hover:bg-geist-gray-alpha-200 hover:text-geist-gray-1000 focus-visible:focus-ring"
             aria-label="Toggle sidebar"
           >
             <IconMenu className="h-5 w-5" />
           </button>
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-600 text-[10px] font-bold text-white">
+          <div className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] bg-geist-gray-1000 text-[10px] font-bold text-geist-background-100">
             B
           </div>
-          <span className="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
-            Baton
-          </span>
+          <span className="text-sm font-semibold tracking-tight text-geist-gray-1000">Baton</span>
         </header>
 
         {/* Page content */}

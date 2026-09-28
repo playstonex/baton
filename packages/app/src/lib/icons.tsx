@@ -223,26 +223,31 @@ export const IconSpinner = ({ className, ...props }: IconProps) => (
 /* ─── Status Dots ─── */
 export function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    running: 'bg-green-500',
-    thinking: 'bg-blue-500',
-    executing: 'bg-blue-500',
-    idle: 'bg-amber-400',
-    waiting_input: 'bg-amber-500',
-    stopped: 'bg-gray-400',
-    error: 'bg-red-500',
-    starting: 'bg-blue-400',
-    completed: 'bg-green-500',
-    pending: 'bg-gray-300 dark:bg-gray-600',
-    failed: 'bg-red-500',
-    skipped: 'bg-gray-300 dark:bg-gray-600',
-    connected: 'bg-green-500',
-    disconnected: 'bg-red-500',
-    online: 'bg-green-500',
-    offline: 'bg-red-500',
+    running: 'bg-geist-green-600',
+    thinking: 'bg-geist-blue-600',
+    executing: 'bg-geist-blue-600',
+    idle: 'bg-geist-amber-600',
+    waiting_input: 'bg-geist-amber-600',
+    stopped: 'bg-geist-gray-500',
+    error: 'bg-geist-red-600',
+    starting: 'bg-geist-blue-600',
+    completed: 'bg-geist-green-600',
+    pending: 'bg-geist-gray-500',
+    failed: 'bg-geist-red-600',
+    skipped: 'bg-geist-gray-500',
+    connected: 'bg-geist-green-600',
+    disconnected: 'bg-geist-red-600',
+    online: 'bg-geist-green-600',
+    offline: 'bg-geist-red-600',
   };
+  const animated =
+    status === 'running' ||
+    status === 'thinking' ||
+    status === 'executing' ||
+    status === 'starting';
   return (
     <span
-      className={`inline-block h-1.5 w-1.5 rounded-full ${colors[status] ?? 'bg-gray-400'} ${status === 'running' || status === 'thinking' || status === 'executing' || status === 'starting' ? 'animate-pulse' : ''}`}
+      className={`inline-block h-1.5 w-1.5 rounded-full ${colors[status] ?? 'bg-geist-gray-500'} ${animated ? 'animate-pulse' : ''}`}
       aria-hidden="true"
     />
   );

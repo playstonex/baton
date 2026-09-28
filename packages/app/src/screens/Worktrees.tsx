@@ -127,7 +127,8 @@ export function WorktreesScreen() {
 
   // Agents whose projectPath lives inside a given worktree path.
   function agentsFor(wt: WorktreeInfo): AgentProcess[] {
-    return agents.filter((a) => a.projectPath === wt.path);
+    const root = wt.path.replace(/\/+$/, '');
+    return agents.filter((a) => a.projectPath === root || a.projectPath?.startsWith(`${root}/`));
   }
 
   const active = worktrees.find((w) => w.id === activeId) ?? null;
@@ -214,6 +215,7 @@ export function WorktreesScreen() {
               onClick={fetchList}
               className="ml-auto shrink-0 rounded p-1.5 text-geist-gray-700 hover:text-geist-gray-1000"
               title="Refresh"
+              aria-label="Refresh"
             >
               <IconRefreshCw className="h-4 w-4" />
             </button>
@@ -275,6 +277,7 @@ export function WorktreesScreen() {
                             size="sm"
                             onClick={() => navigate(`/terminal/${a.id}`)}
                             title="Terminal"
+                            aria-label="Terminal"
                           >
                             <IconTerminal className="h-4 w-4" />
                           </Button>
@@ -283,6 +286,7 @@ export function WorktreesScreen() {
                             size="sm"
                             onClick={() => navigate(`/files/${a.id}`)}
                             title="Files"
+                            aria-label="Files"
                           >
                             <IconFile className="h-4 w-4" />
                           </Button>
