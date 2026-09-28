@@ -87,14 +87,22 @@ export class Orchestrator {
       this.notify(pipeline);
 
       try {
-        const sessionId = await this.runStep(step, (event) => {
-          result.events.push(event);
-          this.notify(pipeline);
-        }, abortController.signal);
+        const sessionId = await this.runStep(
+          step,
+          (event) => {
+            result.events.push(event);
+            this.notify(pipeline);
+          },
+          abortController.signal,
+        );
 
         result.sessionId = sessionId;
 
-        await this.waitForCompletion(sessionId, step.timeoutMs ?? STEP_TIMEOUT_DEFAULT, abortController.signal);
+        await this.waitForCompletion(
+          sessionId,
+          step.timeoutMs ?? STEP_TIMEOUT_DEFAULT,
+          abortController.signal,
+        );
 
         result.status = 'completed';
         result.completedAt = new Date().toISOString();
@@ -167,30 +175,50 @@ export class Orchestrator {
 
   private _stepUnsubs = new Map<string, () => void>();
 
-  private waitForCompletion(sessionId: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
+  private waitForCompletion(
+    sessionId: string,
+    timeoutMs: number,
+    signal: AbortSignal,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timeout);
+        const unsub = this._stepUnsubs.get(sessionId);
+        unsub?.();
+        this._stepUnsubs.delete(sessionId);
+      };
+
       const timeout = setTimeout(() => {
+        cleanup();
         reject(new Error('Step timed out'));
       }, timeoutMs);
 
-      const check = () => {
-        const agent = this.agentManager.get(sessionId);
-        if (!agent || agent.status === 'stopped' || agent.status === 'error') {
-          clearTimeout(timeout);
-          const unsub = this._stepUnsubs.get(sessionId);
-          unsub?.();
-          this._stepUnsubs.delete(sessionId);
+      // Race: abort beats completion.
+      signal.addEventListener('abort', () => {
+        cleanup();
+        reject(new Error('Pipeline cancelled'));
+      });
+
+      // Fast path: agent already terminal before we subscribed.
+      const agent = this.agentManager.get(sessionId);
+      if (!agent || agent.status === 'stopped' || agent.status === 'error') {
+        cleanup();
+        resolve();
+        return;
+      }
+
+      // Event-driven: resolve the first time we see a terminal status_change,
+      // replacing the old 500ms-poll loop.
+      const unsub = this.agentManager.onEvent(sessionId, (event) => {
+        if (
+          event.type === 'status_change' &&
+          (event.status === 'stopped' || event.status === 'error')
+        ) {
+          cleanup();
           resolve();
-          return;
         }
-        if (signal.aborted) {
-          clearTimeout(timeout);
-          reject(new Error('Pipeline cancelled'));
-          return;
-        }
-        setTimeout(check, 500);
-      };
-      check();
+      });
+      this._stepUnsubs.set(sessionId, unsub);
     });
   }
 

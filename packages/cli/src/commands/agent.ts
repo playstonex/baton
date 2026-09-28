@@ -123,18 +123,45 @@ async function agentAttach(sessionId?: string): Promise<void> {
 
   await ws.connect();
   ws.send({ type: 'control', action: 'attach_session', sessionId });
+  ws.send({ type: 'control', action: 'claim_session', sessionId });
+
+  let isRemotelyControlled = false;
 
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(true);
   }
   process.stdin.on('data', (data) => {
+    if (isRemotelyControlled) {
+      isRemotelyControlled = false;
+      ws.send({ type: 'control', action: 'claim_session', sessionId });
+      process.stdout.write('\x1b[32m\n[💻 Control reclaimed locally]\x1b[0m\n');
+      return;
+    }
     ws.send({ type: 'terminal_input', sessionId, data: data.toString() });
   });
 
   ws.onMessage((msg) => {
-    const m = msg as { type: string; sessionId?: string; data?: string };
+    const m = msg as {
+      type: string;
+      sessionId?: string;
+      data?: string;
+      owner?: string;
+      claimedBy?: string;
+    };
     if (m.type === 'terminal_output' && m.sessionId === sessionId && m.data) {
       process.stdout.write(m.data);
+    } else if (m.type === 'session_ownership' && m.sessionId === sessionId) {
+      if (m.owner === 'remote') {
+        isRemotelyControlled = true;
+        process.stdout.write(
+          '\n\x1b[33m[📱 Controlled remotely — press any key to reclaim control]\x1b[0m\n',
+        );
+      } else if (m.owner === 'local') {
+        if (isRemotelyControlled) {
+          isRemotelyControlled = false;
+          process.stdout.write('\x1b[32m\n[💻 Control reclaimed locally]\x1b[0m\n');
+        }
+      }
     }
   });
 

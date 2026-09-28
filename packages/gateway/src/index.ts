@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { Database } from 'bun:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { signToken, verifyToken, generatePairingCode } from './services/auth.js';
@@ -10,11 +10,42 @@ import { signToken, verifyToken, generatePairingCode } from './services/auth.js'
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 3220;
 
-const pairingCodes = new Map<string, { hostId: string; code: string; token: string; expiresAt: number }>();
+/** Resolve BATON_HOME following the daemon convention. */
+function batonHome(): string {
+  return process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
+}
+
+const pairingCodes = new Map<
+  string,
+  { hostId: string; code: string; token: string; expiresAt: number }
+>();
+
+/**
+ * Locate the migration SQL file. In dev (bun run src/index.ts) it lives next
+ * to the source; in a compiled build it may be under dist/ or a sibling. We
+ * check a few candidates so the gateway works in both layouts.
+ */
+function findMigrationSql(): string {
+  const candidates = [
+    join(__dirname, 'db/migrations/0001_init.sql'), // dev: src/db/migrations
+    join(__dirname, '../db/migrations/0001_init.sql'), // compiled: dist/db → ../db
+    join(__dirname, '../src/db/migrations/0001_init.sql'), // compiled without copy
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return readFileSync(p, 'utf-8');
+  }
+  throw new Error(`gateway migration SQL not found (looked in ${candidates.join(', ')})`);
+}
 
 function initDatabase(): Database {
-  const db = new Database(':memory:');
-  const migrationSql = readFileSync(join(__dirname, 'db/migrations/0001_init.sql'), 'utf-8');
+  // Persist to disk so hosts/sessions/pairing survive restarts. Previously
+  // this was `:memory:`, which silently dropped everything on every restart.
+  const dir = batonHome();
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const dbPath = join(dir, 'gateway.db');
+  const db = new Database(dbPath);
+  db.exec('PRAGMA journal_mode = WAL'); // safe concurrent reads
+  const migrationSql = findMigrationSql();
   for (const stmt of migrationSql.split(';').filter((s) => s.trim())) {
     db.exec(stmt);
   }
@@ -25,7 +56,11 @@ function createRateLimiter(maxRequests = 100, windowMs = 60 * 1000) {
   const requests = new Map<string, { count: number; resetAt: number }>();
 
   return function rateLimit(c: any): boolean {
-    const ip = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || c.env.REQUEST_IP || 'unknown';
+    const ip =
+      c.req.header('x-forwarded-for') ||
+      c.req.header('cf-connecting-ip') ||
+      c.env.REQUEST_IP ||
+      'unknown';
     const now = Date.now();
 
     for (const [key, record] of requests) {
@@ -77,7 +112,11 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; p
     if (!payload || payload.role !== 'host') return c.json({ error: 'Invalid host token' }, 401);
 
     const code = generatePairingCode();
-    const clientToken = await signToken({ sub: payload.hostId!, role: 'client', hostId: payload.hostId! });
+    const clientToken = await signToken({
+      sub: payload.hostId!,
+      role: 'client',
+      hostId: payload.hostId!,
+    });
 
     pairingCodes.set(code, {
       hostId: payload.hostId!,
@@ -115,7 +154,9 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; p
   });
 
   app.get('/api/v1/hosts', (c) => {
-    const hosts = db.prepare('SELECT id, name, hostname, os, status, last_seen, created_at FROM hosts').all();
+    const hosts = db
+      .prepare('SELECT id, name, hostname, os, status, last_seen, created_at FROM hosts')
+      .all();
     return c.json(hosts);
   });
 
@@ -124,7 +165,15 @@ export function createGateway(port = DEFAULT_PORT): { app: Hono; db: Database; p
     const id = crypto.randomUUID();
     db.prepare(
       'INSERT INTO hosts (id, name, hostname, os, status, last_seen, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(id, body.name, body.hostname ?? null, body.os ?? null, 'online', new Date().toISOString(), new Date().toISOString());
+    ).run(
+      id,
+      body.name,
+      body.hostname ?? null,
+      body.os ?? null,
+      'online',
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
     return c.json({ id, status: 'online' }, 201);
   });
 

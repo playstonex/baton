@@ -1,4 +1,6 @@
 import type { AccessMode } from '@baton/shared';
+import { getVapidKeys, sendWebPush, parseSubscription } from './vapid.js';
+import type { PushSubscription as WebPushSubscription } from 'web-push';
 
 interface PushSubscription {
   clientId: string;
@@ -53,10 +55,24 @@ export class PushNotificationService {
     }
   }
 
-  private async notifyWebPush(endpoint: string, payload: NotificationPayload): Promise<boolean> {
-    // Web Push requires VAPID keys — stub for now, returns true to avoid retry spam
-    console.log(`[Push] Web push to ${endpoint.slice(0, 30)}...: ${payload.title}`);
-    return true;
+  private async notifyWebPush(token: string, payload: NotificationPayload): Promise<boolean> {
+    // The token for web clients is the JSON PushSubscription the browser
+    // created via pushManager.subscribe(). Parse it and send via VAPID.
+    // Ensure VAPID keys are initialized (idempotent).
+    await getVapidKeys();
+    const subscription = parseSubscription(token);
+    if (!subscription) {
+      console.log('[Push] Invalid web subscription token, removing');
+      this.removeByToken(token);
+      return false;
+    }
+    const ok = await sendWebPush(subscription as WebPushSubscription, {
+      title: payload.title,
+      body: payload.body,
+      data: payload.data,
+    });
+    if (!ok) this.removeByToken(token);
+    return ok;
   }
 
   private async notifyMobilePush(

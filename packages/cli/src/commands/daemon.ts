@@ -222,18 +222,40 @@ async function daemonStatus(json: boolean): Promise<void> {
 
 async function daemonPair(json: boolean): Promise<void> {
   try {
-    const data = await apiFetch<{ qr: string; fingerprint: string; relayUrl: string }>(
-      '/api/pair/qr',
-    );
+    const data = await apiFetch<{
+      qr: string;
+      qrTerminal?: string;
+      fingerprint: string;
+      relayUrl: string;
+      localHttpUrl?: string;
+      localWsUrl?: string;
+      name?: string;
+      payload?: string;
+    }>('/api/pair/qr');
     if (json) {
-      emitJson({ ok: true, fingerprint: data.fingerprint, relayUrl: data.relayUrl });
+      emitJson({
+        ok: true,
+        fingerprint: data.fingerprint,
+        relayUrl: data.relayUrl,
+        localHttpUrl: data.localHttpUrl,
+        localWsUrl: data.localWsUrl,
+        name: data.name,
+        payload: data.payload,
+      });
       return;
     }
-    console.log(`\nPairing QR Code generated:`);
-    console.log(`Fingerprint: ${data.fingerprint}`);
+    console.log(`\n================ Baton Pairing ================`);
+    if (data.name) console.log(`Host:        ${data.name}`);
+    if (data.localHttpUrl) console.log(`Local (LAN): ${data.localHttpUrl}`);
     console.log(`Relay:       ${data.relayUrl}`);
-    console.log(`\nScan the QR code in the Baton mobile app.\n`);
-    console.log(data.qr);
+    console.log(`Fingerprint: ${data.fingerprint}`);
+    console.log(`\nScan this QR code in the Baton mobile app to connect:\n`);
+    if (data.qrTerminal) {
+      console.log(data.qrTerminal);
+    } else {
+      console.log(data.qr);
+    }
+    console.log(`===============================================\n`);
   } catch (err) {
     if (json) emitJson({ ok: false, error: 'failed to generate pairing QR' });
     else console.error('Failed to generate pairing QR:', err instanceof Error ? err.message : err);

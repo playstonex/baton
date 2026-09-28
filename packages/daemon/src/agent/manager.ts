@@ -162,6 +162,7 @@ export class AgentManager {
       pid: managed.process.pid,
       cols: managed.cols,
       rows: managed.rows,
+      mode: managed.process.mode,
     };
 
     try {
@@ -210,6 +211,7 @@ export class AgentManager {
               status: 'stopped',
               startedAt: snapshot.createdAt,
               stoppedAt: new Date().toISOString(),
+              mode: snapshot.mode,
             };
 
             this.agents.set(snapshot.id, {
@@ -263,6 +265,7 @@ export class AgentManager {
       status: 'starting',
       pid: pty.pid,
       startedAt: new Date().toISOString(),
+      mode: 'pty',
     };
 
     const managed: ManagedAgent = {
@@ -396,6 +399,7 @@ export class AgentManager {
       projectPath: config.projectPath,
       status: 'starting',
       startedAt: new Date().toISOString(),
+      mode: 'sdk',
     };
 
     const managed: ManagedAgent = {
@@ -541,7 +545,8 @@ export class AgentManager {
     if (managed.sdk) {
       managed.sdk.write(content);
     } else if (managed.pty) {
-      managed.pty.write(content + '\n');
+      const transformed = managed.adapter?.transformInput(content) ?? (content + '\n');
+      managed.pty.write(transformed);
     } else {
       throw new Error(`Agent ${id} has no active session`);
     }

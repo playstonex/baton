@@ -12,15 +12,25 @@ const agentCreate = buildTool({
     projectPath: z.string().describe('Absolute path to the project directory'),
     prompt: z.string().optional().describe('Initial prompt to send to the agent'),
     worktree: z.boolean().default(false).describe('Create a git worktree for isolation'),
+    notifyOnFinish: z
+      .boolean()
+      .default(true)
+      .describe(
+        'When true (default), broadcast an agent_finished event via the daemon WS ' +
+          'when this agent reaches a terminal state, so orchestrators are notified ' +
+          'instead of polling.',
+      ),
   },
   isReadOnly: false,
   isConcurrencySafe: false,
   execute: async (params, ctx) => {
     const agentManager = ctx.agentManager as AgentManager;
-      const adapter = createAdapter(params.provider as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
-      const sessionId = await agentManager.start(
-        {
-          type: params.provider as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
+    const adapter = createAdapter(
+      params.provider as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
+    );
+    const sessionId = await agentManager.start(
+      {
+        type: params.provider as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
         projectPath: params.projectPath as string,
       },
       adapter as BaseAgentAdapter,
@@ -28,6 +38,24 @@ const agentCreate = buildTool({
 
     if (params.prompt) {
       agentManager.write(sessionId, (params.prompt as string) + '\n');
+    }
+
+    // Event-driven completion notification: subscribe once, fire when the
+    // agent reaches a terminal status, then unsubscribe. This replaces the
+    // 500ms-poll pattern used elsewhere. COMPAT(notifyOnFinish).
+    if (params.notifyOnFinish) {
+      const onAgentFinished = ctx.onAgentFinished as
+        | ((sid: string, status: string) => void)
+        | undefined;
+      const unsub = agentManager.onEvent(sessionId, (event) => {
+        if (
+          event.type === 'status_change' &&
+          (event.status === 'stopped' || event.status === 'error')
+        ) {
+          onAgentFinished?.(sessionId, event.status);
+          unsub();
+        }
+      });
     }
 
     return toolResult(JSON.stringify({ sessionId, status: 'running', provider: params.provider }));

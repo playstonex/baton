@@ -29,6 +29,8 @@ export interface AgentProcess {
   pid?: number;
   startedAt: string;
   stoppedAt?: string;
+  /** Adapter mode this session was started with */
+  mode?: 'pty' | 'sdk';
 }
 
 export type { AgentConfig, SpawnConfig } from './agent.js';

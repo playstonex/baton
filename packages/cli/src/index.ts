@@ -60,10 +60,11 @@ function printHelp() {
   Baton CLI v0.0.1
 
   Usage:
-    baton daemon start [--foreground]       Start the daemon
-    baton daemon stop                        Stop the daemon
-    baton daemon status                      Show daemon status
-    baton daemon pair                        Generate QR pairing code
+    baton daemon start [--foreground] [--json]  Start the daemon
+    baton daemon stop [--json]                  Stop the daemon
+    baton daemon restart [--json]               Restart the daemon
+    baton daemon status [--json]                Show daemon status (machine-readable with --json)
+    baton daemon pair                           Generate QR pairing code
 
     baton agent run <path> [--provider X]   Start an agent
     baton agent ls [-a]                      List agents

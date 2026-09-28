@@ -130,3 +130,165 @@ describe('CLI Client', () => {
     expect(mode).toBe('pty');
   });
 });
+
+describe('File Browser and Path Permissions', () => {
+  it('allows browsing directories via /api/files across the filesystem', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+
+    const res = await app.request(`/api/files?path=${encodeURIComponent(process.cwd())}`);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { path: string; items: { name: string; isDir: boolean }[] };
+    expect(data.path).toBe(process.cwd());
+    expect(Array.isArray(data.items)).toBe(true);
+    expect(data.items.some((item) => item.name === 'package.json')).toBe(true);
+  });
+
+  it('blocks reading file content outside allowed project paths with 403', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+
+    const res = await app.request(`/api/files/content?path=${encodeURIComponent('/etc/hosts')}`);
+    expect(res.status).toBe(403);
+    const data = (await res.json()) as { error: string };
+    expect(data.error).toBe('Path not allowed');
+  });
+
+  it('allows browsing another directory even after an agent is started in a different directory', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+
+    // Mock starting an agent in /tmp or cwd
+    const tmpDir = process.cwd();
+    const otherDir = '/tmp';
+
+    // Browse otherDir before any agent starts
+    const res1 = await app.request(`/api/files?path=${encodeURIComponent(otherDir)}`);
+    expect(res1.status).toBe(200);
+
+    // Start agent in tmpDir
+    const startRes = await app.request('/api/agents/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentType: 'claude-code', projectPath: tmpDir, mode: 'pty' }),
+    });
+    // Regardless of whether pty starts in mock/test, projectPath was registered
+    expect([200, 500]).toContain(startRes.status);
+
+    // Now browse otherDir to select directory for second agent — must NOT return 403
+    const res2 = await app.request(`/api/files?path=${encodeURIComponent(otherDir)}`);
+    expect(res2.status).toBe(200);
+    const data2 = (await res2.json()) as { path: string; items: unknown[] };
+    expect(data2.path).toBe(otherDir);
+  });
+
+  it('searches project files with /api/files/search once the project path is registered', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+
+    // Starting an agent registers its projectPath as allowed (even if the PTY
+    // itself fails to start in the test environment).
+    const startRes = await app.request('/api/agents/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentType: 'claude-code', projectPath: process.cwd(), mode: 'pty' }),
+    });
+    expect([200, 500]).toContain(startRes.status);
+
+    const res = await app.request(
+      `/api/files/search?path=${encodeURIComponent(process.cwd())}&q=package`,
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { path: string; files: string[] };
+    expect(Array.isArray(data.files)).toBe(true);
+    expect(data.files.some((f) => f.includes('package.json'))).toBe(true);
+  });
+
+  it('blocks /api/files/search outside allowed project paths with 403', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+
+    const res = await app.request(`/api/files/search?path=${encodeURIComponent('/etc')}&q=host`);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects /api/files/search without a path with 400', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+
+    const res = await app.request('/api/files/search?q=package');
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('Credential-bearing routes are local-only', () => {
+  const post = (body: unknown, origin?: string): RequestInit => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
+    body: JSON.stringify(body),
+  });
+  const evil = { name: 'evil', baseUrl: 'https://attacker.example', envKey: 'OPENAI_API_KEY' };
+
+  it('refuses provider mutation from a non-loopback peer', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+    const res = await app.request('/api/api-providers', post(evil), { requestIP: '192.168.1.50' });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses provider mutation when the peer address is unknown', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+    const res = await app.request('/api/api-providers', post(evil));
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses a loopback request carrying a foreign browser Origin', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+    const res = await app.request('/api/api-providers', post(evil, 'https://attacker.example'), {
+      requestIP: '127.0.0.1',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses the proxy from a non-loopback peer', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+    const res = await app.request('/proxy/responses', post({ model: 'x', input: 'hi' }), {
+      requestIP: '::ffff:10.0.0.7',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects an envKey that is not an *_API_KEY name, even from localhost', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+    const res = await app.request(
+      '/api/api-providers',
+      post({ ...evil, envKey: 'AWS_SECRET_ACCESS_KEY' }, 'http://localhost:5173'),
+      { requestIP: '::1' },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('still allows reading the provider list from the LAN', async () => {
+    const { createDaemon } = await import('../index.js');
+    const { app } = createDaemon(0);
+    const res = await app.request('/api/api-providers', undefined, { requestIP: '192.168.1.50' });
+    expect(res.status).toBe(200);
+  });
+
+  it('classifies loopback addresses and origins', async () => {
+    const { isLoopbackAddress, isLocalOrigin } = await import('../index.js');
+    expect(isLoopbackAddress('127.0.0.1')).toBe(true);
+    expect(isLoopbackAddress('::1')).toBe(true);
+    expect(isLoopbackAddress('::ffff:127.0.0.1')).toBe(true);
+    expect(isLoopbackAddress('192.168.1.2')).toBe(false);
+    expect(isLoopbackAddress('127.evil.com')).toBe(false);
+    expect(isLocalOrigin('http://localhost:5173')).toBe(true);
+    expect(isLocalOrigin('http://127.0.0.1:3210')).toBe(true);
+    expect(isLocalOrigin('http://localhost.attacker.com')).toBe(false);
+    expect(isLocalOrigin('null')).toBe(false);
+  });
+});

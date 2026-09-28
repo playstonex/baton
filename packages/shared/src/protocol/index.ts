@@ -9,10 +9,12 @@ import type {
   ReasoningEffort,
   ServiceTier,
 } from '../types/index.js';
+import type { HelloMessage, WelcomeMessage } from './handshake.js';
 // AccessMode is defined locally below (kept for backward compat with main).
 
 // WebSocket message types: Client → Daemon
 export type ClientMessage =
+  | HelloMessage
   | TerminalInputMessage
   | ChatInputMessage
   | SteerInputMessage
@@ -156,6 +158,7 @@ export type ControlAction =
   | 'list_agents'
   | 'attach_session'
   | 'detach_session'
+  | 'resume_session' // COMPAT(sessionResume): added in v2.1
   | 'resize'
   | 'claim_session'
   | 'release_session'
@@ -184,6 +187,7 @@ export interface ControlMessage {
 
 // WebSocket message types: Daemon → Client
 export type DaemonMessage =
+  | WelcomeMessage
   | TerminalOutputMessage
   | HistoryReplayMessage
   | ParsedEventMessage
@@ -194,6 +198,7 @@ export type DaemonMessage =
   | SessionOwnershipMessage
   | HealthScoreMessage
   | AccessModeMessage
+  | ResumeReplyMessage
   | ModelListMessage
   | GitBranchListMessage
   | GitStatusMessage
@@ -205,6 +210,10 @@ export interface TerminalOutputMessage {
   type: 'terminal_output';
   sessionId: string;
   data: string;
+  /** Monotonic per-session sequence number. Present when the daemon and client
+   * both support the `sessionResume` capability; used to resume after reconnect.
+   * COMPAT(sessionResume): added in v2.1, optional until floor >= v2.1 */
+  seq?: number;
 }
 
 export interface HistoryReplayMessage {
@@ -217,6 +226,8 @@ export interface ParsedEventMessage {
   type: 'parsed_event';
   sessionId: string;
   event: ParsedEvent;
+  /** Monotonic per-session sequence number (see TerminalOutputMessage.seq). */
+  seq?: number;
 }
 
 export interface EventHistoryMessage {
@@ -229,11 +240,19 @@ export interface StatusUpdateMessage {
   type: 'status_update';
   sessionId: string;
   status: AgentStatus | SessionStatus;
+  /** Monotonic per-session sequence number (see TerminalOutputMessage.seq). */
+  seq?: number;
 }
 
 export interface AgentListMessage {
   type: 'agent_list';
-  agents: { id: string; type: string; status: AgentStatus; projectPath: string }[];
+  agents: {
+    id: string;
+    type: string;
+    status: AgentStatus;
+    projectPath: string;
+    mode?: 'pty' | 'sdk';
+  }[];
 }
 
 export interface PermissionRequestMessage {
@@ -308,6 +327,26 @@ export interface AccessModeMessage {
   mode: AccessMode;
 }
 
+/**
+ * Response to a `resume_session` control action. Tells the client the range of
+ * sequence numbers it has been caught up to, so it knows the next expected seq.
+ * If the requested lastSeq is older than what the buffer retains, `gap=true`
+ * and the client should fall back to a full re-attach (history replay).
+ */
+export interface ResumeReplyMessage {
+  type: 'resume_reply';
+  sessionId: string;
+  /** First seq number replayed (inclusive). */
+  fromSeq: number;
+  /** Last seq number replayed (inclusive). Equals currentSeq if nothing buffered. */
+  toSeq: number;
+  /** Highest seq the daemon has assigned for this session. */
+  currentSeq: number;
+  /** True when the requested lastSeq is behind the buffer's floor — caller must
+   * do a full re-attach to recover the missing gap. COMPAT(sessionResume). */
+  gap?: boolean;
+}
+
 // Git result message: Daemon → Client
 export interface GitResultMessage {
   type: 'git_result';
@@ -360,3 +399,5 @@ export interface HostInfoResponse {
 
 export * from './channels.js';
 export * from './handshake.js';
+export * from './schemas.js';
+export * from './seq-buffer.js';

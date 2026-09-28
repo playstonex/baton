@@ -43,6 +43,7 @@ export interface AgentSnapshot {
   pid?: number;
   cols: number;
   rows: number;
+  mode?: 'pty' | 'sdk';
 }
 
 export interface AgentConfig {

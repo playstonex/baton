@@ -3,6 +3,7 @@ import { readdir, stat, readFile } from 'node:fs/promises';
 import { join, basename, extname, resolve, sep } from 'node:path';
 import { access } from 'node:fs/promises';
 import { Hono } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import QRCode from 'qrcode';
 import { generateKeyPair, keyToFingerprint } from '@baton/shared/crypto';
@@ -63,10 +64,33 @@ function formatHostForUrl(host: string): string {
   return host.includes(':') ? `[${host}]` : host;
 }
 
+export function isLoopbackAddress(ip: string): boolean {
+  const addr = ip.replace(/^::ffff:/i, ''); // IPv4-mapped IPv6
+  return addr === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(addr);
+}
+
+export function isLocalOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname;
+    return host === 'localhost' || host === '[::1]' || host === '::1' || isLoopbackAddress(host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Provider env vars must look like an API key name. `envKey` selects which
+ * process env var the proxy forwards upstream, so an unconstrained value
+ * (e.g. AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN) would turn the proxy into a
+ * general env-var exfiltration channel.
+ */
+export const API_KEY_ENV_PATTERN = /^[A-Z][A-Z0-9_]*_API_KEY$/;
+
 export function createDaemon(port = DEFAULT_PORT) {
   const app = new Hono();
   const batonHome = process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
   const agentManager = new AgentManager();
+  void agentManager.restore();
   const orchestrator = new Orchestrator(agentManager);
   const scheduler = new ScheduleService(agentManager);
   void scheduler.restore();
@@ -100,10 +124,44 @@ export function createDaemon(port = DEFAULT_PORT) {
         return true;
       }
     }
-    return allowedProjectPaths.size === 0;
+    for (const agent of agentManager.list()) {
+      if (agent.projectPath) {
+        const allowedResolved = resolve(agent.projectPath) + sep;
+        if (resolved.startsWith(allowedResolved) || resolved === resolve(agent.projectPath)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   app.use('*', cors());
+
+  // ── Local-only guard for credential-bearing routes ───────────────────
+  // /proxy/* attaches a real API key (resolved from the daemon's env) to an
+  // outbound request, and /api/api-providers mutations decide WHERE that key
+  // goes (baseUrl) and WHICH env var is read (envKey). The daemon listens on
+  // all interfaces with no auth and permissive CORS, so without this guard any
+  // LAN peer — or any web page the user visits, via a cross-origin fetch to
+  // localhost — could point a provider at its own server and have the daemon
+  // POST the key there. Require a loopback peer AND no foreign browser Origin.
+  // Codex (the proxy's real caller) runs on this host and sends no Origin; the
+  // web UI is served from localhost (Vite dev or same-origin).
+  const localOnly: MiddlewareHandler = async (c, next) => {
+    if (c.req.method === 'GET' && !c.req.path.startsWith('/proxy/')) return next();
+    const ip = (c.env as { requestIP?: string } | undefined)?.requestIP;
+    if (!ip || !isLoopbackAddress(ip)) {
+      return c.json({ error: 'This endpoint is only available from the daemon host' }, 403);
+    }
+    const origin = c.req.header('origin');
+    if (origin && !isLocalOrigin(origin)) {
+      return c.json({ error: 'Cross-origin request refused' }, 403);
+    }
+    return next();
+  };
+  app.use('/api/api-providers', localOnly);
+  app.use('/api/api-providers/*', localOnly);
+  app.use('/proxy/*', localOnly);
 
   app.get('/api/health', (c) => {
     return c.json({
@@ -307,10 +365,8 @@ export function createDaemon(port = DEFAULT_PORT) {
   ]);
 
   app.get('/api/files', async (c) => {
-    const dir = c.req.query('path') ?? '/';
-    if (!isPathAllowed(dir)) {
-      return c.json({ error: 'Path not allowed' }, 403);
-    }
+    const rawDir = c.req.query('path') ?? '/';
+    const dir = resolve(rawDir);
 
     try {
       const entries = await readdir(dir, { withFileTypes: true });
@@ -340,6 +396,82 @@ export function createDaemon(port = DEFAULT_PORT) {
       return c.json({ path: dir, items: sorted });
     } catch {
       return c.json({ error: 'Cannot read directory' }, 400);
+    }
+  });
+
+  app.get('/api/files/search', async (c) => {
+    const rawDir = c.req.query('path');
+    if (!rawDir) return c.json({ error: 'path is required' }, 400);
+    const query = (c.req.query('q') ?? '').trim().toLowerCase();
+    const dir = resolve(rawDir);
+    // Search walks a whole tree recursively (git ls-files / deep scan), so unlike
+    // the one-level directory browser it is scoped to registered project paths.
+    if (!isPathAllowed(dir)) return c.json({ error: 'Path not allowed' }, 403);
+
+    try {
+      const s = await stat(dir);
+      if (!s.isDirectory()) {
+        return c.json({ error: 'Path is not a directory' }, 400);
+      }
+      // 1. Try git ls-files if inside a git repository
+      const proc = Bun.spawn(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], {
+        cwd: dir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const stdout = await new Response(proc.stdout).text();
+      const exitCode = await proc.exited;
+
+      let filePaths: string[] = [];
+      if (exitCode === 0 && stdout.trim().length > 0) {
+        filePaths = stdout.trim().split('\n');
+      } else {
+        // Fallback: fast recursive scan (up to depth 4, skip hidden & node_modules)
+        const scan = async (curDir: string, relPrefix = '', depth = 0): Promise<string[]> => {
+          if (depth > 4) return [];
+          const res: string[] = [];
+          const entries = await readdir(curDir, { withFileTypes: true }).catch(() => []);
+          for (const e of entries) {
+            if (IGNORE_DIRS.has(e.name) || e.name.startsWith('.')) continue;
+            const rel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
+            if (e.isDirectory()) {
+              res.push(...(await scan(join(curDir, e.name), rel, depth + 1)));
+            } else {
+              res.push(rel);
+            }
+            if (res.length > 500) break;
+          }
+          return res;
+        };
+        filePaths = await scan(dir);
+      }
+
+      // Filter and rank by query
+      let matches = filePaths;
+      if (query) {
+        matches = filePaths
+          .filter((p) => p.toLowerCase().includes(query))
+          .sort((a, b) => {
+            const aName = a.split('/').pop()?.toLowerCase() ?? '';
+            const bName = b.split('/').pop()?.toLowerCase() ?? '';
+            const aNameStarts = aName.startsWith(query);
+            const bNameStarts = bName.startsWith(query);
+            if (aNameStarts && !bNameStarts) return -1;
+            if (!aNameStarts && bNameStarts) return 1;
+            const aNameMatch = aName.includes(query);
+            const bNameMatch = bName.includes(query);
+            if (aNameMatch && !bNameMatch) return -1;
+            if (!aNameMatch && bNameMatch) return 1;
+            return a.length - b.length;
+          });
+      }
+
+      return c.json({
+        path: dir,
+        files: matches.slice(0, 30),
+      });
+    } catch {
+      return c.json({ error: 'Search failed', files: [] }, 400);
     }
   });
 
@@ -754,9 +886,13 @@ export function createDaemon(port = DEFAULT_PORT) {
     }>();
 
     const upstreamFormat = body.upstreamFormat ?? 'openai-chat';
+    const envKey = body.envKey ?? 'OPENAI_API_KEY';
+    if (!API_KEY_ENV_PATTERN.test(envKey)) {
+      return c.json({ error: 'envKey must be an env var name ending in _API_KEY' }, 400);
+    }
     const profile: ApiProviderProfile = {
       baseUrl: body.baseUrl,
-      envKey: body.envKey ?? 'OPENAI_API_KEY',
+      envKey,
       models: body.models ?? [],
       enabled: body.enabled ?? true,
       isDefault: body.isDefault ?? false,
@@ -781,6 +917,9 @@ export function createDaemon(port = DEFAULT_PORT) {
     if (!existing) return c.json({ error: 'Provider not found' }, 404);
 
     const body = await c.req.json<Partial<ApiProviderProfile>>();
+    if (body.envKey !== undefined && !API_KEY_ENV_PATTERN.test(body.envKey)) {
+      return c.json({ error: 'envKey must be an env var name ending in _API_KEY' }, 400);
+    }
     await apiProviderRegistry.set(name, { ...existing, ...body });
     return c.json({ ok: true });
   });
@@ -1022,13 +1161,32 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
     const fingerprint = keyToFingerprint(daemonKeyPair.publicKey);
     const relayUrl = c.req.query('relay') ?? `ws://localhost:${DEFAULT_PORT + 20}`;
+    const ips = getLocalIps();
+    const localIp = ips.ipv4 || '127.0.0.1';
+    const localHttpUrl = `http://${localIp}:${port}`;
+    const localWsUrl = `ws://${localIp}:${port + 1}`;
+    const hostname = os.hostname();
     const payload = JSON.stringify({
+      version: 1,
+      name: hostname,
+      localHttpUrl,
+      localWsUrl,
       daemonId: 'local',
       fp: fingerprint,
       relay: relayUrl,
     });
     const qrDataUrl = await QRCode.toDataURL(payload, { width: 256 });
-    return c.json({ qr: qrDataUrl, fingerprint, relayUrl });
+    const qrTerminal = await QRCode.toString(payload, { type: 'terminal', small: true });
+    return c.json({
+      qr: qrDataUrl,
+      qrTerminal,
+      fingerprint,
+      relayUrl,
+      localHttpUrl,
+      localWsUrl,
+      name: hostname,
+      payload,
+    });
   });
 
   return { app, agentManager, transport, port, watchers };
@@ -1067,7 +1225,9 @@ export async function main() {
   }
 
   Bun.serve({
-    fetch: app.fetch,
+    // Expose the socket peer address to handlers (c.env.requestIP) — used by
+    // the local-only guard. Never trust X-Forwarded-For for this.
+    fetch: (req, server) => app.fetch(req, { requestIP: server.requestIP(req)?.address }),
     port,
     hostname,
   });
@@ -1099,4 +1259,7 @@ export async function main() {
   });
 }
 
-main();
+if (import.meta.main) {
+  void main();
+}
+
