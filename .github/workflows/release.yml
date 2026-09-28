@@ -209,13 +209,9 @@ jobs:
         working-directory: packages/mobile
         run: |
           set -euo pipefail
-          # The native android/ project is committed, so EAS reads the version
-          # from build.gradle; app.json is kept in sync for the JS side.
-          sed -i -E \
-            -e "s/^(\s*)versionCode [0-9]+/\1versionCode ${VERSION_CODE}/" \
-            -e "s/^(\s*)versionName \"[^\"]*\"/\1versionName \"${VERSION}\"/" \
-            android/app/build.gradle
-          grep -nE 'versionCode|versionName' android/app/build.gradle
+          # android/ is gitignored (Continuous Native Generation): EAS runs
+          # prebuild from app.json, so app.json is the only version source.
+          # eas.json pins appVersionSource=local so EAS does not override it.
           node -e '
             const fs = require("fs");
             const p = "app.json";
@@ -223,6 +219,7 @@ jobs:
             j.expo.version = process.env.VERSION;
             j.expo.android = { ...(j.expo.android || {}), versionCode: Number(process.env.VERSION_CODE) };
             fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+            console.log(`app.json: version=${j.expo.version} android.versionCode=${j.expo.android.versionCode}`);
           '
 
       - name: Build on EAS
