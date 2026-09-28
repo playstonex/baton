@@ -9,7 +9,8 @@
     "./protocol": "./src/protocol/index.ts",
     "./utils": "./src/utils/index.ts",
     "./crypto": "./src/crypto/index.ts",
-    "./forge": "./src/forge/index.ts"
+    "./forge": "./src/forge/index.ts",
+    "./host": "./src/host/index.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
