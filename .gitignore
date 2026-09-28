@@ -43,3 +43,6 @@ design/icons/Untitled*.icon/
 
 # Bun lockfile (project uses pnpm)
 bun.lock
+
+# Local agent-tool state (hook snapshots, finding ledgers) — never commit
+.mimosa/
