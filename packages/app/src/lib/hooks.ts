@@ -12,7 +12,6 @@ export function usePolling(fetchFn: () => void | Promise<void>, intervalMs: numb
     saved.current();
     const id = setInterval(() => saved.current(), intervalMs);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intervalMs]);
 }
 
@@ -40,7 +39,6 @@ export function useAsyncData<T>(
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   useEffect(() => {
