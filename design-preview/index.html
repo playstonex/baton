@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Mobile — Redesign Preview</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #12151c;
+    --text: #e8eaf0;
+    --muted: #8a91a3;
+    --accent: #5b8cff;
+    --hairline: rgba(255, 255, 255, 0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 50% -10%, rgba(91, 140, 255, 0.10), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: "SF Pro Text", -apple-system, "PingFang SC", "Segoe UI", sans-serif;
+    padding: 48px 24px 80px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  header h1 {
+    font-family: "SF Pro Display", -apple-system, sans-serif;
+    font-size: 34px; letter-spacing: -0.8px; font-weight: 700;
+  }
+  header h1 .thin { color: var(--muted); font-weight: 500; }
+  header p { color: var(--muted); margin-top: 10px; font-size: 14px; line-height: 1.7; max-width: 720px; }
+  .chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 4px 12px;
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  h2 {
+    margin: 56px 0 20px; font-size: 13px; font-weight: 600;
+    letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2::before { content: ""; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); }
+  .row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 28px;
+  }
+  figure { margin: 0; }
+  .phone {
+    border-radius: 40px;
+    padding: 10px;
+    background: linear-gradient(160deg, #1d2230, #0e1117);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 2px 0 rgba(255,255,255,0.04) inset;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .phone:hover { transform: translateY(-4px); box-shadow: 0 32px 70px rgba(0,0,0,0.55); }
+  .phone img {
+    display: block; width: 100%; border-radius: 32px;
+  }
+  figcaption { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
+  figcaption b { color: var(--text); font-weight: 600; }
+  .tag {
+    font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border-radius: 6px;
+    border: 1px solid var(--hairline);
+  }
+  .tag.dark { color: #9fb6ff; }
+  .tag.light { color: #ffd479; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 12px; line-height: 1.8; border-top: 1px solid var(--hairline); padding-top: 20px; }
+  code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11px; color: #9fb6ff; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Baton Mobile <span class="thin">· 重设计预览</span></h1>
+      <p>
+        在保留现有功能的前提下对设计系统做了整体升级：Space Grotesk 显示层标题、JetBrains Mono
+        机器数据（URL / 路径 / 资源数值）、玻璃卡片 1px 内边框、按压 scale 反馈、重设计的统计卡与空状态、
+        分节 overline 标题、冷调阴影。正文保持 SF Pro 原生质感。
+      </p>
+      <div class="chips">
+        <span class="chip">Display <b>Space Grotesk</b></span>
+        <span class="chip">Mono <b>JetBrains Mono</b></span>
+        <span class="chip">Body <b>SF Pro</b></span>
+        <span class="chip">Glass <b>1px inner border</b></span>
+        <span class="chip">Press <b>scale 0.97</b></span>
+      </div>
+    </header>
+
+    <h2>Light 模式</h2>
+    <div class="row">
+      <figure>
+        <div class="phone"><img src="dashboard-light.png" alt="Dashboard Light" /></div>
+        <figcaption><b>Dashboard</b><span class="tag light">AGENTS</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="pipelines-light.png" alt="Pipelines Light" /></div>
+        <figcaption><b>Pipelines</b><span class="tag light">PIPELINES</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="connect-light.png" alt="Connect Light" /></div>
+        <figcaption><b>Connect</b><span class="tag light">入口页</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="settings-light.png" alt="Settings Light" /></div>
+        <figcaption><b>Settings</b><span class="tag light">多服务器管理</span></figcaption>
+      </figure>
+    </div>
+
+    <h2>Dark 模式</h2>
+    <div class="row">
+      <figure>
+        <div class="phone"><img src="dashboard-dark.png" alt="Dashboard Dark" /></div>
+        <figcaption><b>Dashboard</b><span class="tag dark">AGENTS</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="connect-dark.png" alt="Connect Dark" /></div>
+        <figcaption><b>Connect</b><span class="tag dark">入口页</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="settings-dark.png" alt="Settings Dark" /></div>
+        <figcaption><b>Settings</b><span class="tag dark">多服务器管理</span></figcaption>
+      </figure>
+    </div>
+
+    <h2>Chat 屏（Sep 28 追加）</h2>
+    <div class="row">
+      <figure>
+        <div class="phone"><img src="chat-empty-light.png" alt="Chat Empty Light" /></div>
+        <figcaption><b>Chat · 空状态</b><span class="tag light">Live daemon</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="chat-messages-light.png" alt="Chat Messages Light" /></div>
+        <figcaption><b>Chat · 消息流</b><span class="tag light">Live daemon</span></figcaption>
+      </figure>
+    </div>
+
+    <footer>
+      截图来源：iPhone 18 Pro Max 模拟器（iOS 27.x），实时运行的 App（daemon 已连接）。<br />
+      改动文件：<code>theme.ts</code> · <code>GlassKit.tsx</code> · <code>_layout.tsx</code> ·
+      <code>(tabs)/index.tsx</code> · <code>(tabs)/settings.tsx</code> · <code>connect.tsx</code> ·
+      <code>ResourceMonitor.tsx</code> · <code>chat/[sessionId].tsx</code>（本次：glass 头部/输入栏/队列条/弹层全量接入设计系统）·
+      <code>agent/[sessionId].tsx</code>（emoji → Ionicons）
+    </footer>
+  </div>
+</body>
+</html>
