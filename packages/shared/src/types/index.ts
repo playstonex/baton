@@ -9,6 +9,7 @@ export type AgentType =
   | 'opencode'
   | 'kiro-cli'
   | 'kiro-cli-acp'
+  | 'acp'
   | 'custom';
 
 export type AgentStatus =

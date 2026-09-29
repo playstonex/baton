@@ -11,6 +11,8 @@ const AGENT_OPTIONS: {
   type: AgentType;
   label: string;
   desc: string;
+  /** For type 'acp': which ~/.baton/acp.json entry to spawn. */
+  acpProvider?: string;
 }[] = [
   {
     type: 'claude-code',
@@ -40,9 +42,44 @@ export function DashboardScreen() {
   const { addAgent, removeAgent, setAgents, updateAgentStatus } = useAgentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
+  /** Which ~/.baton/acp.json provider when agentType === 'acp'. */
+  const [acpProvider, setAcpProvider] = useState<string>('');
+  const [acpProviders, setAcpProviders] = useState<
+    { name: string; label: string; available: boolean }[]
+  >([]);
   const [mode, setMode] = useState<'chat' | 'terminal'>('chat');
   const [loading, setLoading] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
+
+  // Generic ACP providers become selectable agent options when configured.
+  useEffect(() => {
+    fetch('/api/acp/providers')
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((list: { name: string; label: string; available: boolean }[]) =>
+        setAcpProviders(list.filter((p) => p.available)),
+      )
+      .catch(() => {
+        // offline or no acp.json — static options only
+      });
+  }, []);
+
+  const agentOptions = [
+    ...AGENT_OPTIONS,
+    ...acpProviders.map((p) => ({
+      type: 'acp' as AgentType,
+      label: p.label,
+      desc: 'Generic ACP provider',
+      acpProvider: p.name,
+    })),
+  ];
+
+  const selectedAgent =
+    agentOptions.find(
+      (o) => o.type === agentType && (!o.acpProvider || o.acpProvider === acpProvider),
+    ) ??
+    (agentType === 'acp' && agentOptions.some((o) => o.type === 'acp')
+      ? agentOptions.find((o) => o.type === 'acp')!
+      : AGENT_OPTIONS[0]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -100,6 +137,9 @@ export function DashboardScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agentType,
+          ...(agentType === 'acp' && selectedAgent.acpProvider
+            ? { acpProvider: selectedAgent.acpProvider }
+            : {}),
           projectPath: projectPath.trim(),
           mode: mode === 'chat' ? 'sdk' : 'pty',
         }),
@@ -137,9 +177,6 @@ export function DashboardScreen() {
     }
   }
 
-  const selectedAgent =
-    AGENT_OPTIONS.find((option) => option.type === agentType) ?? AGENT_OPTIONS[0];
-
   return (
     <div className="max-w-5xl space-y-8">
       <PageHeader title="Baton" description="Agent orchestration dashboard" />
@@ -153,13 +190,17 @@ export function DashboardScreen() {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-geist-gray-800">Agent</label>
             <div className="grid grid-cols-2 gap-2">
-              {AGENT_OPTIONS.map((opt) => (
+              {agentOptions.map((opt) => (
                 <button
-                  key={opt.type}
+                  key={opt.acpProvider ? `acp:${opt.acpProvider}` : opt.type}
                   type="button"
-                  onClick={() => setAgentType(opt.type)}
+                  onClick={() => {
+                    setAgentType(opt.type);
+                    if (opt.acpProvider) setAcpProvider(opt.acpProvider);
+                  }}
                   className={`rounded-[var(--radius-sm)] border px-4 py-3 text-left text-sm font-medium transition-colors ${
-                    agentType === opt.type
+                    opt.type === agentType &&
+                    (!opt.acpProvider || opt.acpProvider === selectedAgent.acpProvider)
                       ? 'border-geist-gray-1000 bg-geist-gray-alpha-100 text-geist-gray-1000'
                       : 'border-geist-gray-alpha-400 text-geist-gray-800 hover:border-geist-gray-alpha-600'
                   }`}

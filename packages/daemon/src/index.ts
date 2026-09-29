@@ -9,6 +9,13 @@ import QRCode from 'qrcode';
 import { generateKeyPair, keyToFingerprint } from '@baton/shared/crypto';
 import { AgentManager } from './agent/manager.js';
 import { createAdapter, createSdkAdapter, ProviderRegistry } from './agent/index.js';
+import {
+  loadAcpProviders,
+  refreshAcpAdapters,
+  getAcpSdkAdapter,
+  getAcpPtyAdapter,
+  acpProviderAvailable,
+} from './agent/acp.js';
 import { Transport } from './transport/index.js';
 import { RelayConnection } from './transport/relay.js';
 import { FileWatcher } from './watcher/index.js';
@@ -91,6 +98,14 @@ export function createDaemon(port = DEFAULT_PORT) {
   const batonHome = process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
   const agentManager = new AgentManager();
   void agentManager.restore();
+  // Generic ACP providers (~/.baton/acp.json) — fire-and-forget; the start
+  // route re-loads on demand if an instance isn't warm yet.
+  void loadAcpProviders().then((profiles) => {
+    refreshAcpAdapters(profiles);
+    if (profiles.size > 0) {
+      console.log(`[baton] acp: ${profiles.size} generic provider(s) loaded`);
+    }
+  });
   const orchestrator = new Orchestrator(agentManager);
   const scheduler = new ScheduleService(agentManager);
   void scheduler.restore();
@@ -249,13 +264,39 @@ export function createDaemon(port = DEFAULT_PORT) {
       env: body.env,
     };
 
+    // Generic ACP: resolve the per-provider adapter from $BATON_HOME/acp.json.
+    // Instances warm lazily — reload the file when a name misses the cache.
+    if (body.agentType === 'acp') {
+      if (!body.acpProvider) {
+        return c.json({ error: 'acpProvider is required for agentType "acp"' }, 400);
+      }
+      if (!getAcpSdkAdapter(body.acpProvider)) {
+        refreshAcpAdapters(await loadAcpProviders());
+      }
+      if (!getAcpSdkAdapter(body.acpProvider)) {
+        return c.json(
+          { error: `Unknown ACP provider '${body.acpProvider}' — check ~/.baton/acp.json` },
+          400,
+        );
+      }
+    }
+
     // SDK mode: try the SDK adapter first; fall back to PTY if unavailable.
-    const sdkAdapter = createSdkAdapter(body.agentType);
+    const sdkAdapter =
+      body.agentType === 'acp'
+        ? getAcpSdkAdapter(body.acpProvider!)
+        : createSdkAdapter(body.agentType);
     const wantSdk =
       (body.mode ?? 'pty') === 'sdk' || (body.mode === 'auto' && !!sdkAdapter?.isSdkAvailable());
     let sessionId: string;
     if (wantSdk && sdkAdapter) {
       sessionId = await agentManager.startSdk(agentConfig, sdkAdapter);
+    } else if (body.agentType === 'acp') {
+      const adapter = getAcpPtyAdapter(body.acpProvider!);
+      if (!adapter) {
+        return c.json({ error: 'ACP terminal adapter unavailable' }, 400);
+      }
+      sessionId = await agentManager.start(agentConfig, adapter);
     } else {
       const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
       sessionId = await agentManager.start(agentConfig, adapter);
@@ -836,6 +877,22 @@ export function createDaemon(port = DEFAULT_PORT) {
     const removed = await providerRegistry.remove(c.req.param('name'));
     if (!removed) return c.json({ error: 'Provider not found' }, 404);
     return c.json({ ok: true });
+  });
+
+  // Generic ACP providers ($BATON_HOME/acp.json). Reloads on every call so
+  // config edits appear without a daemon restart, and refreshes adapter
+  // instances so the next start request finds them warm.
+  app.get('/api/acp/providers', async (c) => {
+    const profiles = await loadAcpProviders();
+    refreshAcpAdapters(profiles);
+    return c.json(
+      [...profiles.entries()].map(([name, p]) => ({
+        name,
+        label: p.label ?? name,
+        command: p.command,
+        available: acpProviderAvailable(p),
+      })),
+    );
   });
 
   // API Providers — managed here, synced into Codex's config.toml on every write

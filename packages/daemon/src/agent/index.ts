@@ -77,6 +77,7 @@ export function isSdkMode(type: AgentType): boolean {
     type === 'codex' ||
     type === 'opencode' ||
     type === 'kiro-cli-acp' ||
-    type === 'kiro-cli'
+    type === 'kiro-cli' ||
+    type === 'acp'
   );
 }

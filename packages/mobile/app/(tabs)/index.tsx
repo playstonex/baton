@@ -34,6 +34,8 @@ const AGENT_OPTIONS: {
   desc: string;
   icon: string;
   color: string;
+  /** For type 'acp': which ~/.baton/acp.json entry to spawn. */
+  acpProvider?: string;
 }[] = [
   {
     type: 'claude-code',
@@ -117,6 +119,8 @@ export default function DashboardScreen() {
   const { sessions, addSession, removeSession } = useRecentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
+  /** Which ~/.baton/acp.json provider when agentType === 'acp'. */
+  const [acpProvider, setAcpProvider] = useState<string>('');
   const [chatMode, setChatMode] = useState<'chat' | 'terminal'>('chat');
   const [loading, setLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -124,6 +128,10 @@ export default function DashboardScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [showSearch, setShowSearch] = useState(false);
+  /** Generic ACP providers from the daemon's ~/.baton/acp.json. */
+  const [acpProviders, setAcpProviders] = useState<
+    { name: string; label: string; available: boolean }[]
+  >([]);
   const c = useThemeColors();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -145,6 +153,15 @@ export default function DashboardScreen() {
       // offline
     }
   }, [setAgents, addSession]);
+
+  // Generic ACP providers become selectable agent options when configured.
+  useEffect(() => {
+    apiFetch<Array<{ name: string; label: string; available: boolean }>>('/api/acp/providers')
+      .then((list) => setAcpProviders(list.filter((p) => p.available)))
+      .catch(() => {
+        // daemon offline or no acp.json — static options only
+      });
+  }, []);
 
   useEffect(() => {
     fetchAgents();
@@ -194,7 +211,29 @@ export default function DashboardScreen() {
     [recentSessionList, pinnedIds, searchQuery],
   );
 
-  const selectedAgent = AGENT_OPTIONS.find((o) => o.type === agentType) ?? AGENT_OPTIONS[0];
+  // Static options + one entry per configured generic ACP provider.
+  const agentOptions = useMemo(
+    () => [
+      ...AGENT_OPTIONS,
+      ...acpProviders.map((p) => ({
+        type: 'acp' as AgentType,
+        label: p.label,
+        desc: 'Generic ACP provider',
+        icon: 'hardware-chip-outline',
+        color: '#8B5CF6',
+        acpProvider: p.name,
+      })),
+    ],
+    [acpProviders],
+  );
+
+  const selectedAgent =
+    agentOptions.find(
+      (o) => o.type === agentType && (!o.acpProvider || o.acpProvider === acpProvider),
+    ) ??
+    (agentType === 'acp' && agentOptions.some((o) => o.type === 'acp')
+      ? agentOptions.find((o) => o.type === 'acp')!
+      : AGENT_OPTIONS[0]);
 
   // Connection-first flow: with no saved servers, the connect screen is home.
   // Declared here (inside the mounted tab) so the navigator is ready.
@@ -233,6 +272,9 @@ export default function DashboardScreen() {
         method: 'POST',
         body: JSON.stringify({
           agentType,
+          ...(agentType === 'acp' && selectedAgent.acpProvider
+            ? { acpProvider: selectedAgent.acpProvider }
+            : {}),
           projectPath: projectPath.trim(),
           mode: chatMode === 'chat' ? 'sdk' : 'pty',
         }),
@@ -677,13 +719,16 @@ export default function DashboardScreen() {
                     >
                       Select Agent
                     </Text>
-                    {AGENT_OPTIONS.map((option) => {
-                      const active = option.type === agentType;
+                    {agentOptions.map((option) => {
+                      const active =
+                        option.type === agentType &&
+                        (!option.acpProvider || option.acpProvider === selectedAgent.acpProvider);
                       return (
                         <Pressable
-                          key={option.type}
+                          key={option.acpProvider ? `acp:${option.acpProvider}` : option.type}
                           onPress={() => {
                             setAgentType(option.type);
+                            if (option.acpProvider) setAcpProvider(option.acpProvider);
                             setMenuOpen(false);
                           }}
                           style={({ pressed }) => [

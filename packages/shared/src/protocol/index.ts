@@ -380,6 +380,25 @@ export interface StartAgentRequest {
   args?: string[];
   env?: Record<string, string>;
   mode?: AdapterMode;
+  /**
+   * For agentType 'acp': which entry from $BATON_HOME/acp.json to spawn
+   * (e.g. 'gemini'). Required for ACP sessions; ignored by other types.
+   */
+  acpProvider?: string;
+}
+
+/** One entry of $BATON_HOME/acp.json — an arbitrary ACP-speaking command. */
+export interface AcpProviderProfile {
+  /** Executable to spawn, e.g. 'gemini'. */
+  command: string;
+  /** Fixed args appended before request args, e.g. ['--experimental-acp']. */
+  args?: string[];
+  /** Human label for UI lists. */
+  label?: string;
+}
+
+export interface AcpProvidersFile {
+  providers: Record<string, AcpProviderProfile>;
 }
 
 export interface StartAgentResponse {
