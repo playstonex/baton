@@ -20,16 +20,24 @@ import { KiroAcpAdapter, kiroAcpSdkAdapter } from './kiro-acp.js';
 import { OpenCodeAdapter } from './opencode.js';
 import { opencodeSdkAdapter } from './opencode-sdk.js';
 import type { BaseAgentAdapter } from './adapter.js';
-import { adapterRegistry } from './adapter-registry.js';
+import { adapterRegistry, type AdapterConstructor } from './adapter-registry.js';
 
 // Built-in PTY providers live in the open registry so third-party plugins
 // (plugins/loader.ts) register beside them instead of patching this file.
-adapterRegistry.register('claude-code', ClaudeCodeAdapter);
-adapterRegistry.register('claude-code-sdk', ClaudeSdkAdapter);
-adapterRegistry.register('codex', CodexAdapter);
-adapterRegistry.register('kiro-cli', KiroCliAdapter);
-adapterRegistry.register('kiro-cli-acp', KiroAcpAdapter);
-adapterRegistry.register('opencode', OpenCodeAdapter);
+// Idempotent: if this module is ever evaluated twice in one process (bundler
+// duplication, dual test runners), skip instead of throwing at import time —
+// a duplicate identical registration is a no-op, not a conflict.
+const builtinAdapters: Array<[string, AdapterConstructor]> = [
+  ['claude-code', ClaudeCodeAdapter],
+  ['claude-code-sdk', ClaudeSdkAdapter],
+  ['codex', CodexAdapter],
+  ['kiro-cli', KiroCliAdapter],
+  ['kiro-cli-acp', KiroAcpAdapter],
+  ['opencode', OpenCodeAdapter],
+];
+for (const [type, ctor] of builtinAdapters) {
+  if (!adapterRegistry.has(type)) adapterRegistry.register(type, ctor);
+}
 
 const sdkAdapters: Partial<Record<AgentType, SdkAgentAdapter>> = {
   'claude-code-sdk': claudeSdkAdapter,

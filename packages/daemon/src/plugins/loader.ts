@@ -8,16 +8,15 @@
 // from this local directory the user explicitly manages — never downloaded
 // or installed automatically ("never install without being asked").
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   adapterRegistry,
   AdapterRegistry,
   type AdapterConstructor,
 } from '../agent/adapter-registry.js';
-import type { BaseAgentAdapter } from '../agent/adapter.js';
 
 export interface ProviderPluginManifest {
   name: string;
@@ -45,7 +44,7 @@ function pluginDir(): string {
   return join(home, 'plugins');
 }
 
-function isManifest(value: unknown, name: string): value is ProviderPluginManifest {
+function isManifest(value: unknown): value is ProviderPluginManifest {
   if (typeof value !== 'object' || value === null) return false;
   const m = value as Partial<ProviderPluginManifest>;
   return (
@@ -54,8 +53,7 @@ function isManifest(value: unknown, name: string): value is ProviderPluginManife
     typeof m.entry === 'string' &&
     m.kind === 'provider' &&
     // Reject weird type strings before they reach the registry.
-    /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(m.type) &&
-    name.length > 0
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(m.type)
   );
 }
 
@@ -82,12 +80,18 @@ export async function loadProviderPlugins(
   }
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    // A plugin dir may itself be a symlink (e.g. a shared dotfiles setup) —
+    // stat() follows links so those load like regular dirs; a symlink to a
+    // non-directory falls through and is ignored.
+    const pluginRoot = join(dir, entry.name);
+    if (!(entry.isDirectory() || entry.isSymbolicLink())) continue;
+    const st = await stat(pluginRoot).catch(() => null);
+    if (!st?.isDirectory()) continue;
     const name = entry.name;
     try {
-      const raw = await readFile(join(dir, name, 'plugin.json'), 'utf-8');
+      const raw = await readFile(join(pluginRoot, 'plugin.json'), 'utf-8');
       const manifest: unknown = JSON.parse(raw);
-      if (!isManifest(manifest, name)) {
+      if (!isManifest(manifest)) {
         result.failed.push({ name, reason: 'invalid plugin.json manifest' });
         continue;
       }
@@ -99,7 +103,14 @@ export async function loadProviderPlugins(
         continue;
       }
 
-      const entryUrl = pathToFileURL(resolve(dir, name, manifest.entry)).href;
+      // The entry must stay INSIDE the plugin dir — a manifest pointing at
+      // ../../outside.js violates the contract and is rejected outright.
+      const entryPath = resolve(pluginRoot, manifest.entry);
+      if (!entryPath.startsWith(pluginRoot + sep)) {
+        result.failed.push({ name, reason: 'entry escapes the plugin directory' });
+        continue;
+      }
+      const entryUrl = pathToFileURL(entryPath).href;
       const mod = (await import(entryUrl)) as {
         default?: AdapterConstructor | { adapter: AdapterConstructor };
       };
@@ -122,12 +133,3 @@ export async function loadProviderPlugins(
 
   return result;
 }
-
-/** Plugins visible to doctor / agent list (loaded set only). */
-export function describePlugins(result: PluginLoadResult): string[] {
-  return result.loaded.map(
-    (p) => `${p.name} (${p.type}${p.version ? ` v${p.version}` : ''})`,
-  );
-}
-
-export type { BaseAgentAdapter };

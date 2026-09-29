@@ -36,7 +36,6 @@ export function WorktreeTabStrip({
 }) {
   const agents = useAgentStore((s) => s.agents);
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const fetchList = useCallback(async () => {
     try {
@@ -44,8 +43,6 @@ export function WorktreeTabStrip({
       setWorktrees(list);
     } catch {
       // offline — keep last known list
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -57,7 +54,6 @@ export function WorktreeTabStrip({
 
   // Only strips for this project's worktrees (incl. the main checkout).
   const mine = worktrees.filter((w) => w.basePath === projectPath);
-  if (loading && mine.length === 0) return null;
   if (mine.length === 0) return null;
 
   const agentsIn = (path: string) =>

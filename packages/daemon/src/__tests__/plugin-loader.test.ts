@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'bun:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadProviderPlugins } from '../plugins/loader.js';
@@ -99,5 +99,36 @@ describe('loadProviderPlugins', () => {
     const res = await loadProviderPlugins(root, registry);
     expect(res.loaded).toHaveLength(0);
     expect(res.failed[0].reason).toContain('no default adapter export');
+  });
+
+  it('rejects an entry that escapes the plugin directory', async () => {
+    // The manifest points outside its own dir — must be refused even though
+    // a real module exists at that path.
+    await makePlugin(
+      root,
+      'escape',
+      { name: 'escape', kind: 'provider', type: 'escape-1', entry: '../outside/index.js' },
+      ENTRY_JS,
+    );
+    const res = await loadProviderPlugins(root, registry);
+    expect(res.loaded).toHaveLength(0);
+    expect(res.failed[0].reason).toContain('escapes the plugin directory');
+    expect(registry.has('escape-1')).toBe(false);
+  });
+
+  it('loads a symlinked plugin directory', async () => {
+    await makePlugin(
+      root,
+      'real-plugin',
+      { name: 'linked', kind: 'provider', type: 'linked-1', entry: 'index.js' },
+      ENTRY_JS,
+    );
+    await symlink(join(root, 'real-plugin'), join(root, 'linked-plugin'));
+    const res = await loadProviderPlugins(root, registry);
+    // Both the real dir and its symlink register the SAME type — second one
+    // reports a collision, which proves the symlink was followed.
+    const loaded = res.loaded.filter((p) => p.type === 'linked-1');
+    expect(loaded).toHaveLength(1);
+    expect(res.failed.some((f) => f.reason.includes('already registered'))).toBe(true);
   });
 });
