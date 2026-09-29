@@ -545,26 +545,33 @@ export function consumeAcpLines(
   }
 }
 
-// Per-provider adapter instances, rebuilt whenever acp.json is reloaded.
-const acpSdkAdapters = new Map<string, GenericAcpSdkAdapter>();
-const acpPtyAdapters = new Map<string, GenericAcpAdapter>();
+// Configured provider profiles, refreshed whenever acp.json is (re)loaded.
+// Adapters themselves are created FRESH per session: both variants carry
+// per-session state (process, sessionId, lineBuffer, onEvent), so a shared
+// instance would make two concurrent sessions clobber each other.
+const acpProfiles = new Map<string, AcpProviderProfile>();
 
-/** Build (or rebuild) adapter instances for every configured provider. */
+/** Replace the profile set (called after every acp.json load). */
 export function refreshAcpAdapters(profiles: Map<string, AcpProviderProfile>): void {
-  acpSdkAdapters.clear();
-  acpPtyAdapters.clear();
+  acpProfiles.clear();
   for (const [name, profile] of profiles) {
-    acpSdkAdapters.set(name, new GenericAcpSdkAdapter(name, profile));
-    acpPtyAdapters.set(name, new GenericAcpAdapter(name, profile));
+    acpProfiles.set(name, profile);
   }
 }
 
-/** Resolve the chat-mode adapter for a provider, or null if unconfigured. */
-export function getAcpSdkAdapter(providerName: string): GenericAcpSdkAdapter | null {
-  return acpSdkAdapters.get(providerName) ?? null;
+/** Is a provider configured? (existence check without constructing an adapter) */
+export function hasAcpProvider(providerName: string): boolean {
+  return acpProfiles.has(providerName);
 }
 
-/** Resolve the terminal-mode adapter for a provider, or null if unconfigured. */
+/** Fresh chat-mode adapter for one session. Null when unconfigured. */
+export function getAcpSdkAdapter(providerName: string): GenericAcpSdkAdapter | null {
+  const profile = acpProfiles.get(providerName);
+  return profile ? new GenericAcpSdkAdapter(providerName, profile) : null;
+}
+
+/** Fresh terminal-mode adapter for one session. Null when unconfigured. */
 export function getAcpPtyAdapter(providerName: string): GenericAcpAdapter | null {
-  return acpPtyAdapters.get(providerName) ?? null;
+  const profile = acpProfiles.get(providerName);
+  return profile ? new GenericAcpAdapter(providerName, profile) : null;
 }

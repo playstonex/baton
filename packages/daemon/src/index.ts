@@ -12,6 +12,7 @@ import { createAdapter, createSdkAdapter, ProviderRegistry } from './agent/index
 import {
   loadAcpProviders,
   refreshAcpAdapters,
+  hasAcpProvider,
   getAcpSdkAdapter,
   getAcpPtyAdapter,
   acpProviderAvailable,
@@ -265,15 +266,15 @@ export function createDaemon(port = DEFAULT_PORT) {
     };
 
     // Generic ACP: resolve the per-provider adapter from $BATON_HOME/acp.json.
-    // Instances warm lazily — reload the file when a name misses the cache.
+    // Profiles warm lazily — reload the file when a name misses the cache.
     if (body.agentType === 'acp') {
       if (!body.acpProvider) {
         return c.json({ error: 'acpProvider is required for agentType "acp"' }, 400);
       }
-      if (!getAcpSdkAdapter(body.acpProvider)) {
+      if (!hasAcpProvider(body.acpProvider)) {
         refreshAcpAdapters(await loadAcpProviders());
       }
-      if (!getAcpSdkAdapter(body.acpProvider)) {
+      if (!hasAcpProvider(body.acpProvider)) {
         return c.json(
           { error: `Unknown ACP provider '${body.acpProvider}' — check ~/.baton/acp.json` },
           400,
@@ -1156,6 +1157,7 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.post('/api/workspace/revert-preview', async (c) => {
     const body = await c.req.json<{ cwd: string; checkpointId: string }>();
+    if (!body?.cwd) return c.json({ error: 'cwd required' }, 400);
     if (!isPathAllowed(resolve(body.cwd))) {
       return c.json({ error: 'Path not allowed' }, 403);
     }
@@ -1172,6 +1174,7 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.post('/api/workspace/revert-apply', async (c) => {
     const body = await c.req.json<{ cwd: string; checkpointId: string }>();
+    if (!body?.cwd) return c.json({ error: 'cwd required' }, 400);
     if (!isPathAllowed(resolve(body.cwd))) {
       return c.json({ error: 'Path not allowed' }, 403);
     }

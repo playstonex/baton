@@ -13,23 +13,27 @@
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile, readdir, unlink, realpath } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 
 /**
  * Canonicalize a client-supplied project path before any git subprocess
- * touches it: resolves symlinks/`..` and verifies a real directory exists
- * there. Everything downstream (spawn cwd, checkpoint id hashing) uses the
+ * touches it: resolves symlinks/`..` and verifies the directory sits inside
+ * a git work tree (`.git` dir — or file, for worktrees — found by walking up
+ * a bounded number of parents, so nested subdirectories still qualify).
+ * Everything downstream (spawn cwd, checkpoint id hashing) uses the
  * canonical form only.
  */
 async function canonicalProjectDir(projectPath: string): Promise<string> {
   const real = await realpath(projectPath);
-  if (!existsSync(join(real, '.git')) && !existsSync(join(real, '..', '.git'))) {
-    // Checkpoints are git-diff based; a directory with no repo anywhere is
-    // never a valid checkpoint target.
-    throw new Error('not inside a git work tree');
+  let dir = real;
+  for (let i = 0; i < 16; i++) {
+    if (existsSync(join(dir, '.git'))) return real;
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
   }
-  return real;
+  throw new Error('not inside a git work tree');
 }
 
 export interface Checkpoint {

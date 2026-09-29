@@ -166,4 +166,62 @@ describe('GenericAcpSdkAdapter end-to-end (stub agent)', () => {
     expect(getAcpSdkAdapter('stub')?.name).toBe('Stub (ACP)');
     expect(getAcpSdkAdapter('missing')).toBeNull();
   });
+
+  it('returns a FRESH adapter per session — concurrent sessions stay isolated', async () => {
+    refreshAcpAdapters(
+      new Map([['stub', { command: 'node', args: [STUB], label: 'Stub' }]]),
+    );
+    // Two lookups must be independent objects: adapters carry per-session
+    // state (process/sessionId/onEvent); sharing one would clobber the first
+    // session when the second starts.
+    const a = getAcpSdkAdapter('stub')!;
+    const b = getAcpSdkAdapter('stub')!;
+    expect(a).not.toBe(b);
+
+    const eventsA: ParsedEvent[] = [];
+    const eventsB: ParsedEvent[] = [];
+    const waitUntil = (events: ParsedEvent[], content: string, ms = 6000) =>
+      new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error(`timeout waiting for "${content}"`)), ms);
+        const check = () => {
+          if (events.some((e) => e.type === 'chat_message' && e.content === content)) {
+            clearTimeout(t);
+            resolve();
+          } else setTimeout(check, 25);
+        };
+        check();
+      });
+
+    const cfg = { type: 'acp', projectPath: dirname(STUB) } as Parameters<typeof a.startSession>[0];
+    const sessA = await a.startSession(cfg, (ev) => eventsA.push(ev));
+    const sessB = await b.startSession(cfg, (ev) => eventsB.push(ev));
+    try {
+      // Wait both sessions ready (idle after session/new), then prompt each.
+      const ready = (events: ParsedEvent[]) =>
+        new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, 5000);
+          const check = () => {
+            if (events.some((e) => e.type === 'status_change' && e.status === 'idle')) {
+              clearTimeout(t);
+              resolve();
+            } else setTimeout(check, 25);
+          };
+          check();
+        });
+      await ready(eventsA);
+      await ready(eventsB);
+
+      sessA.write('from session A');
+      sessB.write('from session B');
+
+      await waitUntil(eventsA, 'echo: from session A');
+      await waitUntil(eventsB, 'echo: from session B');
+      // Cross-contamination check: A must not carry B's echo.
+      expect(eventsA.some((e) => e.type === 'chat_message' && e.content === 'echo: from session B')).toBe(false);
+      expect(eventsB.some((e) => e.type === 'chat_message' && e.content === 'echo: from session A')).toBe(false);
+    } finally {
+      await sessA.stop();
+      await sessB.stop();
+    }
+  }, 15000);
 });
