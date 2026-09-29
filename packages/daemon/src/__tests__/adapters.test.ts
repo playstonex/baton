@@ -74,3 +74,24 @@ describe('OpenCodeAdapter', () => {
     expect(events.some((e) => e.type === 'raw_output')).toBe(true);
   });
 });
+
+describe('createSdkAdapter factory semantics', () => {
+  // SDK adapters carry per-session state (child process, sessionId, pending
+  // callbacks) — every lookup must hand back a FRESH instance or two
+  // concurrent same-type sessions would clobber each other.
+  it('returns a fresh instance per call for every SDK-capable type', async () => {
+    const { createSdkAdapter } = await import('../agent/index.js');
+    const types = ['claude-code', 'codex', 'opencode', 'kiro-cli', 'kiro-cli-acp'] as const;
+    for (const t of types) {
+      const a = createSdkAdapter(t);
+      const b = createSdkAdapter(t);
+      expect(a, `${t} should resolve`).not.toBeNull();
+      expect(a, `${t} must not share instances between sessions`).not.toBe(b);
+    }
+  });
+
+  it('returns null for PTY-only types', async () => {
+    const { createSdkAdapter } = await import('../agent/index.js');
+    expect(createSdkAdapter('acp')).toBeNull(); // acp resolves via its own per-provider factory
+  });
+});

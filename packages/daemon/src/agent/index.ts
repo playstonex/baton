@@ -14,11 +14,11 @@ import type { AgentType, AdapterMode, SdkAgentAdapter } from '@baton/shared';
 import { ClaudeCodeAdapter } from './claude-code.js';
 import { ClaudeSdkAdapter, claudeSdkAdapter } from './claude-sdk.js';
 import { CodexAdapter } from './codex.js';
-import { codexSdkAdapter } from './codex-sdk.js';
+import { CodexSdkAdapter, codexSdkAdapter } from './codex-sdk.js';
 import { KiroCliAdapter } from './kiro-cli.js';
-import { KiroAcpAdapter, kiroAcpSdkAdapter } from './kiro-acp.js';
+import { KiroAcpAdapter, KiroAcpSdkAdapter, kiroAcpSdkAdapter } from './kiro-acp.js';
 import { OpenCodeAdapter } from './opencode.js';
-import { opencodeSdkAdapter } from './opencode-sdk.js';
+import { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
 import type { BaseAgentAdapter } from './adapter.js';
 import { adapterRegistry, type AdapterConstructor } from './adapter-registry.js';
 
@@ -39,26 +39,33 @@ for (const [type, ctor] of builtinAdapters) {
   if (!adapterRegistry.has(type)) adapterRegistry.register(type, ctor);
 }
 
-const sdkAdapters: Partial<Record<AgentType, SdkAgentAdapter>> = {
-  'claude-code-sdk': claudeSdkAdapter,
-  'claude-code': claudeSdkAdapter,
-  'codex-sdk': codexSdkAdapter,
-  codex: codexSdkAdapter,
-  opencode: opencodeSdkAdapter,
-  'kiro-cli': kiroAcpSdkAdapter,
-  'kiro-cli-acp': kiroAcpSdkAdapter,
+// SDK (chat) adapters are constructed FRESH per session: every adapter
+// carries per-session state (child process, sessionId, pending callbacks),
+// so a shared singleton would make two concurrent same-type sessions clobber
+// each other. The exported singletons below remain only as cheap
+// availability probes for mode:'auto'.
+const sdkAdapterFactories: Partial<Record<AgentType, () => SdkAgentAdapter>> = {
+  'claude-code-sdk': () => new ClaudeSdkAdapter(),
+  'claude-code': () => new ClaudeSdkAdapter(),
+  'codex-sdk': () => new CodexSdkAdapter(),
+  codex: () => new CodexSdkAdapter(),
+  opencode: () => new OpenCodeSdkAdapter(),
+  'kiro-cli': () => new KiroAcpSdkAdapter(),
+  'kiro-cli-acp': () => new KiroAcpSdkAdapter(),
 };
 
 export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseAgentAdapter {
   if (mode === 'sdk') {
-    const sdk = sdkAdapters[type];
+    const sdk = createSdkAdapter(type);
     if (sdk) return sdk as unknown as BaseAgentAdapter;
   }
   if (mode === 'auto') {
-    if (type === 'claude-code' && claudeSdkAdapter.isSdkAvailable()) return claudeSdkAdapter as unknown as BaseAgentAdapter;
-    if (type === 'codex' && codexSdkAdapter.isSdkAvailable()) return codexSdkAdapter as unknown as BaseAgentAdapter;
-    if (type === 'opencode' && opencodeSdkAdapter.isSdkAvailable()) return opencodeSdkAdapter as unknown as BaseAgentAdapter;
-    if ((type === 'kiro-cli' || type === 'kiro-cli-acp') && kiroAcpSdkAdapter.isSdkAvailable()) return kiroAcpSdkAdapter as unknown as BaseAgentAdapter;
+    // Availability probes use the cheap long-lived singletons; the actual
+    // adapter handed back is a fresh per-session instance.
+    if (type === 'claude-code' && claudeSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if (type === 'codex' && codexSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if (type === 'opencode' && opencodeSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if ((type === 'kiro-cli' || type === 'kiro-cli-acp') && kiroAcpSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
   }
   // Registry first (covers built-ins + third-party plugins); fall back to the
   // default provider so a bad type never crashes a spawn request.
@@ -66,7 +73,8 @@ export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseA
 }
 
 export function createSdkAdapter(type: AgentType): SdkAgentAdapter | null {
-  return sdkAdapters[type] ?? null;
+  const factory = sdkAdapterFactories[type];
+  return factory ? factory() : null;
 }
 
 export function isSdkMode(type: AgentType): boolean {

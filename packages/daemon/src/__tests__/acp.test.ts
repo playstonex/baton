@@ -159,6 +159,38 @@ describe('GenericAcpSdkAdapter end-to-end (stub agent)', () => {
     }
   }, 10000);
 
+  it('reaches a terminal status when the command cannot spawn', async () => {
+    // Command passes SAFE_COMMAND_RE but doesn't exist: /usr/bin/env fails
+    // with exit 127 (or the spawn errors). Either way the session MUST end
+    // in a terminal state — never hang in "thinking" forever.
+    const adapter = new GenericAcpSdkAdapter('ghost', {
+      command: 'definitely-not-a-real-cmd-xyz',
+      args: [],
+      label: 'Ghost',
+    });
+    const events: ParsedEvent[] = [];
+    const session = await adapter.startSession(
+      { type: 'acp', projectPath: dirname(STUB) } as Parameters<typeof adapter.startSession>[0],
+      (ev) => events.push(ev),
+    );
+    try {
+      session.write('anyone there?');
+      const terminal = await new Promise<boolean>((resolve) => {
+        const t = setTimeout(() => resolve(false), 5000);
+        const check = () => {
+          if (events.some((e) => e.type === 'status_change' && (e.status === 'stopped' || e.status === 'error'))) {
+            clearTimeout(t);
+            resolve(true);
+          } else setTimeout(check, 25);
+        };
+        check();
+      });
+      expect(terminal).toBe(true);
+    } finally {
+      await session.stop();
+    }
+  }, 8000);
+
   it('refreshAcpAdapters warms the per-provider lookup', () => {
     refreshAcpAdapters(
       new Map([['stub', { command: 'node', args: [STUB], label: 'Stub' }]]),

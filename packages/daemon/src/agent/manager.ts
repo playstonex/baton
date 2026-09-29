@@ -422,7 +422,10 @@ export class AgentManager {
 
     this.agents.set(id, managed);
 
-    const { write, stop } = await sdkAdapter.startSession(config, (event: ParsedEvent) => {
+    let write: (input: string) => void;
+    let stop: () => Promise<void>;
+    try {
+      ({ write, stop } = await sdkAdapter.startSession(config, (event: ParsedEvent) => {
       managed.eventHistory.push(event);
       if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
         managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
@@ -454,7 +457,14 @@ export class AgentManager {
       }
 
       for (const cb of managed.eventCallbacks) cb(event, id);
-    });
+      }));
+    } catch (err) {
+      // startSession threw (e.g. spawn failed / backend server never came
+      // up): drop the just-registered agent so no zombie sits in the list in
+      // 'initializing' forever, and surface a clear error.
+      this.agents.delete(id);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
 
     managed.sdk = { write, stop };
 

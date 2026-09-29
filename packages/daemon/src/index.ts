@@ -282,24 +282,38 @@ export function createDaemon(port = DEFAULT_PORT) {
       }
     }
 
-    // SDK mode: try the SDK adapter first; fall back to PTY if unavailable.
+    // SDK mode: try the SDK adapter first; fall back to PTY when the SDK
+    // backend is unavailable on this host (e.g. missing CLI / SDK package) —
+    // an explicit mode:'sdk' degrades instead of spawning a zombie session.
     const sdkAdapter =
       body.agentType === 'acp'
         ? getAcpSdkAdapter(body.acpProvider!)
         : createSdkAdapter(body.agentType);
+    const sdkUsable = !!sdkAdapter && sdkAdapter.isSdkAvailable();
     const wantSdk =
-      (body.mode ?? 'pty') === 'sdk' || (body.mode === 'auto' && !!sdkAdapter?.isSdkAvailable());
+      (body.mode ?? 'pty') === 'sdk'
+        ? sdkUsable
+        : body.mode === 'auto' && sdkUsable;
     let sessionId: string;
     if (wantSdk && sdkAdapter) {
       sessionId = await agentManager.startSdk(agentConfig, sdkAdapter);
     } else if (body.agentType === 'acp') {
       const adapter = getAcpPtyAdapter(body.acpProvider!);
-      if (!adapter) {
-        return c.json({ error: 'ACP terminal adapter unavailable' }, 400);
+      if (!adapter || !adapter.detect(absPath)) {
+        return c.json(
+          { error: `ACP provider '${body.acpProvider}' command not found on this host` },
+          400,
+        );
       }
       sessionId = await agentManager.start(agentConfig, adapter);
     } else {
       const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
+      if (!adapter.detect(absPath)) {
+        return c.json(
+          { error: `${body.agentType} CLI not found on this host — install it or pick another agent` },
+          400,
+        );
+      }
       sessionId = await agentManager.start(agentConfig, adapter);
     }
 

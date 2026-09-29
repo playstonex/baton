@@ -308,7 +308,10 @@ export class GenericAcpSdkAdapter implements SdkAgentAdapter {
       this.onEvent?.({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
     });
     this.process.on('error', (err) => {
+      // Spawn failure (e.g. command missing): error + terminal status so the
+      // session dies visibly instead of hanging in "thinking".
       this.onEvent?.({ type: 'error', message: err.message, timestamp: Date.now() });
+      this.onEvent?.({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
     });
 
     setTimeout(() => {

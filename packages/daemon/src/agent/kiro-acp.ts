@@ -374,7 +374,11 @@ export class KiroAcpSdkAdapter implements SdkAgentAdapter {
     });
 
     this.process.on('error', (err) => {
+      // Spawn failure (e.g. ENOENT when the CLI is missing): surface the
+      // error AND a terminal status so the session doesn't linger in
+      // "thinking" forever with no way for the UI to know it died.
       this.onEvent?.({ type: 'error', message: err.message, timestamp: Date.now() });
+      this.onEvent?.({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
     });
 
     setTimeout(() => {

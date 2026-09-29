@@ -161,7 +161,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     this.process.on('error', (err) => {
       console.error(`[baton] codex-sdk: process error:`, err);
       if (this.onEvent) {
+        // Error + terminal status so a failed spawn never leaves the session
+        // hanging mid-turn.
         this.onEvent({ type: 'error', message: err.message, timestamp: Date.now() });
+        this.onEvent({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
       }
     });
 
