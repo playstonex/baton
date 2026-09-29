@@ -74,7 +74,7 @@ export const MarkdownText = React.memo(function MarkdownText({ content, colors }
           const code = token.content ?? '';
           elements.push(
             <View key={i} style={[styles.codeBlock, { backgroundColor: colors.subtle }]}>
-              <Text style={styles.codeText}>{code}</Text>
+              <Text style={[styles.codeText, { color: colors.textPrimary }]}>{code}</Text>
             </View>,
           );
           continue;
@@ -183,7 +183,6 @@ const styles = StyleSheet.create({
   codeText: {
     fontFamily: FontFamily.mono,
     fontSize: 13,
-    color: '#e8e8e8',
     lineHeight: 18,
   },
   inlineCode: {

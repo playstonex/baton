@@ -11,7 +11,7 @@ import {
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { searchProjectFiles } from '../services/api';
-import { FontFamily, Typography, Spacing, CornerRadius, Colors } from '../constants/theme';
+import { FontFamily, Typography, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
 import type { ThemeColors } from './messages';
 
 export interface SlashCommand {
@@ -153,15 +153,26 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
       style={[
         styles.container,
         {
-          backgroundColor: c.isDark ? 'rgba(28,28,30,0.85)' : 'rgba(255,255,255,0.92)',
-          borderColor: c.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
+          borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
         },
       ]}
     >
       <BlurView
-        tint={c.isDark ? 'dark' : 'light'}
-        intensity={70}
+        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+        intensity={Glass.blur.tooltip}
         style={StyleSheet.absoluteFill}
+      />
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: c.isDark
+              ? Glass.opacity.dark.surface
+              : Glass.opacity.light.surface,
+            borderRadius: CornerRadius.medium,
+          },
+        ]}
+        pointerEvents="none"
       />
 
       {/* Header bar */}
@@ -169,7 +180,7 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
         style={[
           styles.headerRow,
           {
-            borderBottomColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            borderBottomColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
           },
         ]}
       >
@@ -202,8 +213,8 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
                 {
                   backgroundColor: pressed
                     ? c.isDark
-                      ? 'rgba(255,255,255,0.1)'
-                      : 'rgba(0,0,0,0.05)'
+                      ? Glass.opacity.dark.subtle
+                      : Glass.opacity.light.subtle
                     : 'transparent',
                 },
               ]}
@@ -244,8 +255,8 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
                   {
                     backgroundColor: pressed
                       ? c.isDark
-                        ? 'rgba(255,255,255,0.1)'
-                        : 'rgba(0,0,0,0.05)'
+                        ? Glass.opacity.dark.subtle
+                        : Glass.opacity.light.subtle
                       : 'transparent',
                   },
                 ]}
@@ -255,8 +266,8 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
                     styles.iconWrap,
                     {
                       backgroundColor: c.isDark
-                        ? 'rgba(255,255,255,0.06)'
-                        : 'rgba(0,0,0,0.04)',
+                        ? Glass.opacity.dark.border
+                        : Glass.opacity.light.border,
                     },
                   ]}
                 >

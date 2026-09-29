@@ -11,7 +11,7 @@ import {
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { GlassCard, GlassButton } from './GlassKit';
-import { Typography, Spacing, Colors } from '../constants/theme';
+import { Typography, Spacing, Colors, Glass } from '../constants/theme';
 
 export interface QuestionOption {
   label: string;
@@ -62,14 +62,14 @@ export function AgentQuestionCard({
       <GlassCard c={c} style={[styles.card, styles.permissionCard, style]}>
         <View style={styles.headerRow}>
           <View style={styles.iconBadgePermission}>
-            <Ionicons name="shield-checkmark" size={16} color="#f59e0b" />
+            <Ionicons name="shield-checkmark" size={16} color={Colors.warning[400]} />
           </View>
           <View style={styles.headerTextGroup}>
             <Text style={[Typography.subhead, styles.bold, { color: c.textPrimary }]}>
               Permission Requested
             </Text>
             <View style={styles.toolPill}>
-              <Text style={[Typography.caption2, { color: '#f59e0b', fontWeight: '700' }]}>
+              <Text style={[Typography.caption2, { color: Colors.warning[400], fontWeight: '700' }]}>
                 {permission.tool || 'Action'}
               </Text>
             </View>
@@ -81,7 +81,16 @@ export function AgentQuestionCard({
         </Text>
 
         {permission.action && permission.description !== permission.action && (
-          <View style={[styles.codeBox, { backgroundColor: c.isDark ? '#1c1c1e' : '#f2f2f7' }]}>
+          <View
+            style={[
+              styles.codeBox,
+              {
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.subtle
+                  : Glass.opacity.light.subtle,
+              },
+            ]}
+          >
             <Text style={[Typography.mono, { color: c.textPrimary, fontSize: 12 }]}>
               {permission.action}
             </Text>
@@ -179,17 +188,15 @@ export function AgentQuestionCard({
                     styles.optionButton,
                     {
                       backgroundColor: isSelected
-                        ? c.isDark
-                          ? 'rgba(59, 130, 246, 0.25)'
-                          : 'rgba(59, 130, 246, 0.12)'
+                        ? Colors.primary[500] + (c.isDark ? '40' : '1F')
                         : c.isDark
-                          ? 'rgba(255, 255, 255, 0.05)'
-                          : 'rgba(0, 0, 0, 0.03)',
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
                       borderColor: isSelected
                         ? Colors.primary[500]
                         : c.isDark
-                          ? 'rgba(255, 255, 255, 0.08)'
-                          : 'rgba(0, 0, 0, 0.06)',
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
                       opacity: submitted && !isSelected ? 0.4 : pressed ? 0.8 : 1,
                     },
                   ]}
@@ -234,8 +241,12 @@ export function AgentQuestionCard({
                 styles.customInput,
                 {
                   color: c.textPrimary,
-                  backgroundColor: c.isDark ? 'rgba(58,58,60,0.4)' : c.elevated,
-                  borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                  backgroundColor: c.isDark
+                    ? Glass.opacity.dark.subtle
+                    : Glass.opacity.light.subtle,
+                  borderColor: c.isDark
+                    ? Glass.opacity.dark.border
+                    : Glass.opacity.light.border,
                 },
               ]}
               placeholder="Or type a custom reply..."
@@ -286,11 +297,11 @@ const styles = StyleSheet.create({
   },
   permissionCard: {
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: Colors.warning[400],
   },
   questionCard: {
     borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: Colors.primary[500],
   },
   headerRow: {
     flexDirection: 'row',
@@ -302,7 +313,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: Colors.warning[400] + '26',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -310,7 +321,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: Colors.primary[500] + '26',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -327,7 +338,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    backgroundColor: Colors.warning[400] + '1F',
   },
   codeBox: {
     padding: Spacing.sm,

@@ -37,7 +37,7 @@ export const TypingIndicator = React.memo(function TypingIndicator({ colors }: {
   }));
 
   return (
-    <View style={styles.track}>
+    <View style={[styles.track, { backgroundColor: colors.subtle }]}>
       <Animated.View
         style={[
           styles.shimmer,
@@ -54,7 +54,6 @@ const styles = StyleSheet.create({
     width: 26,
     height: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(142,142,147,0.12)',
     overflow: 'hidden',
   },
   shimmer: {

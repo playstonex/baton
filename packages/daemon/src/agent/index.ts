@@ -20,15 +20,24 @@ import { KiroAcpAdapter, kiroAcpSdkAdapter } from './kiro-acp.js';
 import { OpenCodeAdapter } from './opencode.js';
 import { opencodeSdkAdapter } from './opencode-sdk.js';
 import type { BaseAgentAdapter } from './adapter.js';
+import { adapterRegistry, type AdapterConstructor } from './adapter-registry.js';
 
-const adapters: Record<string, new () => BaseAgentAdapter> = {
-  'claude-code': ClaudeCodeAdapter,
-  'claude-code-sdk': ClaudeSdkAdapter,
-  codex: CodexAdapter,
-  'kiro-cli': KiroCliAdapter,
-  'kiro-cli-acp': KiroAcpAdapter,
-  opencode: OpenCodeAdapter,
-};
+// Built-in PTY providers live in the open registry so third-party plugins
+// (plugins/loader.ts) register beside them instead of patching this file.
+// Idempotent: if this module is ever evaluated twice in one process (bundler
+// duplication, dual test runners), skip instead of throwing at import time —
+// a duplicate identical registration is a no-op, not a conflict.
+const builtinAdapters: Array<[string, AdapterConstructor]> = [
+  ['claude-code', ClaudeCodeAdapter],
+  ['claude-code-sdk', ClaudeSdkAdapter],
+  ['codex', CodexAdapter],
+  ['kiro-cli', KiroCliAdapter],
+  ['kiro-cli-acp', KiroAcpAdapter],
+  ['opencode', OpenCodeAdapter],
+];
+for (const [type, ctor] of builtinAdapters) {
+  if (!adapterRegistry.has(type)) adapterRegistry.register(type, ctor);
+}
 
 const sdkAdapters: Partial<Record<AgentType, SdkAgentAdapter>> = {
   'claude-code-sdk': claudeSdkAdapter,
@@ -51,8 +60,9 @@ export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseA
     if (type === 'opencode' && opencodeSdkAdapter.isSdkAvailable()) return opencodeSdkAdapter as unknown as BaseAgentAdapter;
     if ((type === 'kiro-cli' || type === 'kiro-cli-acp') && kiroAcpSdkAdapter.isSdkAvailable()) return kiroAcpSdkAdapter as unknown as BaseAgentAdapter;
   }
-  const Adapter = adapters[type] ?? adapters['claude-code'];
-  return new Adapter();
+  // Registry first (covers built-ins + third-party plugins); fall back to the
+  // default provider so a bad type never crashes a spawn request.
+  return adapterRegistry.create(type) ?? new ClaudeCodeAdapter();
 }
 
 export function createSdkAdapter(type: AgentType): SdkAgentAdapter | null {

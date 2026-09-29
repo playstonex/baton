@@ -208,6 +208,30 @@ export const IconMinimize = createIcon(
   <path d="M5 11L2 14M2 10v4h4M11 5l3-3M14 6V2h-4" />,
 );
 
+/* ─── System ─── */
+export const IconCpu = createIcon(
+  <>
+    <rect x="4" y="4" width="8" height="8" rx="1" />
+    <rect x="6.5" y="6.5" width="3" height="3" />
+    <path d="M6 2v2M10 2v2M6 12v2M10 12v2M2 6h2M2 10h2M12 6h2M12 10h2" />
+  </>,
+);
+
+export const IconMemory = createIcon(
+  <>
+    <path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5V10H2V5.5Z" />
+    <path d="M4.5 10v2M7.5 10v2M10.5 10v2M5 6.5v2M8 6.5v2M11 6.5v2" />
+  </>,
+);
+
+export const IconDisk = createIcon(
+  <>
+    <circle cx="8" cy="8" r="6" />
+    <circle cx="8" cy="8" r="1.5" />
+    <path d="M9.2 9.2 12.5 12.5" />
+  </>,
+);
+
 export const IconSpinner = ({ className, ...props }: IconProps) => (
   <svg
     className={`animate-spin ${className ?? ''}`}

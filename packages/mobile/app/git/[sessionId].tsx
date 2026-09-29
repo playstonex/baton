@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   View,
   Text,
   TextInput,
@@ -656,9 +657,11 @@ function ChangesTab({
         </Text>
         <TextInput
           style={{
-            backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
-            borderWidth: 1,
-            borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+            backgroundColor: c.isDark
+              ? Glass.opacity.dark.subtle
+              : Glass.opacity.light.subtle,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
             borderRadius: CornerRadius.medium,
             paddingHorizontal: Spacing.md,
             paddingVertical: Spacing.sm,
@@ -762,7 +765,7 @@ function FileRow({
         paddingVertical: 10,
         gap: Spacing.sm,
         borderBottomWidth: last ? 0 : 0.5,
-        borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+        borderBottomColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
         minHeight: 44,
         backgroundColor: pressed ? c.subtle : 'transparent',
       })}
@@ -886,7 +889,7 @@ function CommitRow({
         minHeight: ROW_HEIGHT,
         backgroundColor: pressed ? c.subtle : 'transparent',
         borderBottomWidth: isLast ? 0 : 0.5,
-        borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+        borderBottomColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
       })}
     >
       <View style={{ width: graphWidth, height: ROW_HEIGHT }}>
@@ -1063,7 +1066,7 @@ function BranchRow({
         gap: Spacing.sm,
         backgroundColor: pressed ? c.subtle : isCurrent ? c.accentBg : 'transparent',
         borderBottomWidth: last ? 0 : 0.5,
-        borderBottomColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+        borderBottomColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
         minHeight: 44,
       })}
     >
@@ -1260,7 +1263,7 @@ function FileDiffBlock({ file }: { file: GitFileDiff }) {
           paddingHorizontal: Spacing.md,
           paddingVertical: 10,
           gap: Spacing.sm,
-          backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+          backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
         }}
       >
         <Ionicons

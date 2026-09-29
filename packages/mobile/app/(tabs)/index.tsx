@@ -26,6 +26,7 @@ import {
 import { FontFamily, Typography, Spacing, Glass, Colors, STATUS_COLORS } from '../../src/constants/theme';
 import { DirectoryPicker } from '../../src/components/DirectoryPicker';
 import { ResourceMonitor } from '../../src/components/ResourceMonitor';
+import { WorktreeTabStrip } from '../../src/components/WorktreeTabStrip';
 
 const AGENT_OPTIONS: {
   type: AgentType;
@@ -488,6 +489,19 @@ export default function DashboardScreen() {
             <GlassCard c={c} blurIntensity={Glass.blur.card - 10}>
               <ResourceMonitor connected={connected} />
             </GlassCard>
+
+            {/* Parallel worktrees for the currently entered base project */}
+            {connected && projectPath.trim().length > 0 && (
+              <WorktreeTabStrip
+                c={c}
+                projectPath={projectPath.trim()}
+                onSelect={(w) => {
+                  // Tapping a tab points the launcher at that worktree's
+                  // isolated checkout so the next agent runs on its branch.
+                  if (w) setProjectPath(w.path);
+                }}
+              />
+            )}
 
             {/* Launch Session */}
             <GlassSectionHeader c={c} title="Launch Session" />

@@ -8,6 +8,8 @@ import {
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Colors, CornerRadius, Glass, Shadows } from '../../constants/theme';
 import type { ThemeColors } from './TypingIndicator';
 
 export interface MenuOption {
@@ -104,9 +106,32 @@ export const PopoverMenu = React.memo(function PopoverMenu({
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
-          style={[styles.card, { backgroundColor: colors.bg }, containerStyle]}
+          style={[
+            styles.card,
+            {
+              borderColor: colors.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+            },
+            containerStyle,
+          ]}
           onPress={() => {}}
         >
+          <BlurView
+            tint={colors.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+            intensity={Glass.blur.sheet}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: colors.isDark
+                  ? Glass.opacity.dark.elevated
+                  : Glass.opacity.light.surface,
+                borderRadius: CornerRadius.large,
+              },
+            ]}
+            pointerEvents="none"
+          />
           {title && (
             <Text style={[styles.title, { color: colors.textTertiary }]}>{title}</Text>
           )}
@@ -127,7 +152,14 @@ export const PopoverMenu = React.memo(function PopoverMenu({
                   key={`opt-${i}`}
                   style={({ pressed }) => [
                     styles.option,
-                    pressed && { backgroundColor: colors.subtle },
+                    {
+                      backgroundColor: pressed
+                        ? colors.isDark
+                          ? Glass.opacity.dark.subtle
+                          : Glass.opacity.light.subtle
+                        : 'transparent',
+                      borderRadius: pressed ? CornerRadius.medium : 0,
+                    },
                   ]}
                   onPress={() => {
                     if (!opt.disabled) onSelect(i);
@@ -137,7 +169,9 @@ export const PopoverMenu = React.memo(function PopoverMenu({
                   <Text
                     style={[
                       styles.optionText,
-                      { color: opt.destructive ? '#F04545' : colors.textPrimary },
+                      {
+                        color: opt.destructive ? Colors.danger[400] : colors.textPrimary,
+                      },
                       opt.disabled && { opacity: 0.35 },
                     ]}
                     numberOfLines={1}
@@ -145,7 +179,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
                     {opt.label}
                   </Text>
                   {opt.selected && (
-                    <Text style={[styles.checkmark, { color: colors.textPrimary }]}>✓</Text>
+                    <Text style={[styles.checkmark, { color: Colors.primary[500] }]}>✓</Text>
                   )}
                 </Pressable>
               );
@@ -160,16 +194,15 @@ export const PopoverMenu = React.memo(function PopoverMenu({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CornerRadius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
     paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Shadows.elevated,
   },
   cardCentered: {
     alignSelf: 'center',

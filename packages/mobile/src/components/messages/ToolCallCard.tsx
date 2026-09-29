@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
-import { FontFamily } from '../../constants/theme';
+import { FontFamily, Colors } from '../../constants/theme';
 
 interface Props {
   toolName: string;
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   filePath: {
     fontSize: 12,
     fontFamily: FontFamily.mono,
-    color: '#3b82f6',
+    color: Colors.primary[500],
     flexShrink: 1,
   },
   output: {

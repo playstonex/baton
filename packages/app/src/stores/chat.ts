@@ -87,7 +87,7 @@ export const useChatStore = create<ChatState>()((set) => ({
           messages: [...state.messages, {
             id,
             role: 'system' as const,
-            content: `⏳ Approval required: ${toolName}${detail ? ` — ${detail}` : ''}`,
+            content: `Approval required: ${toolName}${detail ? ` — ${detail}` : ''}`,
             timestamp: ts,
             eventType: 'waiting_approval',
           }],
@@ -107,7 +107,7 @@ export const useChatStore = create<ChatState>()((set) => ({
       if (event.type === 'tool_use') {
         const fileHint = event.args?.filePath ? ` → ${event.args.filePath}` : '';
         return {
-          messages: [...state.messages, { id, role: 'system', content: `🔧 ${event.tool}${fileHint}`, timestamp: ts, eventType: 'tool_use', meta: event.args as Record<string, unknown> }],
+          messages: [...state.messages, { id, role: 'system', content: `${event.tool}${fileHint}`, timestamp: ts, eventType: 'tool_use', meta: event.args as Record<string, unknown> }],
         };
       }
 
