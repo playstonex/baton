@@ -199,6 +199,9 @@ export default function DashboardScreen() {
   );
 
   const runningCount = useMemo(() => agents.filter((a) => a.status !== 'stopped').length, [agents]);
+  // "Active Sessions" means LIVE sessions — stopped ones are dead weight in
+  // the list (they're not tappable and pile up across daemon restarts).
+  const liveAgents = useMemo(() => agents.filter((a) => a.status !== 'stopped'), [agents]);
   const activeSessionIds = useMemo(() => new Set(agents.map((a) => a.id)), [agents]);
 
   const recentSessionList = useMemo(
@@ -445,7 +448,7 @@ export default function DashboardScreen() {
   return (
     <View style={[styles.root, { backgroundColor: c.bg }]}>
       <FlatList
-        data={agents}
+        data={liveAgents}
         keyExtractor={(item) => item.id}
         style={styles.list}
         contentContainerStyle={[
@@ -782,8 +785,8 @@ export default function DashboardScreen() {
             />
 
             {/* Active Sessions */}
-            <GlassSectionHeader c={c} title="Active Sessions" count={agents.length} />
-            {agents.length === 0 && (
+            <GlassSectionHeader c={c} title="Active Sessions" count={liveAgents.length} />
+            {liveAgents.length === 0 && (
               <GlassCard c={c}>
                 <View
                   style={{ alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm }}

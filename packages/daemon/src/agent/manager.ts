@@ -12,7 +12,7 @@ import { VALID_TRANSITIONS, generateId } from '@baton/shared';
 import type { AgentState, AgentSnapshot, TimelineItem } from '@baton/shared';
 import type { BaseAgentAdapter } from './adapter.js';
 import { spawnPty } from '../pty/bridge.js';
-import { mkdir, writeFile, readdir, stat, readFile, access } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, stat, readFile, access, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
 interface IPty {
@@ -45,6 +45,12 @@ interface ManagedAgent {
   eventCallbacks: Set<(event: ParsedEvent, sessionId: string) => void>;
   rawCallbacks: Set<(data: string, sessionId: string) => void>;
   firstOutputReceived: boolean;
+  /**
+   * Restored-from-disk dead session: kept so transcripts can still be
+   * attached/read, but excluded from list() — otherwise every historical
+   * session ever started piles up in the dashboards as "Stopped" rows.
+   */
+  historyOnly?: boolean;
 }
 
 const MAX_OUTPUT_HISTORY = 10000;
@@ -182,8 +188,15 @@ export class AgentManager {
       return; // No agents dir yet
     }
 
+    // Cap restored dead sessions: every snapshot ever written used to be
+    // hydrated into the live list, so the dashboards accumulated an
+    // ever-growing pile of "Stopped" rows across restarts. Keep only the
+    // newest HISTORY_CAP for transcript replay; prune older files.
+    const HISTORY_CAP = 100;
+
     try {
       const dirs = await readdir(agentsDir);
+      const found: Array<{ dirPath: string; file: string; path: string; snapshot: AgentSnapshot }> = [];
       for (const dir of dirs) {
         const dirPath = join(agentsDir, dir);
         const s = await stat(dirPath);
@@ -193,48 +206,59 @@ export class AgentManager {
         for (const file of files) {
           if (!file.endsWith('.json')) continue;
           try {
-            const content = await readFile(join(dirPath, file), 'utf-8');
-            const snapshot: AgentSnapshot = JSON.parse(content);
-
-            // Crashed agents are always stopped after recovery
-            if (snapshot.state.status !== 'stopped') {
-              console.log(
-                `Restoring agent ${snapshot.id} (was ${snapshot.state.status} → stopped)`,
-              );
-              snapshot.state = { status: 'stopped', at: Date.now(), exitCode: -1 };
-            }
-
-            const agentProcess: AgentProcess = {
-              id: snapshot.id,
-              type: snapshot.type,
-              projectPath: snapshot.projectPath,
-              status: 'stopped',
-              startedAt: snapshot.createdAt,
-              stoppedAt: new Date().toISOString(),
-              mode: snapshot.mode,
-            };
-
-            this.agents.set(snapshot.id, {
-              process: agentProcess,
-              adapter: null,
-              pty: null,
-              sdk: null,
-              sdkAdapter: null,
-              state: snapshot.state,
-              cols: snapshot.cols ?? DEFAULT_COLS,
-              rows: snapshot.rows ?? DEFAULT_ROWS,
-              outputHistory: [],
-              displayHistory: [],
-              eventHistory: snapshot.timeline as unknown as ParsedEvent[],
-              timeline: snapshot.timeline,
-              eventCallbacks: new Set(),
-              rawCallbacks: new Set(),
-              firstOutputReceived: true,
-            });
+            const path = join(dirPath, file);
+            const snapshot: AgentSnapshot = JSON.parse(await readFile(path, 'utf-8'));
+            found.push({ dirPath, file, path, snapshot });
           } catch (err) {
             console.error(`Failed to restore ${file}:`, err);
           }
         }
+      }
+
+      // Newest first (last state transition time, falling back to creation).
+      const tsOf = (s: AgentSnapshot): number =>
+        (s.state as { at?: number }).at ?? Date.parse(s.createdAt) ?? 0;
+      found.sort((a, b) => tsOf(b.snapshot) - tsOf(a.snapshot));
+
+      for (const entry of found.slice(HISTORY_CAP)) {
+        // Best-effort prune; a locked file must not block startup.
+        await rm(entry.path).catch(() => {});
+      }
+
+      for (const { snapshot } of found.slice(0, HISTORY_CAP)) {
+        // Crashed agents are always stopped after recovery
+        if (snapshot.state.status !== 'stopped') {
+          snapshot.state = { status: 'stopped', at: Date.now(), exitCode: -1 };
+        }
+
+        const agentProcess: AgentProcess = {
+          id: snapshot.id,
+          type: snapshot.type,
+          projectPath: snapshot.projectPath,
+          status: 'stopped',
+          startedAt: snapshot.createdAt,
+          stoppedAt: new Date().toISOString(),
+          mode: snapshot.mode,
+        };
+
+        this.agents.set(snapshot.id, {
+          process: agentProcess,
+          adapter: null,
+          pty: null,
+          sdk: null,
+          sdkAdapter: null,
+          state: snapshot.state,
+          cols: snapshot.cols ?? DEFAULT_COLS,
+          rows: snapshot.rows ?? DEFAULT_ROWS,
+          outputHistory: [],
+          displayHistory: [],
+          eventHistory: snapshot.timeline as unknown as ParsedEvent[],
+          timeline: snapshot.timeline,
+          eventCallbacks: new Set(),
+          rawCallbacks: new Set(),
+          firstOutputReceived: true,
+          historyOnly: true,
+        });
       }
     } catch (err) {
       console.error('Failed to restore agents:', err);
@@ -501,7 +525,9 @@ export class AgentManager {
   // ── Query Methods ──────────────────────────────────────────────
 
   list(): AgentProcess[] {
-    return Array.from(this.agents.values()).map((m) => m.process);
+    return Array.from(this.agents.values())
+      .filter((m) => !m.historyOnly)
+      .map((m) => m.process);
   }
 
   get(id: string): AgentProcess | undefined {
