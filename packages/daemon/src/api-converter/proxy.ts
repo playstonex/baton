@@ -29,6 +29,13 @@ export type ProxyResult =
   | { status: number; error: string };
 
 function upstreamUrl(baseUrl: string, format: UpstreamFormat): string {
+  // Sink-level guard: whatever the stored provider profile contains, the
+  // daemon only ever fetches absolute http(s) origins — file:/data:/unix:
+  // schemes are refused here, at the fetch boundary.
+  const parsed = new URL(baseUrl);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`provider baseUrl must be http(s), got ${parsed.protocol}`);
+  }
   const base = baseUrl.replace(/\/$/, '');
   switch (format) {
     case 'responses':

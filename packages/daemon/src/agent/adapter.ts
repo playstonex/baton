@@ -1,5 +1,15 @@
 import type { AgentAdapter, AgentConfig, AgentType, ParsedEvent, SpawnConfig } from '@baton/shared';
 
+/**
+ * Defensive git ref check for adapter git helpers that pass client-supplied
+ * branch names as argv elements. Arg arrays eliminate shell injection, but a
+ * leading '-'/'+' would still be parsed as a FLAG (e.g. branch '-B' →
+ * `git checkout -B`). Reject anything that doesn't start alphanumeric.
+ */
+export function isSafeGitRef(ref: string): boolean {
+  return /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(ref);
+}
+
 export abstract class BaseAgentAdapter implements AgentAdapter {
   abstract readonly name: string;
   abstract readonly agentType: AgentType;

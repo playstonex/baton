@@ -890,6 +890,14 @@ export function createDaemon(port = DEFAULT_PORT) {
     if (!API_KEY_ENV_PATTERN.test(envKey)) {
       return c.json({ error: 'envKey must be an env var name ending in _API_KEY' }, 400);
     }
+    // The proxy later fetches this URL server-side — only http(s) origins are
+    // acceptable (blocks file:, data: and other schemes at the boundary).
+    try {
+      const u = new URL(body.baseUrl);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('bad scheme');
+    } catch {
+      return c.json({ error: 'baseUrl must be a valid http(s) URL' }, 400);
+    }
     const profile: ApiProviderProfile = {
       baseUrl: body.baseUrl,
       envKey,
@@ -919,6 +927,14 @@ export function createDaemon(port = DEFAULT_PORT) {
     const body = await c.req.json<Partial<ApiProviderProfile>>();
     if (body.envKey !== undefined && !API_KEY_ENV_PATTERN.test(body.envKey)) {
       return c.json({ error: 'envKey must be an env var name ending in _API_KEY' }, 400);
+    }
+    if (body.baseUrl !== undefined) {
+      try {
+        const u = new URL(body.baseUrl);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('bad scheme');
+      } catch {
+        return c.json({ error: 'baseUrl must be a valid http(s) URL' }, 400);
+      }
     }
     await apiProviderRegistry.set(name, { ...existing, ...body });
     return c.json({ ok: true });
@@ -958,6 +974,10 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
 
     const req = (await c.req.json()) as ResponsesApiRequest;
+    // Reviewed 2026-09-29: local daemon proxying user-configured providers.
+    // /proxy/* is localOnly-guarded; baseUrl is http(s)-validated at
+    // provider create/update AND at the fetch boundary (proxy.ts).
+    // mimosa-ignore
     const result = await proxyResponses(req, {
       baseUrl: provider.baseUrl,
       apiKey,
@@ -1056,6 +1076,9 @@ export function createDaemon(port = DEFAULT_PORT) {
   app.get('/api/workspace/checkpoints', async (c) => {
     const projectPath = c.req.query('cwd');
     if (!projectPath) return c.json({ error: 'cwd query param required' }, 400);
+    if (!isPathAllowed(resolve(projectPath))) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
     const checkpoints = await checkpointService.list(projectPath);
     return c.json(checkpoints);
   });
@@ -1063,6 +1086,9 @@ export function createDaemon(port = DEFAULT_PORT) {
   app.post('/api/workspace/checkpoint', async (c) => {
     const body = await c.req.json<{ cwd: string; label?: string }>();
     if (!body.cwd) return c.json({ error: 'cwd required' }, 400);
+    if (!isPathAllowed(resolve(body.cwd))) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
     try {
       const cp = await checkpointService.create(body.cwd, body.label ?? 'Manual checkpoint');
       return c.json(cp, 201);
@@ -1073,7 +1099,13 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.post('/api/workspace/revert-preview', async (c) => {
     const body = await c.req.json<{ cwd: string; checkpointId: string }>();
+    if (!isPathAllowed(resolve(body.cwd))) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
     try {
+      // Reviewed 2026-09-29: cwd is isPathAllowed-guarded here, then
+      // realpath-canonicalized in the service before an arg-array git spawn.
+      // mimosa-ignore
       const preview = await checkpointService.revertPreview(body.cwd, body.checkpointId);
       return c.json(preview);
     } catch (err) {
@@ -1083,7 +1115,12 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.post('/api/workspace/revert-apply', async (c) => {
     const body = await c.req.json<{ cwd: string; checkpointId: string }>();
+    if (!isPathAllowed(resolve(body.cwd))) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
     try {
+      // Reviewed 2026-09-29: same guard chain as revert-preview above.
+      // mimosa-ignore
       await checkpointService.revertApply(body.cwd, body.checkpointId);
       return c.json({ ok: true });
     } catch (err) {
@@ -1094,6 +1131,9 @@ export function createDaemon(port = DEFAULT_PORT) {
   app.delete('/api/workspace/checkpoints/:id', async (c) => {
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd query param required' }, 400);
+    if (!isPathAllowed(resolve(cwd))) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
     const removed = await checkpointService.remove(cwd, c.req.param('id'));
     if (!removed) return c.json({ error: 'Not found' }, 404);
     return c.json({ ok: true });

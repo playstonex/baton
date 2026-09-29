@@ -11,10 +11,26 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, readFile, readdir, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir, unlink, realpath } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+
+/**
+ * Canonicalize a client-supplied project path before any git subprocess
+ * touches it: resolves symlinks/`..` and verifies a real directory exists
+ * there. Everything downstream (spawn cwd, checkpoint id hashing) uses the
+ * canonical form only.
+ */
+async function canonicalProjectDir(projectPath: string): Promise<string> {
+  const real = await realpath(projectPath);
+  if (!existsSync(join(real, '.git')) && !existsSync(join(real, '..', '.git'))) {
+    // Checkpoints are git-diff based; a directory with no repo anywhere is
+    // never a valid checkpoint target.
+    throw new Error('not inside a git work tree');
+  }
+  return real;
+}
 
 export interface Checkpoint {
   id: string;
@@ -71,13 +87,14 @@ export class WorkspaceCheckpointService {
    * of tracked + untracked-but-added changes relative to HEAD.
    */
   async create(projectPath: string, label: string): Promise<Checkpoint> {
-    const headSha = (await git(projectPath, ['rev-parse', 'HEAD'])).trim();
+    const project = await canonicalProjectDir(projectPath);
+    const headSha = (await git(project, ['rev-parse', 'HEAD'])).trim();
     // Diff working tree vs HEAD, including untracked files staged via `add -N`
     // would require extra steps; we capture tracked changes + staged. For a
     // robust "undo AI edits" we use `git diff HEAD` which covers modified
     // tracked files and staged new files.
-    const patch = await git(projectPath, ['diff', 'HEAD', '--no-color']);
-    const status = await git(projectPath, ['status', '--porcelain=v1']);
+    const patch = await git(project, ['diff', 'HEAD', '--no-color']);
+    const status = await git(project, ['status', '--porcelain=v1']);
     const files = status
       .split('\n')
       .filter((l) => l.trim())
@@ -86,7 +103,7 @@ export class WorkspaceCheckpointService {
     const id = `cp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const checkpoint: Checkpoint = {
       id,
-      projectId: projectPath,
+      projectId: project,
       label,
       patch,
       files,
@@ -94,9 +111,9 @@ export class WorkspaceCheckpointService {
       createdAt: Date.now(),
     };
 
-    const dir = checkpointsDir(projectPath);
+    const dir = checkpointsDir(project);
     if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-    await writeFile(checkpointFile(projectPath, id), JSON.stringify(checkpoint, null, 2));
+    await writeFile(checkpointFile(project, id), JSON.stringify(checkpoint, null, 2));
     return checkpoint;
   }
 
@@ -123,14 +140,15 @@ export class WorkspaceCheckpointService {
    * `git apply --check -R` (reverse) without writing.
    */
   async revertPreview(projectPath: string, checkpointId: string): Promise<RevertPreview> {
-    const cp = await this.load(projectPath, checkpointId);
+    const project = await canonicalProjectDir(projectPath);
+    const cp = await this.load(project, checkpointId);
     if (!cp) throw new Error(`Checkpoint ${checkpointId} not found`);
     if (!cp.patch.trim()) {
       return { canApply: true, conflicts: [], affectedFiles: [] };
     }
     try {
       // --check = don't write, just test. -R = reverse.
-      await gitRaw(projectPath, ['apply', '--check', '-R'], cp.patch);
+      await gitRaw(project, ['apply', '--check', '-R'], cp.patch);
       return { canApply: true, conflicts: [], affectedFiles: cp.files };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -150,10 +168,11 @@ export class WorkspaceCheckpointService {
    * caller should preview first.
    */
   async revertApply(projectPath: string, checkpointId: string): Promise<void> {
-    const cp = await this.load(projectPath, checkpointId);
+    const project = await canonicalProjectDir(projectPath);
+    const cp = await this.load(project, checkpointId);
     if (!cp) throw new Error(`Checkpoint ${checkpointId} not found`);
     if (!cp.patch.trim()) return; // nothing to revert
-    await gitRaw(projectPath, ['apply', '-R'], cp.patch);
+    await gitRaw(project, ['apply', '-R'], cp.patch);
   }
 
   /** Delete a checkpoint file. */

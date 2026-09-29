@@ -1,6 +1,7 @@
 import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { isSafeGitRef } from './adapter.js';
 
 // ── JSON-RPC types for codex app-server ────────────────────────────
 
@@ -981,15 +982,19 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   async gitLog(count: number = 10): Promise<string> {
     if (!this.isGitRepo()) return '';
     try {
-      return execSync(`git log --oneline -${count}`, {
+      // Arg-array exec: count sanitized to a positive integer.
+      const n = Math.max(1, Math.floor(Number(count) || 1));
+      return execFileSync('git', ['log', '--oneline', `-${n}`], {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
       }).trim();
     } catch { return ''; }
   }
 
   async gitCheckout(branch: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSafeGitRef(branch)) return { success: false, error: 'Invalid branch name' };
     try {
-      execSync(`git checkout ${branch}`, {
+      // Arg-array exec — branch comes from the client and must never touch a shell.
+      execFileSync('git', ['checkout', branch], {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
       });
       return { success: true };
@@ -1000,9 +1005,14 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
 
   async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
     try {
-      execSync('git add -A', { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
-      execSync(`git commit -m ${JSON.stringify(message)}`, {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+      execFileSync('git', ['add', '-A'], { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      // Message flows via stdin (-F -), never into argv — no quoting or
+      // option-position concerns at all.
+      execFileSync('git', ['commit', '-F', '-'], {
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
+        input: message,
       });
       return { success: true };
     } catch (err) {
@@ -1029,8 +1039,9 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitCreateBranch(name: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSafeGitRef(name)) return { success: false, error: 'Invalid branch name' };
     try {
-      execSync(`git checkout -b ${name}`, {
+      execFileSync('git', ['checkout', '-b', name], {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
       });
       return { success: true };

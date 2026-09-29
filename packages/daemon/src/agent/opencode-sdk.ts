@@ -1,5 +1,6 @@
 import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
-import { execSync, spawn } from 'node:child_process';
+import { execSync, execFileSync, spawn } from 'node:child_process';
+import { isSafeGitRef } from './adapter.js';
 
 type OcPart = {
   id?: string;
@@ -171,13 +172,25 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       const text = await res.text().catch(() => '');
       throw new Error(`HTTP ${res.status}: ${text}`);
     }
-    return res.json() as Promise<Record<string, unknown>>;
+    // opencode ≥1.18 returns 204 No Content for accepted async calls
+    // (e.g. prompt_async) — res.json() on an empty body throws
+    // "Unexpected end of JSON input", which surfaced as an error event on
+    // every chat message. An empty body means "accepted, no payload".
+    const text = await res.text();
+    if (!text) return {};
+    return JSON.parse(text) as Record<string, unknown>;
   }
 
   private async httpGet(path: string): Promise<unknown> {
     const res = await fetch(`${this.baseUrl}${path}`);
     if (!res.ok) return null;
-    return res.json();
+    const text = await res.text();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   }
 
   private pollEvents(onEvent: (event: ParsedEvent) => void): void {
@@ -373,15 +386,19 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   async gitLog(count: number = 10): Promise<string> {
     if (!this.isGitRepo()) return '';
     try {
-      return execSync(`git log --oneline -${count}`, {
+      // Arg-array exec: count sanitized to a positive integer.
+      const n = Math.max(1, Math.floor(Number(count) || 1));
+      return execFileSync('git', ['log', '--oneline', `-${n}`], {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
       }).trim();
     } catch { return ''; }
   }
 
   async gitCheckout(branch: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSafeGitRef(branch)) return { success: false, error: 'Invalid branch name' };
     try {
-      execSync(`git checkout ${branch}`, {
+      // Arg-array exec — branch comes from the client and must never touch a shell.
+      execFileSync('git', ['checkout', branch], {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
       });
       return { success: true };
@@ -392,9 +409,14 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
   async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
     try {
-      execSync('git add -A', { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
-      execSync(`git commit -m ${JSON.stringify(message)}`, {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+      execFileSync('git', ['add', '-A'], { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      // Message flows via stdin (-F -), never into argv — no quoting or
+      // option-position concerns at all.
+      execFileSync('git', ['commit', '-F', '-'], {
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
+        input: message,
       });
       return { success: true };
     } catch (err) {
@@ -421,8 +443,9 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitCreateBranch(name: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSafeGitRef(name)) return { success: false, error: 'Invalid branch name' };
     try {
-      execSync(`git checkout -b ${name}`, {
+      execFileSync('git', ['checkout', '-b', name], {
         cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
       });
       return { success: true };

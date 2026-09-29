@@ -7,7 +7,8 @@ import type {
   AccessMode,
   ServiceTier,
 } from '@baton/shared';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
+import { isSafeGitRef } from './adapter.js';
 
 type SdkMessage = {
   type: string;
@@ -339,7 +340,10 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   async gitLog(count = 10): Promise<string> {
     if (!this.isGitRepo()) return '';
     try {
-      return execSync(`git log --oneline -${count}`, {
+      // Arg-array exec: count is sanitized to a positive integer so it can
+      // never smuggle shell syntax through.
+      const n = Math.max(1, Math.floor(Number(count) || 1));
+      return execFileSync('git', ['log', '--oneline', `-${n}`], {
         cwd: this.projectPath,
         encoding: 'utf-8',
         timeout: 5000,
@@ -350,8 +354,10 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitCheckout(branch: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSafeGitRef(branch)) return { success: false, error: 'Invalid branch name' };
     try {
-      execSync(`git checkout ${branch}`, {
+      // Arg-array exec — branch comes from the client and must never touch a shell.
+      execFileSync('git', ['checkout', branch], {
         cwd: this.projectPath,
         encoding: 'utf-8',
         timeout: 10000,
@@ -364,11 +370,14 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
 
   async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
     try {
-      execSync('git add -A', { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
-      execSync(`git commit -m ${JSON.stringify(message)}`, {
+      execFileSync('git', ['add', '-A'], { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      // Message flows via stdin (-F -), never into argv — no quoting or
+      // option-position concerns at all.
+      execFileSync('git', ['commit', '-F', '-'], {
         cwd: this.projectPath,
         encoding: 'utf-8',
         timeout: 10000,
+        input: message,
       });
       return { success: true };
     } catch (err) {
@@ -395,8 +404,9 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   }
 
   async gitCreateBranch(name: string): Promise<{ success: boolean; error?: string }> {
+    if (!isSafeGitRef(name)) return { success: false, error: 'Invalid branch name' };
     try {
-      execSync(`git checkout -b ${name}`, {
+      execFileSync('git', ['checkout', '-b', name], {
         cwd: this.projectPath,
         encoding: 'utf-8',
         timeout: 10000,
