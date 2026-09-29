@@ -3,34 +3,33 @@ import { IconChevronRight, StatusDot } from './icons.js';
 export { StatusDot };
 
 /* ─────────────────────────────────────────────
-   Button — Geist component tokens
-   primary: gray-1000 fill / background-100 label
-   secondary: background-100 fill / gray-alpha-400 border
-   tertiary: transparent / gray-1000 text
-   error: red-800 fill / white label
-   Sizes: sm 32px / md 40px / lg 48px
+   Button — Linear component voice
+   primary: brand indigo fill · white label
+   secondary: ghost control — translucent field + hairline border
+   tertiary: quiet text control
+   error: quiet danger — tinted until hover
+   Sizes: sm 28px / md 32px / lg 36px
    ───────────────────────────────────────────── */
 type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'error';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap rounded-[var(--radius-sm)] transition-colors focus-visible:focus-ring disabled:cursor-not-allowed select-none';
+  'inline-flex items-center justify-center gap-1.5 rounded-sm font-medium whitespace-nowrap transition-colors duration-150 focus-visible:focus-ring disabled:cursor-not-allowed select-none';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    'bg-geist-gray-1000 text-geist-background-100 hover:bg-geist-gray-900 disabled:bg-geist-gray-100 disabled:text-geist-gray-700',
+    'bg-accent text-accent-on hover:bg-accent-hover active:bg-accent-active disabled:bg-raised disabled:text-meta',
   secondary:
-    'bg-geist-background-100 text-geist-gray-1000 border border-geist-gray-alpha-400 hover:bg-geist-gray-alpha-100 disabled:text-geist-gray-700',
-  tertiary:
-    'bg-transparent text-geist-gray-1000 hover:bg-geist-gray-alpha-200 disabled:text-geist-gray-700',
+    'border border-line bg-field text-fg-2 hover:bg-raised hover:text-fg active:bg-active disabled:text-meta disabled:bg-transparent',
+  tertiary: 'text-fg-2 hover:bg-raised hover:text-fg active:bg-active disabled:text-meta',
   error:
-    'bg-geist-red-800 text-white hover:bg-geist-red-900 disabled:bg-geist-gray-100 disabled:text-geist-gray-700',
+    'border border-danger/30 bg-danger-soft text-danger hover:bg-danger hover:border-danger hover:text-white disabled:border-line disabled:bg-transparent disabled:text-meta',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 px-2.5 text-sm',
-  md: 'h-10 px-3.5 text-sm',
-  lg: 'h-12 px-4 text-base',
+  sm: 'h-7 px-2.5 text-[13px]',
+  md: 'h-8 px-3 text-[13px]',
+  lg: 'h-9 px-3.5 text-sm',
 };
 
 export function Button({
@@ -55,16 +54,15 @@ export function Button({
 }
 
 /* ─────────────────────────────────────────────
-   Input — Geist component tokens
-   background-100 fill / gray-alpha-400 border / radius-sm
-   Sizes: sm 32px / md 40px / lg 48px
+   Input — translucent field, hairline border
+   Sizes: sm 28px / md 32px / lg 36px
    ───────────────────────────────────────────── */
 type InputSize = 'sm' | 'md' | 'lg';
 
 const INPUT_SIZES: Record<InputSize, string> = {
-  sm: 'h-8 text-sm',
-  md: 'h-10 text-sm',
-  lg: 'h-12 text-base',
+  sm: 'h-7 text-[13px]',
+  md: 'h-8 text-[13px]',
+  lg: 'h-9 text-sm',
 };
 
 export function Input({
@@ -74,22 +72,22 @@ export function Input({
 }: { size?: InputSize } & Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>) {
   return (
     <input
-      className={`w-full rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 px-3 text-geist-gray-1000 placeholder:text-geist-gray-700 transition-colors focus:border-geist-blue-700 focus-visible:focus-ring focus:outline-none disabled:opacity-50 ${INPUT_SIZES[size]} ${className}`}
+      className={`w-full rounded-sm border border-line bg-field px-2.5 text-fg placeholder:text-meta transition-colors duration-150 hover:border-line-strong focus:border-accent focus-visible:focus-ring focus:outline-none disabled:opacity-50 ${INPUT_SIZES[size]} ${className}`}
       {...props}
     />
   );
 }
 
 /* ─────────────────────────────────────────────
-   ProgressBar — Geist track + accent fill
+   ProgressBar — hairline track + accent fill
    ───────────────────────────────────────────── */
 type ProgressColor = 'blue' | 'green' | 'amber' | 'red';
 
 const PROGRESS_FILLS: Record<ProgressColor, string> = {
-  blue: 'bg-geist-blue-700',
-  green: 'bg-geist-green-700',
-  amber: 'bg-geist-amber-600',
-  red: 'bg-geist-red-700',
+  blue: 'bg-accent',
+  green: 'bg-success',
+  amber: 'bg-warn',
+  red: 'bg-danger',
 };
 
 export function ProgressBar({
@@ -100,27 +98,27 @@ export function ProgressBar({
 }: { value: number; color?: ProgressColor } & React.HTMLAttributes<HTMLDivElement>) {
   const pct = Math.min(100, Math.max(0, value));
   return (
-    <div
-      className={`h-1.5 w-full overflow-hidden rounded-full bg-geist-gray-alpha-200 ${className}`}
-      {...props}
-    >
-      <div className={`h-full rounded-full transition-[width] duration-300 ${PROGRESS_FILLS[color]}`} style={{ width: `${pct}%` }} />
+    <div className={`h-1 w-full overflow-hidden rounded-full bg-line-soft ${className}`} {...props}>
+      <div
+        className={`h-full rounded-full transition-[width] duration-300 ${PROGRESS_FILLS[color]}`}
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   Chip — soft variant ({color}-100 bg, {color}-700 text)
+   Chip — pill; neutral variant is outline-only
    ───────────────────────────────────────────── */
 type ChipColor = 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'purple';
 
 const CHIP_STYLES: Record<ChipColor, string> = {
-  gray: 'bg-geist-gray-alpha-200 text-geist-gray-1000',
-  blue: 'bg-geist-blue-100 text-geist-blue-700 dark:bg-geist-blue-1000 dark:text-geist-blue-900',
-  green: 'bg-geist-green-100 text-geist-green-700 dark:bg-geist-green-1000 dark:text-geist-green-900',
-  red: 'bg-geist-red-100 text-geist-red-700 dark:bg-geist-red-1000 dark:text-geist-red-900',
-  amber: 'bg-geist-amber-100 text-geist-amber-900 dark:bg-geist-amber-1000 dark:text-geist-amber-600',
-  purple: 'bg-geist-purple-100 text-geist-purple-700 dark:bg-geist-purple-1000 dark:text-geist-purple-900',
+  gray: 'border border-line bg-transparent text-fg-2',
+  blue: 'bg-accent-soft text-accent-hover dark:text-accent-hover',
+  green: 'bg-success-soft text-success',
+  red: 'bg-danger-soft text-danger',
+  amber: 'bg-warn-soft text-warn',
+  purple: 'bg-accent-soft text-accent-hover',
 };
 
 export function Chip({
@@ -134,7 +132,7 @@ export function Chip({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${CHIP_STYLES[color]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${CHIP_STYLES[color]} ${className}`}
     >
       {children}
     </span>
@@ -142,7 +140,7 @@ export function Chip({
 }
 
 /* ─────────────────────────────────────────────
-   SegmentedControl — replaces UpstreamFormatSelector
+   SegmentedControl — luminance-stepped track
    ───────────────────────────────────────────── */
 export function SegmentedControl<T extends string>({
   value,
@@ -157,7 +155,7 @@ export function SegmentedControl<T extends string>({
 }) {
   return (
     <div
-      className={`inline-flex rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-gray-alpha-100 p-0.5 ${className}`}
+      className={`inline-flex rounded-sm border border-line-soft bg-raised p-0.5 ${className}`}
     >
       {options.map((opt) => {
         const active = value === opt.key;
@@ -166,10 +164,10 @@ export function SegmentedControl<T extends string>({
             key={opt.key}
             type="button"
             onClick={() => onChange(opt.key)}
-            className={`rounded-[calc(var(--radius-sm)-2px)] px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`rounded-[calc(var(--radius-sm)-2px)] px-3 py-1 text-xs font-medium transition-colors duration-150 ${
               active
-                ? 'bg-geist-background-100 text-geist-gray-1000 shadow-[var(--shadow-raised)]'
-                : 'text-geist-gray-800 hover:text-geist-gray-1000'
+                ? 'bg-surface text-fg shadow-[var(--shadow-raised)] dark:bg-active'
+                : 'text-muted hover:text-fg'
             }`}
           >
             {opt.label}
@@ -181,11 +179,22 @@ export function SegmentedControl<T extends string>({
 }
 
 /* ─── Page Header ─── */
-export function PageHeader({ title, description }: { title: string; description?: string }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+}) {
   return (
-    <div className="mb-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-geist-gray-1000">{title}</h1>
-      {description && <p className="mt-1.5 text-sm text-geist-gray-800">{description}</p>}
+    <div className="mb-8 flex items-start justify-between gap-4">
+      <div>
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-fg">{title}</h1>
+        {description && <p className="mt-1 text-[13px] leading-relaxed text-muted">{description}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -202,13 +211,13 @@ export function SectionHeader({
 }) {
   return (
     <div className="mb-4 flex items-center gap-3">
-      <h3 className="text-sm font-semibold text-geist-gray-1000">{title}</h3>
+      <h3 className="text-[13px] font-semibold text-fg">{title}</h3>
       {count !== undefined && (
-        <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
+        <span className="inline-flex items-center justify-center rounded-full bg-raised px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
           {count}
         </span>
       )}
-      <div className="h-px flex-1 bg-geist-gray-alpha-200" />
+      <div className="h-px flex-1 bg-line-soft" />
       {children}
     </div>
   );
@@ -221,20 +230,20 @@ export function Breadcrumbs({
   items: Array<{ label: string; href?: string; onClick?: () => void }>;
 }) {
   return (
-    <nav className="flex items-center gap-1.5 text-xs text-geist-gray-700">
+    <nav className="flex items-center gap-1.5 text-xs text-meta">
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          {i > 0 && <IconChevronRight className="h-3 w-3 text-geist-gray-alpha-600" />}
+          {i > 0 && <IconChevronRight className="h-3 w-3 text-line-strong" />}
           {item.onClick || item.href ? (
             <button
               type="button"
               onClick={item.onClick}
-              className="transition-colors hover:text-geist-blue-700"
+              className="transition-colors hover:text-fg"
             >
               {item.label}
             </button>
           ) : (
-            <span className="text-geist-gray-900">{item.label}</span>
+            <span className="font-medium text-fg-2">{item.label}</span>
           )}
         </span>
       ))}
@@ -254,9 +263,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-[var(--radius-md)] border border-geist-gray-alpha-400 bg-geist-background-100 shadow-[var(--shadow-raised)] ${
-        padding ? 'p-6' : ''
-      } ${className}`}
+      className={`rounded-md border border-line-soft bg-surface ${padding ? 'p-5' : ''} ${className}`}
     >
       {children}
     </div>
@@ -276,13 +283,13 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-[var(--radius-md)] border border-dashed border-geist-gray-alpha-500 bg-geist-gray-alpha-100 py-20 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[var(--radius-md)] bg-geist-gray-alpha-200">
+    <div className="flex flex-col items-center rounded-md border border-dashed border-line py-16 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-raised text-muted">
         {icon}
       </div>
-      <h4 className="text-sm font-semibold text-geist-gray-900">{title}</h4>
-      {description && <p className="mt-1 text-xs text-geist-gray-800">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+      <h4 className="text-[13px] font-semibold text-fg-2">{title}</h4>
+      {description && <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">{description}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -300,15 +307,13 @@ export function MetricCard({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-[var(--radius-md)] border border-geist-gray-alpha-400 bg-geist-background-100 p-6 shadow-[var(--shadow-raised)]">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-geist-gray-800">
-        {label}
-      </div>
+    <div className="rounded-md border border-line-soft bg-surface p-5">
+      <div className="text-xs font-medium text-muted">{label}</div>
       <div
-        className={`mt-1.5 text-2xl font-bold tabular-nums ${valueClassName ?? 'text-geist-gray-1000'}`}
+        className={`mt-1.5 text-[22px] font-semibold tracking-[-0.02em] tabular-nums ${valueClassName ?? 'text-fg'}`}
       >
         {value}
-        {suffix && <span className="ml-0.5 text-sm font-normal text-geist-gray-800">{suffix}</span>}
+        {suffix && <span className="ml-0.5 text-sm font-normal text-meta">{suffix}</span>}
       </div>
     </div>
   );
@@ -318,31 +323,11 @@ export function MetricCard({
 type BadgeScale = 'green' | 'blue' | 'amber' | 'red' | 'gray';
 
 const BADGE_STYLES: Record<BadgeScale, { bg: string; text: string; dot: string }> = {
-  green: {
-    bg: 'bg-geist-green-100 dark:bg-geist-green-1000',
-    text: 'text-geist-green-700 dark:text-geist-green-900',
-    dot: 'bg-geist-green-600',
-  },
-  blue: {
-    bg: 'bg-geist-blue-100 dark:bg-geist-blue-1000',
-    text: 'text-geist-blue-700 dark:text-geist-blue-900',
-    dot: 'bg-geist-blue-600',
-  },
-  amber: {
-    bg: 'bg-geist-amber-100 dark:bg-geist-amber-1000',
-    text: 'text-geist-amber-900 dark:text-geist-amber-600',
-    dot: 'bg-geist-amber-600',
-  },
-  red: {
-    bg: 'bg-geist-red-100 dark:bg-geist-red-1000',
-    text: 'text-geist-red-700 dark:text-geist-red-900',
-    dot: 'bg-geist-red-600',
-  },
-  gray: {
-    bg: 'bg-geist-gray-alpha-200',
-    text: 'text-geist-gray-900',
-    dot: 'bg-geist-gray-500',
-  },
+  green: { bg: 'bg-success-soft', text: 'text-success', dot: 'bg-success' },
+  blue: { bg: 'bg-accent-soft', text: 'text-accent-hover', dot: 'bg-accent-hover' },
+  amber: { bg: 'bg-warn-soft', text: 'text-warn', dot: 'bg-warn' },
+  red: { bg: 'bg-danger-soft', text: 'text-danger', dot: 'bg-danger' },
+  gray: { bg: 'bg-raised', text: 'text-muted', dot: 'bg-meta' },
 };
 
 const STATUS_SCALE: Record<string, BadgeScale> = {
@@ -362,19 +347,13 @@ const STATUS_SCALE: Record<string, BadgeScale> = {
   skipped: 'gray',
 };
 
-export function StatusBadge({
-  status,
-  dot = true,
-}: {
-  status: string;
-  dot?: boolean;
-}) {
+export function StatusBadge({ status, dot = true }: { status: string; dot?: boolean }) {
   const scale = STATUS_SCALE[status] ?? 'gray';
   const s = BADGE_STYLES[scale];
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}
     >
       {dot && <span className={`inline-block h-1.5 w-1.5 rounded-full ${s.dot}`} />}
       {status.replace(/_/g, ' ')}
@@ -387,8 +366,8 @@ export function LoadingSpinner({ text = 'Loading…' }: { text?: string }) {
   return (
     <div className="flex items-center justify-center py-20">
       <div className="flex items-center gap-3">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-geist-blue-700 border-t-transparent" />
-        <span className="text-sm text-geist-gray-800">{text}</span>
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
+        <span className="text-[13px] text-muted">{text}</span>
       </div>
     </div>
   );
@@ -400,7 +379,7 @@ export function BackButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="-ml-2 flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-sm text-geist-gray-800 transition-colors hover:bg-geist-gray-alpha-200 hover:text-geist-gray-1000"
+      className="-ml-2 flex items-center gap-1 rounded-sm px-2 py-1 text-[13px] text-muted transition-colors hover:bg-raised hover:text-fg"
     >
       <svg
         className="h-4 w-4"
@@ -430,32 +409,31 @@ export function StatusAlert({
 }) {
   const styles: Record<
     'success' | 'error' | 'info',
-    { border: string; bg: string; titleText: string; msgText: string }
+    { border: string; bg: string; titleText: string }
   > = {
     success: {
-      border: 'border-geist-green-100 dark:border-geist-green-1000',
-      bg: 'bg-geist-green-100 dark:bg-geist-green-1000',
-      titleText: 'text-geist-green-700 dark:text-geist-green-900',
-      msgText: 'text-geist-green-900 dark:text-geist-green-900',
+      border: 'border-success/25',
+      bg: 'bg-success-soft',
+      titleText: 'text-success',
     },
     error: {
-      border: 'border-geist-red-100 dark:border-geist-red-1000',
-      bg: 'bg-geist-red-100 dark:bg-geist-red-1000',
-      titleText: 'text-geist-red-700 dark:text-geist-red-900',
-      msgText: 'text-geist-red-900 dark:text-geist-red-900',
+      border: 'border-danger/25',
+      bg: 'bg-danger-soft',
+      titleText: 'text-danger',
     },
     info: {
-      border: 'border-geist-blue-100 dark:border-geist-blue-1000',
-      bg: 'bg-geist-blue-100 dark:bg-geist-blue-1000',
-      titleText: 'text-geist-blue-700 dark:text-geist-blue-900',
-      msgText: 'text-geist-blue-1000 dark:text-geist-blue-900',
+      border: 'border-accent/25',
+      bg: 'bg-accent-soft',
+      titleText: 'text-accent-hover',
     },
   };
   const s = styles[type];
   return (
-    <div className={`rounded-[var(--radius-sm)] border px-4 py-3 ${s.border} ${s.bg}`}>
-      {title && <div className={`text-sm font-medium ${s.titleText}`}>{title}</div>}
-      <div className={`mt-0.5 text-sm ${s.msgText}`}>{message}</div>
+    <div className={`rounded-md border px-4 py-3 ${s.border} ${s.bg}`}>
+      {title && <div className={`text-[13px] font-semibold ${s.titleText}`}>{title}</div>}
+      <div className={`text-[13px] leading-relaxed text-fg-2 ${title ? 'mt-0.5' : ''}`}>
+        {message}
+      </div>
     </div>
   );
 }

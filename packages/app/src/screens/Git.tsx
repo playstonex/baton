@@ -77,7 +77,7 @@ export function GitScreen() {
   if (!agent) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-sm text-geist-gray-700">Agent not found</p>
+        <p className="text-[13px] text-muted">Agent not found</p>
         <Button variant="secondary" size="sm" className="mt-3" onClick={() => navigate('/')}>
           Back to Dashboard
         </Button>
@@ -111,32 +111,26 @@ export function GitScreen() {
         </div>
       </div>
 
-      {error && <StatusAlert type="error" title="Git Error" message={error} />}
+      {error && <StatusAlert type="error" title="Git error" message={error} />}
 
       {status && (
-        <Card>
-          <div className="flex items-center justify-between">
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <IconGitBranch className="h-5 w-5 text-geist-gray-700" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-accent-soft text-accent-hover">
+                <IconGitBranch className="h-4 w-4" />
+              </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-geist-gray-1000">{status.branch}</span>
+                  <span className="font-mono text-[13px] font-semibold text-fg">{status.branch}</span>
                   {status.tracking && (
-                    <span className="text-xs text-geist-gray-700">tracking {status.tracking}</span>
+                    <span className="font-mono text-xs text-meta">tracking {status.tracking}</span>
                   )}
                 </div>
                 {status.tracking && (status.ahead > 0 || status.behind > 0) && (
-                  <div className="mt-1 flex items-center gap-2 text-xs">
-                    {status.ahead > 0 && (
-                      <span className="text-geist-green-700 dark:text-geist-green-900">
-                        +{status.ahead} ahead
-                      </span>
-                    )}
-                    {status.behind > 0 && (
-                      <span className="text-geist-amber-900 dark:text-geist-amber-600">
-                        −{status.behind} behind
-                      </span>
-                    )}
+                  <div className="mt-0.5 flex items-center gap-2 font-mono text-xs">
+                    {status.ahead > 0 && <span className="text-success">+{status.ahead} ahead</span>}
+                    {status.behind > 0 && <span className="text-warn">−{status.behind} behind</span>}
                   </div>
                 )}
               </div>
@@ -174,32 +168,32 @@ export function GitScreen() {
       {status && status.files.length > 0 && (
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-geist-gray-1000">Changed Files</h3>
-            <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
+            <h3 className="text-[13px] font-semibold text-fg">Changed files</h3>
+            <span className="inline-flex items-center justify-center rounded-full bg-raised px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
               {status.files.length}
             </span>
-            <div className="h-px flex-1 bg-geist-gray-alpha-200" />
+            <div className="h-px flex-1 bg-line-soft" />
           </div>
-          <div className="space-y-1.5">
+          <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
             {status.files.map((file, i) => (
               <FileStatusRow key={i} file={file} />
             ))}
-          </div>
+          </Card>
         </div>
       )}
 
       {log && log.entries.length > 0 && (
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-geist-gray-1000">Recent Commits</h3>
-            <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
+            <h3 className="text-[13px] font-semibold text-fg">Recent commits</h3>
+            <span className="inline-flex items-center justify-center rounded-full bg-raised px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
               {log.entries.length}
             </span>
-            <div className="h-px flex-1 bg-geist-gray-alpha-200" />
+            <div className="h-px flex-1 bg-line-soft" />
           </div>
-          <Card className="p-0" padding={false}>
-            {log.entries.map((entry, i) => (
-              <CommitRow key={entry.hash} entry={entry} isLast={i === log.entries.length - 1} />
+          <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
+            {log.entries.map((entry) => (
+              <CommitRow key={entry.hash} entry={entry} />
             ))}
           </Card>
         </div>
@@ -208,24 +202,24 @@ export function GitScreen() {
       {branches && branches.branches.length > 0 && (
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-geist-gray-1000">Branches</h3>
-            <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
+            <h3 className="text-[13px] font-semibold text-fg">Branches</h3>
+            <span className="inline-flex items-center justify-center rounded-full bg-raised px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
               {branches.branches.length}
             </span>
-            <div className="h-px flex-1 bg-geist-gray-alpha-200" />
+            <div className="h-px flex-1 bg-line-soft" />
           </div>
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap gap-2">
             {branches.branches.map((branch) => (
               <span
                 key={branch.name}
-                className={`inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-1 text-xs font-medium ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-xs font-medium ${
                   branch.current
-                    ? 'bg-geist-gray-1000 text-geist-background-100'
-                    : 'bg-geist-gray-alpha-200 text-geist-gray-900'
+                    ? 'bg-accent text-accent-on'
+                    : 'border border-line bg-transparent text-fg-2'
                 }`}
               >
                 {branch.current && (
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-geist-background-100" />
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-on" />
                 )}
                 {branch.name}
               </span>
@@ -238,44 +232,22 @@ export function GitScreen() {
 }
 
 const STATUS_STYLES: Record<GitStatusFile['status'], { bg: string; text: string; label: string }> = {
-  added: {
-    bg: 'bg-geist-green-100 dark:bg-geist-green-1000',
-    text: 'text-geist-green-700 dark:text-geist-green-900',
-    label: 'A',
-  },
-  modified: {
-    bg: 'bg-geist-blue-100 dark:bg-geist-blue-1000',
-    text: 'text-geist-blue-700 dark:text-geist-blue-900',
-    label: 'M',
-  },
-  deleted: {
-    bg: 'bg-geist-red-100 dark:bg-geist-red-1000',
-    text: 'text-geist-red-700 dark:text-geist-red-900',
-    label: 'D',
-  },
-  renamed: {
-    bg: 'bg-geist-amber-100 dark:bg-geist-amber-1000',
-    text: 'text-geist-amber-900 dark:text-geist-amber-600',
-    label: 'R',
-  },
-  untracked: {
-    bg: 'bg-geist-gray-alpha-200',
-    text: 'text-geist-gray-800',
-    label: '?',
-  },
+  added: { bg: 'bg-success-soft', text: 'text-success', label: 'A' },
+  modified: { bg: 'bg-accent-soft', text: 'text-accent-hover', label: 'M' },
+  deleted: { bg: 'bg-danger-soft', text: 'text-danger', label: 'D' },
+  renamed: { bg: 'bg-warn-soft', text: 'text-warn', label: 'R' },
+  untracked: { bg: 'bg-raised', text: 'text-muted', label: '?' },
 };
 
 function FileStatusRow({ file }: { file: GitStatusFile }) {
   const style = STATUS_STYLES[file.status] ?? STATUS_STYLES.modified;
 
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-300 bg-geist-background-100 px-5 py-3.5 transition-colors hover:bg-geist-gray-alpha-100">
-      <span
-        className={`flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold ${style.bg} ${style.text}`}
-      >
+    <div className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-150 hover:bg-raised/50">
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm font-mono text-[11px] font-semibold ${style.bg} ${style.text}`}>
         {file.staged ? '*' : style.label}
       </span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-geist-gray-900">
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg-2">
         {file.path}
       </span>
       <StatusBadge status={file.status} dot={false} />
@@ -283,7 +255,7 @@ function FileStatusRow({ file }: { file: GitStatusFile }) {
   );
 }
 
-function CommitRow({ entry, isLast }: { entry: GitLogEntry; isLast: boolean }) {
+function CommitRow({ entry }: { entry: GitLogEntry }) {
   const dateStr = new Date(entry.date).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -292,17 +264,13 @@ function CommitRow({ entry, isLast }: { entry: GitLogEntry; isLast: boolean }) {
   });
 
   return (
-    <div
-      className={`flex items-center gap-3.5 px-6 py-3.5 transition-colors hover:bg-geist-gray-alpha-100 ${
-        isLast ? '' : 'border-b border-geist-gray-alpha-200'
-      }`}
-    >
-      <span className="shrink-0 rounded bg-geist-gray-alpha-200 px-1.5 py-0.5 font-mono text-[11px] text-geist-gray-800">
+    <div className="flex items-center gap-3.5 px-5 py-2.5 transition-colors duration-150 hover:bg-raised/50">
+      <span className="shrink-0 rounded-sm bg-raised px-1.5 py-0.5 font-mono text-[11px] text-muted">
         {entry.shortHash}
       </span>
-      <span className="min-w-0 flex-1 truncate text-xs text-geist-gray-900">{entry.message}</span>
-      <span className="shrink-0 text-[11px] text-geist-gray-700">{entry.author}</span>
-      <span className="shrink-0 text-[11px] text-geist-gray-700">{dateStr}</span>
+      <span className="min-w-0 flex-1 truncate text-xs text-fg-2">{entry.message}</span>
+      <span className="shrink-0 text-[11px] text-meta">{entry.author}</span>
+      <span className="shrink-0 text-[11px] tabular-nums text-meta">{dateStr}</span>
     </div>
   );
 }

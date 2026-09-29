@@ -87,47 +87,47 @@ export function AgentDetailScreen() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <MetricCard label="File Changes" value={fileChanges.length} />
-        <MetricCard label="Tool Uses" value={toolUses.length} />
-        <MetricCard label="Total Events" value={events.length} />
+        <MetricCard label="File changes" value={fileChanges.length} />
+        <MetricCard label="Tool uses" value={toolUses.length} />
+        <MetricCard label="Total events" value={events.length} />
       </div>
 
       {fileChanges.length > 0 && (
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-geist-gray-1000">File Changes</h3>
-            <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
+            <h3 className="text-[13px] font-semibold text-fg">File changes</h3>
+            <span className="inline-flex items-center justify-center rounded-full bg-raised px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
               {fileChanges.length}
             </span>
-            <div className="h-px flex-1 bg-geist-gray-alpha-200" />
+            <div className="h-px flex-1 bg-line-soft" />
           </div>
-          <div className="space-y-1.5">
+          <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
             {fileChanges.map((e, i) =>
               e.type === 'file_change' ? (
                 <FileChangeRow key={i} path={e.path} changeType={e.changeType} />
               ) : null,
             )}
-          </div>
+          </Card>
         </div>
       )}
 
       <div>
         <div className="mb-4 flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-geist-gray-1000">Event Timeline</h3>
-          <span className="inline-flex items-center justify-center rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium tabular-nums text-geist-gray-900">
+          <h3 className="text-[13px] font-semibold text-fg">Event timeline</h3>
+          <span className="inline-flex items-center justify-center rounded-full bg-raised px-2 py-0.5 text-xs font-medium tabular-nums text-muted">
             {[...statusEvents, ...toolUses].length}
           </span>
-          <div className="h-px flex-1 bg-geist-gray-alpha-200" />
+          <div className="h-px flex-1 bg-line-soft" />
         </div>
-        <Card className="max-h-[500px] overflow-auto p-0">
+        <Card className="max-h-[500px] overflow-auto p-0" padding={false}>
           {statusEvents.length === 0 && toolUses.length === 0 ? (
             <EmptyState
-              icon={<IconSpinner className="h-6 w-6 text-geist-gray-700" />}
+              icon={<IconSpinner className="h-5 w-5" />}
               title="Waiting for events…"
             />
           ) : (
             <div className="relative">
-              <div className="pointer-events-none absolute left-[62px] top-0 bottom-0 w-px bg-geist-gray-alpha-200" />
+              <div className="pointer-events-none absolute bottom-0 left-[74px] top-0 w-px bg-line-soft" />
               {[...statusEvents, ...toolUses]
                 .sort((a, b) => a.timestamp - b.timestamp)
                 .map((event, i) => <EventRow key={i} event={event} />)}
@@ -141,9 +141,9 @@ export function AgentDetailScreen() {
 
 function FileChangeRow({ path, changeType }: { path: string; changeType: string }) {
   const colorMap: Record<string, string> = {
-    create: 'text-geist-green-700 dark:text-geist-green-900 bg-geist-green-100 dark:bg-geist-green-1000',
-    modify: 'text-geist-blue-700 dark:text-geist-blue-900 bg-geist-blue-100 dark:bg-geist-blue-1000',
-    delete: 'text-geist-red-700 dark:text-geist-red-900 bg-geist-red-100 dark:bg-geist-red-1000',
+    create: 'bg-success-soft text-success',
+    modify: 'bg-accent-soft text-accent-hover',
+    delete: 'bg-danger-soft text-danger',
   };
   const iconMap: Record<string, string> = {
     create: '+',
@@ -152,11 +152,11 @@ function FileChangeRow({ path, changeType }: { path: string; changeType: string 
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-300 bg-geist-background-100 px-5 py-3.5 transition-colors hover:bg-geist-gray-alpha-100">
-      <span className={`flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold ${colorMap[changeType] ?? 'bg-geist-gray-alpha-200 text-geist-gray-900'}`}>
+    <div className="flex items-center gap-3 px-5 py-3 transition-colors duration-150 hover:bg-raised/50">
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[11px] font-semibold ${colorMap[changeType] ?? 'bg-raised text-muted'}`}>
         {iconMap[changeType] ?? '~'}
       </span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-geist-gray-900">{path}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg-2">{path}</span>
       <StatusBadge status={changeType === 'create' ? 'completed' : changeType === 'delete' ? 'error' : 'running'} dot={false} />
     </div>
   );
@@ -166,20 +166,13 @@ function EventRow({ event }: { event: ParsedEvent }) {
   const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const dotColors: Record<string, string> = {
-    status_change: 'bg-geist-blue-600',
-    thinking: 'bg-geist-amber-600',
-    tool_use: 'bg-geist-purple-600',
-    file_change: 'bg-geist-blue-500',
-    command_exec: 'bg-geist-amber-500',
-    error: 'bg-geist-red-600',
-    raw_output: 'bg-geist-gray-500',
-  };
-
-  const bgColors: Record<string, string> = {
-    status_change: 'border-l-geist-blue-500',
-    thinking: 'border-l-geist-amber-500',
-    tool_use: 'border-l-geist-purple-500',
-    error: 'border-l-geist-red-500',
+    status_change: 'bg-accent-hover',
+    thinking: 'bg-warn',
+    tool_use: 'bg-accent',
+    file_change: 'bg-accent-hover/60',
+    command_exec: 'bg-warn/60',
+    error: 'bg-danger',
+    raw_output: 'bg-meta',
   };
 
   const description = (() => {
@@ -202,10 +195,10 @@ function EventRow({ event }: { event: ParsedEvent }) {
   })();
 
   return (
-    <div className={`flex items-center gap-3 border-l-2 px-5 py-3 transition-colors hover:bg-geist-gray-alpha-100 ${bgColors[event.type] ?? 'border-l-transparent'}`}>
-      <span className="w-16 shrink-0 font-mono text-[11px] tabular-nums text-geist-gray-700">{time}</span>
-      <span className={`relative z-10 inline-flex h-2 w-2 rounded-full ${dotColors[event.type] ?? 'bg-geist-gray-500'}`} />
-      <span className="min-w-0 flex-1 truncate text-xs text-geist-gray-900">{description}</span>
+    <div className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-150 hover:bg-raised/50">
+      <span className="w-14 shrink-0 font-mono text-[11px] tabular-nums text-meta">{time}</span>
+      <span className={`relative z-10 inline-flex h-2 w-2 shrink-0 rounded-full ${dotColors[event.type] ?? 'bg-meta'}`} />
+      <span className="min-w-0 flex-1 truncate text-xs text-fg-2">{description}</span>
     </div>
   );
 }

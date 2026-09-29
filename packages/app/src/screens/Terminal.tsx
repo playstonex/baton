@@ -8,51 +8,74 @@ import { StatusBadge, StatusDot, Button } from '../lib/ui.js';
 import { IconFile, IconGitBranch, IconActivity, IconStop } from '../lib/icons.js';
 import '@xterm/xterm/css/xterm.css';
 
-// Terminal ANSI colors are self-contained (not theme tokens).
-const LIGHT_THEME = {
+// Terminal ANSI colors — Linear palette (achromatic + indigo-violet accent).
+interface XTermTheme {
+  background: string;
+  foreground: string;
+  cursor: string;
+  selectionBackground: string;
+  black: string;
+  red: string;
+  green: string;
+  yellow: string;
+  blue: string;
+  magenta: string;
+  cyan: string;
+  white: string;
+  brightBlack: string;
+  brightRed: string;
+  brightGreen: string;
+  brightYellow: string;
+  brightBlue: string;
+  brightMagenta: string;
+  brightCyan: string;
+  brightWhite: string;
+}
+
+const LIGHT_THEME: XTermTheme = {
   background: '#ffffff',
-  foreground: '#171717',
-  cursor: '#006bff',
-  selectionBackground: 'rgba(0, 107, 255, 0.2)',
-  black: '#78716c',
-  red: '#ea001d',
-  green: '#28a948',
-  yellow: '#ffae00',
-  blue: '#006bff',
-  magenta: '#a000f8',
-  cyan: '#00ac96',
-  white: '#4d4d4d',
-  brightBlack: '#a8a8a8',
-  brightRed: '#ff676d',
-  brightGreen: '#4ce15e',
-  brightYellow: '#ffc543',
-  brightBlue: '#48aeff',
-  brightMagenta: '#c979ff',
-  brightCyan: '#00e3c4',
-  brightWhite: '#171717',
+  foreground: '#1b1d22',
+  cursor: '#5e6ad2',
+  selectionBackground: 'rgba(94, 106, 210, 0.22)',
+  black: '#6f747e',
+  red: '#cf222e',
+  green: '#1a7f37',
+  yellow: '#9a6700',
+  blue: '#4752c4',
+  magenta: '#8250df',
+  cyan: '#1b7c83',
+  white: '#42454c',
+  brightBlack: '#9095a0',
+  brightRed: '#eb4d55',
+  brightGreen: '#3fb950',
+  brightYellow: '#d9a62e',
+  brightBlue: '#7170ff',
+  brightMagenta: '#ab7df8',
+  brightCyan: '#00ac96',
+  brightWhite: '#1b1d22',
 };
 
-const DARK_THEME = {
-  background: '#191919',
-  foreground: '#e8e8e8',
-  cursor: '#47a8ff',
-  selectionBackground: 'rgba(71, 168, 255, 0.3)',
-  black: '#383838',
-  red: '#ff565f',
-  green: '#00ca50',
-  yellow: '#ff9300',
-  blue: '#47a8ff',
+const DARK_THEME: XTermTheme = {
+  background: '#0f1011',
+  foreground: '#e8eaed',
+  cursor: '#7170ff',
+  selectionBackground: 'rgba(94, 106, 210, 0.35)',
+  black: '#2e3033',
+  red: '#eb4d55',
+  green: '#3fb950',
+  yellow: '#d9a62e',
+  blue: '#7170ff',
   magenta: '#c472fb',
-  cyan: '#00cfb7',
-  white: '#ededed',
-  brightBlack: '#6b6b6b',
-  brightRed: '#ff676d',
-  brightGreen: '#4ce15e',
-  brightYellow: '#ffc543',
-  brightBlue: '#48aeff',
-  brightMagenta: '#c979ff',
-  brightCyan: '#00e3c4',
-  brightWhite: '#ffffff',
+  cyan: '#39c5cf',
+  white: '#d0d6e0',
+  brightBlack: '#62666d',
+  brightRed: '#ff6b70',
+  brightGreen: '#56d364',
+  brightYellow: '#e3b341',
+  brightBlue: '#828fff',
+  brightMagenta: '#d2a8ff',
+  brightCyan: '#39c5cf',
+  brightWhite: '#f7f8f8',
 };
 
 function getSystemTheme(): 'light' | 'dark' {
@@ -82,7 +105,7 @@ export function TerminalScreen() {
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: "'Geist Mono', 'JetBrains Mono', Menlo, Monaco, monospace",
+      fontFamily: "'Berkeley Mono', 'Geist Mono', ui-monospace, Menlo, Monaco, monospace",
       theme: isDark ? DARK_THEME : LIGHT_THEME,
       scrollback: 10000,
     });
@@ -114,8 +137,7 @@ export function TerminalScreen() {
       if (!term.element) return;
       try {
         fitAddon.fit();
-      } catch {
-      }
+      } catch {}
       if (term.cols && term.rows) {
         wsService.send({
           type: 'control',
@@ -226,13 +248,13 @@ export function TerminalScreen() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 px-5 py-3.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-line-soft bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2.5">
           <StatusDot status={status} />
-          <span className="text-sm font-medium text-geist-gray-900">Agent</span>
-          <span className="font-mono text-xs text-geist-gray-700">{sessionId?.slice(0, 8)}</span>
+          <span className="text-[13px] font-medium text-fg">Agent</span>
+          <span className="font-mono text-xs text-meta">{sessionId?.slice(0, 8)}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {sessionOwner && (
             <StatusBadge
               status={sessionOwner === 'local' ? 'connected' : 'waiting_input'}
@@ -240,7 +262,7 @@ export function TerminalScreen() {
             />
           )}
           {sessionOwner && (
-            <span className="text-xs text-geist-gray-800">
+            <span className="text-xs text-muted">
               {sessionOwner === 'local' ? 'You control' : 'Remote control'}
             </span>
           )}
@@ -255,6 +277,8 @@ export function TerminalScreen() {
             </Button>
           )}
           <StatusBadge status={connected ? 'connected' : 'disconnected'} dot={false} />
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button size="sm" variant="secondary" onClick={() => navigate(`/files/${sessionId}`)}>
             <IconFile className="mr-1.5 h-3.5 w-3.5" />
             Files
@@ -276,7 +300,7 @@ export function TerminalScreen() {
 
       <div
         ref={termContainerRef}
-        className="flex-1 overflow-hidden rounded-[var(--radius-sm)] border border-geist-gray-alpha-400"
+        className="flex-1 overflow-hidden rounded-md border border-line-soft"
         style={{ background: 'var(--terminal-bg)' }}
       />
     </div>

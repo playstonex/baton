@@ -30,9 +30,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="mx-auto max-w-md py-20 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-geist-red-100 dark:bg-geist-red-1000">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-soft">
             <svg
-              className="h-6 w-6 text-geist-red-700 dark:text-geist-red-900"
+              className="h-6 w-6 text-danger"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -45,8 +45,8 @@ export class ErrorBoundary extends Component<Props, State> {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <p className="text-sm font-medium text-geist-gray-1000">Something went wrong</p>
-          <p className="mt-1 text-xs text-geist-gray-800">
+          <p className="text-sm font-medium text-fg">Something went wrong</p>
+          <p className="mt-1 text-xs text-muted">
             {this.state.error?.message ?? 'An unexpected error occurred'}
           </p>
         </div>

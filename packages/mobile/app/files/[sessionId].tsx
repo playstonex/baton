@@ -131,7 +131,7 @@ export default function FilesScreen() {
   if (imagePath !== null) {
     const uri = `${getDaemonUrl()}/api/files/raw?path=${encodeURIComponent(imagePath)}`;
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+      <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: Math.max(headerHeight, insets.top + 48), paddingBottom: insets.bottom }}>
         <BlurView
           tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
           intensity={80}
@@ -169,7 +169,7 @@ export default function FilesScreen() {
 
   if (fileContent !== null) {
     return (
-      <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+      <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: Math.max(headerHeight, insets.top + 48), paddingBottom: insets.bottom }}>
         <BlurView
           tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
           intensity={80}
@@ -199,7 +199,7 @@ export default function FilesScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: Math.max(headerHeight, insets.top + 48), paddingBottom: insets.bottom }}>
       {/* Glass breadcrumb */}
       <BlurView
         tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
@@ -296,7 +296,7 @@ export default function FilesScreen() {
                   backgroundColor: item.isDir ? c.accentBg : c.elevated,
                 }}>
                   {item.isDir ? (
-                    <Ionicons name="folder" size={18} color={Colors.primary[500]} />
+                    <Ionicons name="folder-outline" size={18} color={Colors.primary[300]} />
                   ) : (
                     <Ionicons name={iconInfo.icon as React.ComponentProps<typeof Ionicons>['name']} size={18} color={iconInfo.color} />
                   )}

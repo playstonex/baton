@@ -81,7 +81,7 @@ export default function AgentDetailScreen() {
   const time = (ts: number) => new Date(ts).toLocaleTimeString();
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: headerHeight, paddingBottom: insets.bottom }}>
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: Math.max(headerHeight, insets.top + 48), paddingBottom: insets.bottom }}>
 
       {/* Glass toolbar */}
       <BlurView

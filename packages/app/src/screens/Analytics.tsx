@@ -52,11 +52,11 @@ export function AnalyticsScreen() {
 
   const scoreColor = health
     ? health.score >= 80
-      ? 'text-geist-green-700'
+      ? 'text-success'
       : health.score >= 50
-        ? 'text-geist-amber-700'
-        : 'text-geist-red-700'
-    : 'text-geist-gray-700';
+        ? 'text-warn'
+        : 'text-danger'
+    : 'text-muted';
 
   const maxEvents = Math.max(...hourly.map((h) => h.totalEvents), 1);
 
@@ -65,24 +65,32 @@ export function AnalyticsScreen() {
       <PageHeader title="Analytics" description="Agent performance metrics and health monitoring" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Health Score" value={health?.score ?? '—'} suffix="/100" valueClassName={scoreColor} />
-        <MetricCard label="Success Rate" value={health?.successRate ?? '—'} suffix="%" />
-        <MetricCard label="Avg Latency" value={health?.avgLatencyMs ?? '—'} suffix="ms" />
+        <MetricCard label="Health score" value={health?.score ?? '—'} suffix="/100" valueClassName={scoreColor} />
+        <MetricCard label="Success rate" value={health?.successRate ?? '—'} suffix="%" />
+        <MetricCard label="Avg latency" value={health?.avgLatencyMs ?? '—'} suffix="ms" />
         <MetricCard
           label="Errors (24h)"
           value={health?.errorCount24h ?? 0}
-          valueClassName={health && health.errorCount24h > 0 ? 'text-geist-red-700' : undefined}
+          valueClassName={health && health.errorCount24h > 0 ? 'text-danger' : undefined}
         />
       </div>
 
       <Card>
-        <div className="px-6 pb-2 pt-4">
-          <div className="text-sm font-semibold text-geist-gray-900">Events Over Time (24h)</div>
+        <div className="px-5 pb-2 pt-4">
+          <div className="text-[13px] font-semibold text-fg">Events over time (24h)</div>
+          <div className="mt-2 flex items-center gap-4 text-[11px] text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-sm bg-accent" /> tool calls
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-sm bg-danger" /> errors
+            </span>
+          </div>
         </div>
-        <div className="px-6 pb-5">
+        <div className="px-5 pb-5 pt-2">
           {hourly.length === 0 ? (
             <EmptyState
-              icon={<IconActivity className="h-6 w-6 text-geist-gray-700" />}
+              icon={<IconActivity className="h-5 w-5" />}
               title="No event data yet"
               description="Start an agent to begin collecting analytics."
             />
@@ -96,23 +104,23 @@ export function AnalyticsScreen() {
                     className="group relative flex min-w-[28px] flex-1 flex-col items-center"
                   >
                     <div
-                      className="w-full rounded-t-[var(--radius-sm)] bg-geist-gray-alpha-200 transition-all duration-200"
+                      className="flex w-full flex-col justify-end overflow-hidden rounded-t-sm bg-raised transition-all duration-200"
                       style={{ height: `${Math.max(height, 2)}%`, minHeight: 2 }}
                     >
                       <div
-                        className="w-full rounded-t-[var(--radius-sm)] bg-geist-blue-600 transition-all"
-                        style={{ height: `${(h.toolCalls / h.totalEvents) * 100}%` }}
-                      />
-                      <div
-                        className="w-full bg-geist-red-600 transition-all"
+                        className="w-full bg-danger transition-all"
                         style={{ height: `${(h.errors / h.totalEvents) * 100}%` }}
                       />
+                      <div
+                        className="w-full bg-accent transition-all"
+                        style={{ height: `${(h.toolCalls / h.totalEvents) * 100}%` }}
+                      />
                     </div>
-                    <span className="mt-1 text-[9px] text-geist-gray-700">{h.hour.slice(-5)}</span>
-                    <div className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 rounded bg-geist-gray-1000 px-2 py-1 text-[10px] text-geist-background-100 opacity-0 shadow-[var(--shadow-popover)] transition-opacity group-hover:opacity-100">
+                    <span className="mt-1 font-mono text-[9px] tabular-nums text-meta">{h.hour.slice(-5)}</span>
+                    <div className="pointer-events-none absolute -top-16 left-1/2 z-10 -translate-x-1/2 rounded-sm border border-line bg-surface px-2.5 py-1.5 font-mono text-[10px] text-fg-2 opacity-0 shadow-[var(--shadow-popover)] transition-opacity duration-150 group-hover:opacity-100">
                       <div>{h.totalEvents} events</div>
                       <div>{h.toolCalls} tools</div>
-                      {h.errors > 0 && <div className="text-geist-red-900">{h.errors} errors</div>}
+                      {h.errors > 0 && <div className="text-danger">{h.errors} errors</div>}
                     </div>
                   </div>
                 );

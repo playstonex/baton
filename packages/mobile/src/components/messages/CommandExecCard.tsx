@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
 import { TypingIndicator } from './TypingIndicator';
 import { humanizeCommand } from './CommandHumanizer';
-import { FontFamily, Colors } from '../../constants/theme';
+import { Colors, FontFamily } from '../../constants/theme';
 
 interface Props {
   command: string;
@@ -13,72 +14,54 @@ interface Props {
   colors: ThemeColors;
 }
 
-function truncateCommand(raw: string, maxLen = 200): string {
+function truncateCommand(raw: string, maxLen = 160): string {
   const s = raw.replace(/\s+/g, ' ').trim();
   return s.length > maxLen ? s.slice(0, maxLen - 1) + '…' : s;
 }
 
-function StatusIcon({ isStreaming, isFailed }: { isStreaming: boolean; isFailed: boolean }) {
+/** Quiet 16px status dot: soft tint + glyph, no saturated pills. */
+function StatusIcon({ isStreaming, isFailed, colors }: { isStreaming: boolean; isFailed: boolean; colors: ThemeColors }) {
   if (isStreaming) {
     return (
-      <View style={[statusStyles.circle, statusStyles.running]}>
-        <View style={statusStyles.pulse} />
+      <View style={[statusStyles.circle, { backgroundColor: colors.isDark ? 'rgba(94,106,210,0.25)' : 'rgba(94,106,210,0.14)' }]}>
+        <View style={[statusStyles.pulse, { backgroundColor: Colors.primary[300] }]} />
       </View>
     );
   }
   if (isFailed) {
     return (
-      <View style={[statusStyles.circle, statusStyles.failedCircle]}>
-        <Text style={statusStyles.xMark}>✕</Text>
+      <View style={[statusStyles.circle, { backgroundColor: colors.isDark ? 'rgba(235,77,85,0.16)' : 'rgba(207,34,46,0.1)' }]}>
+        <Ionicons name="close" size={10} color={Colors.danger[400]} />
       </View>
     );
   }
   return (
-    <View style={[statusStyles.circle, statusStyles.doneCircle]}>
-      <Text style={statusStyles.checkMark}>✓</Text>
+    <View style={[statusStyles.circle, { backgroundColor: colors.isDark ? 'rgba(63,185,80,0.16)' : 'rgba(26,127,55,0.1)' }]}>
+      <Ionicons name="checkmark" size={10} color={colors.isDark ? Colors.success[400] : Colors.success[600]} />
     </View>
   );
 }
 
 const statusStyles = StyleSheet.create({
   circle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  doneCircle: {
-    backgroundColor: Colors.success[400],
-  },
-  failedCircle: {
-    backgroundColor: Colors.danger[400],
-  },
-  running: {
-    backgroundColor: 'rgba(120,120,128,0.2)',
   },
   pulse: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.surface[400],
-  },
-  checkMark: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  xMark: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-    lineHeight: 18,
-    textAlign: 'center',
   },
 });
 
+/**
+ * Codex-style compact command row: verb + target on line one, the raw
+ * command as a single middle-truncated mono line, quiet status dot.
+ * Rows stack into a hairline-separated list — no card per call.
+ */
 export const CommandExecCard = React.memo(function CommandExecCard({ command, output, exitCode, isStreaming, colors }: Props) {
   const hasCommand = command && command.trim().length > 0;
   const hasOutput = output && output.trim().length > 0;
@@ -91,8 +74,9 @@ export const CommandExecCard = React.memo(function CommandExecCard({ command, ou
   const targetText = display ? display.target : 'command';
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.subtle }]}>
+    <View style={[styles.rowWrap, { borderBottomColor: colors.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
       <View style={styles.header}>
+        <StatusIcon isStreaming={isStreaming ?? false} isFailed={isFailed} colors={colors} />
         <Text style={[styles.verb, { color: colors.textSecondary }]} numberOfLines={1}>
           {verbText}
           {targetText ? (
@@ -101,15 +85,15 @@ export const CommandExecCard = React.memo(function CommandExecCard({ command, ou
             </Text>
           ) : null}
         </Text>
-        <StatusIcon isStreaming={isStreaming ?? false} isFailed={isFailed} />
       </View>
 
       {hasCommand && (
         <Text
           style={[styles.cmdText, { color: colors.textTertiary }]}
-          numberOfLines={3}
+          numberOfLines={1}
+          ellipsizeMode="middle"
         >
-          $ {truncateCommand(command)}
+          {truncateCommand(command)}
         </Text>
       )}
 
@@ -119,18 +103,18 @@ export const CommandExecCard = React.memo(function CommandExecCard({ command, ou
 });
 
 const styles = StyleSheet.create({
-  card: {
+  rowWrap: {
     width: '100%',
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
     paddingTop: 5,
-    paddingBottom: 4,
-    marginBottom: 6,
-    gap: 1,
+    paddingBottom: 7,
+    gap: 3,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 7,
   },
   verb: {
     flex: 1,
@@ -144,6 +128,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FontFamily.mono,
     lineHeight: 15,
-    opacity: 0.7,
+    marginLeft: 23,
   },
 });

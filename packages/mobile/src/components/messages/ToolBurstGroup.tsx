@@ -47,15 +47,15 @@ const styles = StyleSheet.create({
   expandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    gap: 5,
+    paddingVertical: 6,
+    paddingLeft: 25,
   },
   countLabel: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '500',
   },
   nounLabel: {
-    fontSize: 15,
+    fontSize: 13,
   },
 });

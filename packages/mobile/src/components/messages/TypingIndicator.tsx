@@ -20,6 +20,7 @@ export interface ThemeColors {
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
+  accentBg: string;
 }
 
 export const TypingIndicator = React.memo(function TypingIndicator({ colors }: { colors: ThemeColors }) {

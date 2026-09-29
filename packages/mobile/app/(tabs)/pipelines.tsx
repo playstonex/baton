@@ -183,7 +183,7 @@ export default function PipelinesScreen() {
                         </Text>
                       </View>
                       <View style={{ flex: 1, gap: Spacing.sm }}>
-                        <View style={{ flexDirection: 'row', gap: Spacing.xs }}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }}>
                           {AGENT_TYPES.map((t) => {
                             const active = step.agentType === t;
                             return (

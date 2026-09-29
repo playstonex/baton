@@ -4,6 +4,7 @@ import {
   SectionHeader,
   Card,
   EmptyState,
+  StatusAlert,
   StatusBadge,
   Button,
   Input,
@@ -56,11 +57,9 @@ function guessUpstreamFormat(baseUrl: string): UpstreamFormat {
 }
 
 const UPSTREAM_BADGE_STYLES: Record<UpstreamFormat, string> = {
-  responses:
-    'bg-geist-blue-100 text-geist-blue-700 dark:bg-geist-blue-1000 dark:text-geist-blue-900',
-  'openai-chat': 'bg-geist-gray-alpha-200 text-geist-gray-900',
-  anthropic:
-    'bg-geist-amber-100 text-geist-amber-900 dark:bg-geist-amber-1000 dark:text-geist-amber-600',
+  responses: 'bg-accent-soft text-accent-hover',
+  'openai-chat': 'bg-raised text-muted',
+  anthropic: 'bg-warn-soft text-warn',
 };
 
 export function ApiProvidersScreen() {
@@ -236,22 +235,17 @@ export function ApiProvidersScreen() {
       />
 
       {status && (
-        <div
-          className={`rounded-[var(--radius-sm)] border px-4 py-3 text-sm ${
-            status.type === 'success'
-              ? 'border-geist-green-100 bg-geist-green-100 text-geist-green-900 dark:border-geist-green-1000 dark:bg-geist-green-1000 dark:text-geist-green-900'
-              : 'border-geist-red-100 bg-geist-red-100 text-geist-red-900 dark:border-geist-red-1000 dark:bg-geist-red-1000 dark:text-geist-red-900'
-          }`}
-        >
-          {status.message}
-        </div>
+        <StatusAlert
+          type={status.type === 'success' ? 'success' : 'error'}
+          message={status.message}
+        />
       )}
 
-      <Card>
-        <SectionHeader title="New Provider" />
+      <Card className="p-6">
+        <SectionHeader title="New provider" />
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">Name</label>
+            <label className="mb-2 block text-xs font-medium text-muted">Name</label>
             <Input
               placeholder="e.g. openai, azure-east"
               value={newName}
@@ -259,7 +253,7 @@ export function ApiProvidersScreen() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">Base URL</label>
+            <label className="mb-2 block text-xs font-medium text-muted">Base URL</label>
             <Input
               placeholder="https://api.openai.com/v1"
               value={newBaseUrl}
@@ -274,19 +268,19 @@ export function ApiProvidersScreen() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">Env Key</label>
+            <label className="mb-2 block text-xs font-medium text-muted">Env key</label>
             <Input
               placeholder="OPENAI_API_KEY"
               value={newEnvKey}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEnvKey(e.target.value)}
               className="font-mono"
             />
-            <p className="mt-1 text-[11px] text-geist-gray-700">
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
               Name of the env var holding the API key (Codex reads the key from here).
             </p>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
+            <label className="mb-2 block text-xs font-medium text-muted">
               Models (comma-separated)
             </label>
             <Input
@@ -297,9 +291,9 @@ export function ApiProvidersScreen() {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
-            Upstream Format
+        <div className="mt-5">
+          <label className="mb-2 block text-xs font-medium text-muted">
+            Upstream format
           </label>
           <SegmentedControl
             value={newUpstreamFormat}
@@ -309,18 +303,18 @@ export function ApiProvidersScreen() {
               setNewFormatTouched(true);
             }}
           />
-          <p className="mt-1.5 text-xs text-geist-gray-700">
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted">
             {UPSTREAM_FORMATS.find((m) => m.key === newUpstreamFormat)?.hint}
           </p>
         </div>
 
         <div className="mt-5 flex items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-geist-gray-800">
+          <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-fg-2">
             <input
               type="checkbox"
               checked={newIsDefault}
               onChange={(e) => setNewIsDefault(e.target.checked)}
-              className="h-4 w-4 rounded-[var(--radius-sm)] border-geist-gray-alpha-500 accent-geist-gray-1000"
+              className="h-3.5 w-3.5 rounded-sm border-line accent-accent"
             />
             Set as default
           </label>
@@ -331,33 +325,33 @@ export function ApiProvidersScreen() {
             disabled={creating || !newName.trim() || !newBaseUrl.trim()}
             className="ml-auto"
           >
-            {creating ? 'Adding…' : 'Add Provider'}
+            {creating ? 'Adding…' : 'Add provider'}
           </Button>
         </div>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-geist-gray-700">
+        <p className="mt-5 border-t border-line-soft pt-4 text-[11px] leading-relaxed text-muted">
           Codex talks Responses-API to the local daemon, which adapts to this provider's upstream
-          format and forwards to <code className="font-mono">Base URL</code>. On save,
-          <code className="font-mono"> ~/.codex/config.toml</code> is updated so this provider points
-          at <code className="font-mono">http://localhost:3210/proxy</code>.
+          format and forwards to <code className="font-mono text-fg-2">Base URL</code>. On save,
+          <code className="font-mono text-fg-2"> ~/.codex/config.toml</code> is updated so this provider points
+          at <code className="font-mono text-fg-2">http://localhost:3210/proxy</code>.
           <br />
-          <strong className="font-medium text-geist-gray-800">API key:</strong> put it in
-          <code className="font-mono"> ~/.baton/.env</code> (e.g.
-          <code className="font-mono"> GLM_CODEX_API_KEY=sk-...</code>) — the daemon reads it from
+          <strong className="font-medium text-fg-2">API key:</strong> put it in
+          <code className="font-mono text-fg-2"> ~/.baton/.env</code> (e.g.
+          <code className="font-mono text-fg-2"> GLM_CODEX_API_KEY=sk-...</code>) — the daemon reads it from
           there on startup, so it works even when launched from the mobile app or on reboot. Restart
           the daemon after editing.
         </p>
       </Card>
 
-      <SectionHeader title="All Providers" count={providers.length} />
+      <SectionHeader title="All providers" count={providers.length} />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-geist-blue-700 border-t-transparent" />
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
         </div>
       ) : providers.length === 0 ? (
         <EmptyState
-          icon={<IconServer className="h-7 w-7 text-geist-gray-700" />}
+          icon={<IconServer className="h-5 w-5" />}
           title="No API providers configured"
           description="Add one above to start using the converter proxy."
         />
@@ -371,13 +365,13 @@ export function ApiProvidersScreen() {
                 {isEditing ? (
                   <div>
                     <div className="mb-5 flex items-center gap-2.5">
-                      <span className="text-sm font-semibold text-geist-gray-1000">{p.name}</span>
+                      <span className="text-[13px] font-semibold text-fg">{p.name}</span>
                       <StatusBadge status="starting" />
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
+                        <label className="mb-2 block text-xs font-medium text-muted">
                           Base URL
                         </label>
                         <Input
@@ -389,8 +383,8 @@ export function ApiProvidersScreen() {
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
-                          Env Key
+                        <label className="mb-2 block text-xs font-medium text-muted">
+                          Env key
                         </label>
                         <Input
                           value={editEnvKey}
@@ -401,7 +395,7 @@ export function ApiProvidersScreen() {
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
+                        <label className="mb-2 block text-xs font-medium text-muted">
                           Models (comma-separated)
                         </label>
                         <Input
@@ -414,8 +408,8 @@ export function ApiProvidersScreen() {
                     </div>
 
                     <div className="mt-4">
-                      <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
-                        Upstream Format
+                      <label className="mb-2 block text-xs font-medium text-muted">
+                        Upstream format
                       </label>
                       <SegmentedControl
                         value={editUpstreamFormat}
@@ -425,21 +419,21 @@ export function ApiProvidersScreen() {
                     </div>
 
                     <div className="mt-4 flex items-center gap-4">
-                      <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-geist-gray-800">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-fg-2">
                         <input
                           type="checkbox"
                           checked={editEnabled}
                           onChange={(e) => setEditEnabled(e.target.checked)}
-                          className="h-4 w-4 rounded-[var(--radius-sm)] border-geist-gray-alpha-500 accent-geist-gray-1000"
+                          className="h-3.5 w-3.5 rounded-sm border-line accent-accent"
                         />
                         Enabled
                       </label>
-                      <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-geist-gray-800">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-fg-2">
                         <input
                           type="checkbox"
                           checked={editIsDefault}
                           onChange={(e) => setEditIsDefault(e.target.checked)}
-                          className="h-4 w-4 rounded-[var(--radius-sm)] border-geist-gray-alpha-500 accent-geist-gray-1000"
+                          className="h-3.5 w-3.5 rounded-sm border-line accent-accent"
                         />
                         Default
                       </label>
@@ -461,31 +455,31 @@ export function ApiProvidersScreen() {
                   </div>
                 ) : (
                   <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-sm font-semibold text-geist-gray-1000">{p.name}</span>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[13px] font-semibold text-fg">{p.name}</span>
                         {p.isDefault && (
-                          <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-geist-gray-1000 px-2 py-0.5 text-xs font-medium text-geist-background-100">
-                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-geist-background-100" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-on">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-on" />
                             default
                           </span>
                         )}
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-0.5 text-xs font-medium ${
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
                             p.enabled
-                              ? 'bg-geist-green-100 text-geist-green-700 dark:bg-geist-green-1000 dark:text-geist-green-900'
-                              : 'bg-geist-gray-alpha-200 text-geist-gray-900'
+                              ? 'bg-success-soft text-success'
+                              : 'bg-raised text-muted'
                           }`}
                         >
                           <span
                             className={`inline-block h-1.5 w-1.5 rounded-full ${
-                              p.enabled ? 'bg-geist-green-600' : 'bg-geist-gray-500'
+                              p.enabled ? 'bg-success' : 'bg-meta'
                             }`}
                           />
                           {p.enabled ? 'enabled' : 'disabled'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -504,21 +498,21 @@ export function ApiProvidersScreen() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-xs text-geist-gray-700">Base URL</span>
-                        <span className="font-mono text-xs text-geist-gray-900">{p.baseUrl}</span>
+                        <span className="w-20 shrink-0 text-xs text-meta">Base URL</span>
+                        <span className="truncate font-mono text-xs text-fg-2">{p.baseUrl}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-xs text-geist-gray-700">Env Key</span>
-                        <span className="font-mono text-xs text-geist-gray-900">
+                        <span className="w-20 shrink-0 text-xs text-meta">Env key</span>
+                        <span className="font-mono text-xs text-fg-2">
                           {p.envKey ?? 'OPENAI_API_KEY'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-xs text-geist-gray-700">Upstream</span>
+                        <span className="w-20 shrink-0 text-xs text-meta">Upstream</span>
                         <span
-                          className={`inline-flex items-center rounded-[var(--radius-sm)] px-2 py-0.5 text-xs font-medium ${UPSTREAM_BADGE_STYLES[p.upstreamFormat ?? 'responses']}`}
+                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${UPSTREAM_BADGE_STYLES[p.upstreamFormat ?? 'responses']}`}
                         >
                           {UPSTREAM_FORMATS.find((m) => m.key === (p.upstreamFormat ?? 'responses'))
                             ?.label ?? p.upstreamFormat}
@@ -531,7 +525,7 @@ export function ApiProvidersScreen() {
                         {p.models.map((m) => (
                           <span
                             key={m}
-                            className="inline-flex items-center rounded-[var(--radius-sm)] bg-geist-gray-alpha-200 px-2 py-0.5 text-xs font-medium text-geist-gray-900"
+                            className="inline-flex items-center rounded-full border border-line bg-transparent px-2 py-0.5 font-mono text-xs text-fg-2"
                           >
                             {m}
                           </span>

@@ -20,21 +20,21 @@ interface FileContent {
   size: number;
 }
 
-const FILE_EXT_ICONS: Record<string, string> = {
-  ts: 'bg-geist-blue-100 text-geist-blue-700 dark:bg-geist-blue-1000 dark:text-geist-blue-900',
-  tsx: 'bg-geist-blue-100 text-geist-blue-700 dark:bg-geist-blue-1000 dark:text-geist-blue-900',
-  js: 'bg-geist-amber-100 text-geist-amber-900 dark:bg-geist-amber-1000 dark:text-geist-amber-600',
-  jsx: 'bg-geist-blue-100 text-geist-blue-700 dark:bg-geist-blue-1000 dark:text-geist-blue-900',
-  json: 'bg-geist-gray-alpha-200 text-geist-gray-900',
-  css: 'bg-geist-pink-100 text-geist-pink-700 dark:bg-geist-pink-1000 dark:text-geist-pink-900',
-  html: 'bg-geist-amber-100 text-geist-amber-900 dark:bg-geist-amber-1000 dark:text-geist-amber-600',
-  md: 'bg-geist-gray-alpha-200 text-geist-gray-900',
-  py: 'bg-geist-green-100 text-geist-green-700 dark:bg-geist-green-1000 dark:text-geist-green-900',
-  rs: 'bg-geist-amber-100 text-geist-amber-900 dark:bg-geist-amber-1000 dark:text-geist-amber-600',
-  go: 'bg-geist-teal-100 text-geist-teal-700 dark:bg-geist-teal-1000 dark:text-geist-teal-900',
-  toml: 'bg-geist-gray-alpha-200 text-geist-gray-900',
-  yaml: 'bg-geist-gray-alpha-200 text-geist-gray-900',
-  yml: 'bg-geist-gray-alpha-200 text-geist-gray-900',
+const FILE_EXT_STYLES: Record<string, string> = {
+  ts: 'bg-accent-soft text-accent-hover',
+  tsx: 'bg-accent-soft text-accent-hover',
+  js: 'bg-warn-soft text-warn',
+  jsx: 'bg-accent-soft text-accent-hover',
+  json: 'bg-raised text-muted',
+  css: 'bg-danger-soft text-danger',
+  html: 'bg-warn-soft text-warn',
+  md: 'bg-raised text-muted',
+  py: 'bg-success-soft text-success',
+  rs: 'bg-warn-soft text-warn',
+  go: 'bg-success-soft text-success',
+  toml: 'bg-raised text-muted',
+  yaml: 'bg-raised text-muted',
+  yml: 'bg-raised text-muted',
 };
 
 export function FilesScreen() {
@@ -92,21 +92,21 @@ export function FilesScreen() {
 
   return (
     <div className="flex h-[calc(100dvh-88px)] flex-col gap-4 md:h-[calc(100dvh-96px)]">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <BackButton onClick={() => navigate(-1)} />
-        <span className="text-sm font-medium text-geist-gray-800">
+        <span className="text-[13px] font-medium text-fg">
           {agent?.projectPath.split('/').pop() ?? 'Files'}
         </span>
-        <span className="font-mono text-xs text-geist-gray-700">{sessionId?.slice(0, 8)}</span>
+        <span className="font-mono text-xs text-meta">{sessionId?.slice(0, 8)}</span>
       </div>
 
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 px-5 py-3">
+          <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-md border border-line-soft bg-surface px-4 py-2">
             <button
               type="button"
               onClick={() => fetchDir('/')}
-              className="px-1.5 font-mono text-[13px] text-geist-gray-700 transition-colors hover:text-geist-gray-1000"
+              className="rounded-sm p-1 text-muted transition-colors duration-150 hover:bg-raised hover:text-fg"
             >
               <IconHome className="h-3.5 w-3.5" />
             </button>
@@ -115,14 +115,14 @@ export function FilesScreen() {
               const isLast = i === pathParts.length - 1;
               return (
                 <span key={path} className="flex items-center gap-1">
-                  <IconChevronRight className="h-3 w-3 text-geist-gray-alpha-500" />
+                  <IconChevronRight className="h-3 w-3 text-line-strong" />
                   <button
                     type="button"
                     onClick={() => fetchDir(path)}
-                    className={`px-1.5 font-mono text-[13px] transition-colors ${
+                    className={`rounded-sm px-1.5 py-0.5 font-mono text-xs transition-colors duration-150 ${
                       isLast
-                        ? 'font-semibold text-geist-gray-1000'
-                        : 'text-geist-gray-800 hover:text-geist-gray-1000'
+                        ? 'font-semibold text-fg'
+                        : 'text-muted hover:bg-raised hover:text-fg'
                     }`}
                   >
                     {part}
@@ -136,16 +136,18 @@ export function FilesScreen() {
             {loading ? (
               <LoadingSpinner text="Loading…" />
             ) : items.length === 0 ? (
-              <EmptyState icon={<IconFolder className="h-6 w-6 text-geist-gray-700" />} title="Empty directory" />
+              <EmptyState icon={<IconFolder className="h-5 w-5" />} title="Empty directory" />
             ) : (
-              items.map((item) => (
-                <FileRow
-                  key={item.path}
-                  item={item}
-                  onClick={() => (item.isDir ? fetchDir(item.path) : openFile(item.path))}
-                  isSelected={selectedFile?.path === item.path}
-                />
-              ))
+              <div className="divide-y divide-line-soft">
+                {items.map((item) => (
+                  <FileRow
+                    key={item.path}
+                    item={item}
+                    onClick={() => (item.isDir ? fetchDir(item.path) : openFile(item.path))}
+                    isSelected={selectedFile?.path === item.path}
+                  />
+                ))}
+              </div>
             )}
           </Card>
         </div>
@@ -153,18 +155,18 @@ export function FilesScreen() {
         <Card className="hidden w-[55%] flex-col overflow-hidden sm:flex" padding={false}>
           {selectedFile ? (
             <>
-              <div className="flex shrink-0 items-center justify-between border-b border-geist-gray-alpha-300 px-5 py-3.5">
+              <div className="flex shrink-0 items-center justify-between border-b border-line-soft px-4 py-2.5">
                 <div className="flex items-center gap-2.5">
-                  <IconFile className="h-4 w-4 text-geist-gray-700" />
-                  <span className="text-[13px] font-medium text-geist-gray-1000">
+                  <IconFile className="h-4 w-4 text-muted" />
+                  <span className="text-xs font-medium text-fg">
                     {selectedFile.name}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-[11px] text-geist-gray-700">
+                <div className="flex items-center gap-3 text-[11px] tabular-nums text-meta">
                   {selectedFile.ext && (
                     <span
-                      className={`rounded px-1.5 py-0.5 font-mono uppercase text-[11px] ${
-                        FILE_EXT_ICONS[selectedFile.ext] ?? 'bg-geist-gray-alpha-200 text-geist-gray-900'
+                      className={`rounded-sm px-1.5 py-0.5 font-mono uppercase ${
+                        FILE_EXT_STYLES[selectedFile.ext] ?? 'bg-raised text-muted'
                       }`}
                     >
                       {selectedFile.ext}
@@ -174,18 +176,18 @@ export function FilesScreen() {
                   <span>{formatSize(selectedFile.size)}</span>
                 </div>
               </div>
-              <div className="flex-1 overflow-auto bg-geist-gray-alpha-100">
-                <pre className="p-5 font-mono text-xs leading-relaxed text-geist-gray-1000">
+              <div className="flex-1 overflow-auto bg-canvas">
+                <pre className="p-5 font-mono text-xs leading-relaxed text-fg-2">
                   {selectedFile.content}
                 </pre>
               </div>
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[var(--radius-md)] bg-geist-gray-alpha-200">
-                <IconFile className="h-6 w-6 text-geist-gray-600" />
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-raised text-muted">
+                <IconFile className="h-5 w-5" />
               </div>
-              <p className="text-sm text-geist-gray-700">Select a file to view its content</p>
+              <p className="text-[13px] text-muted">Select a file to view its content</p>
             </div>
           )}
         </Card>
@@ -206,28 +208,28 @@ function FileRow({
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-3.5 border-b border-geist-gray-alpha-200 px-6 py-3.5 text-left text-[13px] transition-colors last:border-0 ${
-        isSelected ? 'bg-geist-gray-alpha-100' : 'hover:bg-geist-gray-alpha-100'
+      className={`flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] transition-colors duration-150 ${
+        isSelected ? 'bg-raised' : 'hover:bg-raised/60'
       }`}
     >
       {item.isDir ? (
-        <IconFolder className="h-4 w-4 shrink-0 text-geist-gray-700" />
+        <IconFolder className="h-4 w-4 shrink-0 text-muted" />
       ) : (
-        <IconFile className="h-4 w-4 shrink-0 text-geist-gray-700" />
+        <IconFile className="h-4 w-4 shrink-0 text-muted" />
       )}
       <span
         className={`flex-1 truncate font-mono ${
-          item.isDir ? 'font-medium text-geist-gray-1000' : 'text-geist-gray-900'
+          item.isDir ? 'font-medium text-fg' : 'text-fg-2'
         }`}
       >
         {item.name}
       </span>
       {!item.isDir && (
-        <span className="shrink-0 text-[11px] tabular-nums text-geist-gray-700">
+        <span className="shrink-0 text-[11px] tabular-nums text-meta">
           {formatSize(item.size)}
         </span>
       )}
-      {item.isDir && <IconChevronRight className="h-3 w-3 shrink-0 text-geist-gray-alpha-500" />}
+      {item.isDir && <IconChevronRight className="h-3 w-3 shrink-0 text-line-strong" />}
     </button>
   );
 }

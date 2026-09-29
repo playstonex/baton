@@ -47,29 +47,29 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
   }, [oldContent, newContent]);
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius-sm)] bg-geist-gray-100 font-mono text-xs leading-relaxed">
+    <div className="overflow-hidden rounded-sm border border-line-soft bg-canvas font-mono text-xs leading-relaxed">
       <div className="overflow-x-auto">
         {diffLines.map((line, idx) => (
           <div
             key={idx}
             className={`flex ${
               line.type === 'add'
-                ? 'bg-geist-green-700/15'
+                ? 'bg-success-soft'
                 : line.type === 'remove'
-                  ? 'bg-geist-red-700/15'
+                  ? 'bg-danger-soft'
                   : ''
             }`}
           >
-            <div className="w-10 shrink-0 select-none bg-geist-gray-alpha-1000/20 px-2 py-1 text-right text-geist-gray-600">
+            <div className="w-10 shrink-0 select-none bg-raised/60 px-2 py-1 text-right text-meta">
               {line.lineNumber}
             </div>
             <div
-              className={`w-5 shrink-0 select-none bg-geist-gray-alpha-1000/20 px-1 py-1 text-center ${
+              className={`w-5 shrink-0 select-none bg-raised/60 px-1 py-1 text-center ${
                 line.type === 'add'
-                  ? 'text-geist-green-900'
+                  ? 'text-success'
                   : line.type === 'remove'
-                    ? 'text-geist-red-900'
-                    : 'text-geist-gray-600'
+                    ? 'text-danger'
+                    : 'text-meta'
               }`}
             >
               {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
@@ -77,10 +77,10 @@ export function DiffViewer({ oldContent, newContent }: DiffViewerProps) {
             <pre
               className={`whitespace-pre-wrap break-all px-2.5 py-1 ${
                 line.type === 'add'
-                  ? 'text-geist-green-900'
+                  ? 'text-success'
                   : line.type === 'remove'
-                    ? 'text-geist-red-900'
-                    : 'text-geist-gray-900'
+                    ? 'text-danger'
+                    : 'text-fg-2'
               }`}
             >
               {line.content}

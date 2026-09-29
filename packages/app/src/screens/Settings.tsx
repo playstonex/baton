@@ -120,17 +120,17 @@ export function SettingsScreen() {
               key={item.key}
               type="button"
               onClick={() => setMode(item.key)}
-              className={`rounded-[var(--radius-md)] border p-6 text-left transition-colors ${
+              className={`rounded-md border p-5 text-left transition-colors duration-150 ${
                 active
-                  ? 'border-geist-gray-1000 bg-geist-gray-alpha-100'
-                  : 'border-geist-gray-alpha-400 bg-geist-background-100 hover:border-geist-gray-alpha-600'
+                  ? 'border-accent bg-accent-soft'
+                  : 'border-line-soft bg-surface hover:border-line-strong'
               }`}
             >
-              <div className="text-xs font-semibold uppercase tracking-wider text-geist-gray-800">
+              <div className="text-xs font-medium text-muted">
                 {item.label}
               </div>
-              <div className="mt-2 text-base font-medium text-geist-gray-1000">{item.title}</div>
-              <p className="mt-1 text-sm text-geist-gray-800">{item.body}</p>
+              <div className="mt-1.5 text-sm font-semibold text-fg">{item.title}</div>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">{item.body}</p>
             </button>
           );
         })}
@@ -138,8 +138,8 @@ export function SettingsScreen() {
 
       {mode === 'local' ? (
         <Card>
-          <div className="text-sm font-semibold text-geist-gray-1000">Local Connection</div>
-          <p className="mt-1.5 text-sm text-geist-gray-800">Point Baton at the daemon</p>
+          <div className="text-[13px] font-semibold text-fg">Local connection</div>
+          <p className="mt-1 text-[13px] text-muted">Point Baton at the daemon</p>
           <div className="mt-5 space-y-5">
             <FieldBlock label="Daemon HTTP URL" hint="The HTTP endpoint where your Baton daemon is listening.">
               <Input
@@ -155,8 +155,8 @@ export function SettingsScreen() {
         </Card>
       ) : (
         <Card>
-          <div className="text-sm font-semibold text-geist-gray-1000">Remote Pairing</div>
-          <p className="mt-1.5 text-sm text-geist-gray-800">Pair through the relay</p>
+          <div className="text-[13px] font-semibold text-fg">Remote pairing</div>
+          <p className="mt-1 text-[13px] text-muted">Pair through the relay</p>
           <div className="mt-5 space-y-5">
             <FieldBlock label="Relay WebSocket URL" hint="The public WebSocket address of your Baton relay server.">
               <Input
@@ -167,8 +167,8 @@ export function SettingsScreen() {
               />
             </FieldBlock>
 
-            <FieldBlock label="Pairing Code" hint="Use the 6-digit code displayed by the host daemon.">
-              <div className="flex gap-3">
+            <FieldBlock label="Pairing code" hint="Use the 6-digit code displayed by the host daemon.">
+              <div className="flex gap-2">
                 <div className="flex-1">
                   <Input
                     placeholder="000000"
@@ -178,7 +178,7 @@ export function SettingsScreen() {
                     maxLength={6}
                   />
                 </div>
-                <Button variant="primary" onClick={applyRemote} className="px-5">
+                <Button variant="primary" onClick={applyRemote} className="px-4">
                   Pair & Connect
                 </Button>
               </div>
@@ -194,16 +194,16 @@ export function SettingsScreen() {
       {status && (
         <StatusAlert
           type={isSuccess ? 'success' : 'error'}
-          title={isSuccess ? 'Connection Status' : 'Action Required'}
+          title={isSuccess ? 'Connection status' : 'Action required'}
           message={status}
         />
       )}
 
       <Card>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-semibold text-geist-gray-1000">Pair Mobile Device</div>
-            <p className="mt-1 text-sm text-geist-gray-800">
+            <div className="text-[13px] font-semibold text-fg">Pair mobile device</div>
+            <p className="mt-1 text-[13px] text-muted">
               Scan the QR code with the Baton mobile app camera to connect automatically.
             </p>
           </div>
@@ -212,27 +212,25 @@ export function SettingsScreen() {
           </Button>
         </div>
         {pairingQr && (
-          <div className="mt-6 flex flex-col items-center gap-4 rounded-[var(--radius-md)] border border-geist-gray-alpha-300 bg-white p-6 dark:bg-geist-background-100">
+          <div className="mt-5 flex flex-col items-center gap-4 rounded-md border border-line-soft bg-canvas p-6">
             <img
               src={pairingQr.qr}
               alt="Baton Pairing QR Code"
-              className="h-56 w-56 rounded-lg border border-geist-gray-alpha-200 shadow-sm"
+              className="h-56 w-56 rounded-md border border-line-soft bg-white p-2"
             />
-            <div className="w-full space-y-1.5 text-center text-xs text-geist-gray-700">
+            <div className="w-full space-y-1 text-center font-mono text-xs text-muted">
               {pairingQr.name && (
                 <div>
-                  Host: <span className="font-mono text-geist-gray-900">{pairingQr.name}</span>
+                  Host: <span className="text-fg-2">{pairingQr.name}</span>
                 </div>
               )}
               {pairingQr.localHttpUrl && (
                 <div>
-                  LAN URL:{' '}
-                  <span className="font-mono text-geist-gray-900">{pairingQr.localHttpUrl}</span>
+                  LAN URL: <span className="text-fg-2">{pairingQr.localHttpUrl}</span>
                 </div>
               )}
               <div className="truncate">
-                Fingerprint:{' '}
-                <span className="font-mono text-geist-gray-900">{pairingQr.fingerprint.slice(0, 16)}…</span>
+                Fingerprint: <span className="text-fg-2">{pairingQr.fingerprint.slice(0, 16)}…</span>
               </div>
             </div>
           </div>
@@ -240,8 +238,8 @@ export function SettingsScreen() {
       </Card>
 
       <Card>
-        <div className="text-sm font-semibold text-geist-gray-1000">Environment</div>
-        <div className="mt-4 space-y-2.5">
+        <div className="text-[13px] font-semibold text-fg">Environment</div>
+        <div className="mt-3 divide-y divide-line-soft">
           <InfoRow label="Application" value="Baton" />
           <InfoRow label="Version" value="0.1.0" />
           <InfoRow label="Transport" value="WebSocket + HTTP" />
@@ -249,14 +247,14 @@ export function SettingsScreen() {
         </div>
       </Card>
 
-      <div className="rounded-[var(--radius-md)] border border-geist-gray-alpha-400 bg-geist-gray-alpha-100 p-6">
-        <div className="text-xs font-medium uppercase tracking-wider text-geist-gray-800">
-          Current Mode
+      <div className="rounded-md border border-line-soft bg-raised/60 p-5">
+        <div className="text-xs font-medium text-muted">
+          Current mode
         </div>
-        <div className="mt-1 text-lg font-medium text-geist-gray-1000">
+        <div className="mt-1 text-base font-semibold text-fg">
           {mode === 'local' ? 'Local Network' : 'Remote Relay'}
         </div>
-        <p className="mt-1 text-sm text-geist-gray-800">
+        <p className="mt-1 text-[13px] text-muted">
           {mode === 'local'
             ? 'Direct HTTP and WebSocket connectivity for the lowest latency setup.'
             : 'Relay and pairing flow for secure access outside the local environment.'}
@@ -277,18 +275,18 @@ function FieldBlock({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-geist-gray-800">{label}</label>
+      <label className="text-xs font-medium text-muted">{label}</label>
       {children}
-      <p className="text-xs text-geist-gray-700">{hint}</p>
+      <p className="text-xs text-meta">{hint}</p>
     </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-geist-gray-alpha-200 py-2 last:border-0">
-      <span className="text-sm text-geist-gray-800">{label}</span>
-      <span className="font-mono text-sm text-geist-gray-900">{value}</span>
+    <div className="flex items-center justify-between py-2">
+      <span className="text-[13px] text-muted">{label}</span>
+      <span className="font-mono text-[13px] text-fg-2">{value}</span>
     </div>
   );
 }

@@ -260,7 +260,7 @@ export default function GitScreen() {
         tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
         intensity={80}
         style={{
-          paddingTop: headerHeight,
+          paddingTop: Math.max(headerHeight, insets.top + 48),
           paddingHorizontal: Spacing.lg,
           paddingBottom: Spacing.sm,
         }}
@@ -416,7 +416,7 @@ export default function GitScreen() {
           <ToolbarBtn
             icon="ellipsis-horizontal"
             label="More"
-            color={c.textSecondary}
+            color={c.isDark ? '#8a8f98' : '#6f747e'}
             onPress={showMoreActions}
             disabled={busy !== null}
           />
@@ -1128,7 +1128,7 @@ function ToolbarBtn({
         gap: 6,
         paddingVertical: 12,
         borderRadius: CornerRadius.medium,
-        backgroundColor: disabled ? c.subtle : pressed ? color + '28' : color + '14',
+        backgroundColor: disabled ? color + '0a' : pressed ? color + '28' : color + '14',
         minHeight: 44,
         opacity: disabled && !busy ? 0.5 : 1,
       })}

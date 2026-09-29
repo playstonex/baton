@@ -95,14 +95,12 @@ export function PullRequestsScreen() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-geist-gray-1000">Pull Requests</h1>
-          <p className="mt-0.5 text-sm text-geist-gray-800">
-            Browse open PRs and CI checks from a code-hosting platform.
-          </p>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-fg">Pull requests</h1>
+        <p className="mt-1 text-[13px] text-muted">
+          Browse open PRs and CI checks from a code-hosting platform.
+        </p>
       </div>
 
       <form onSubmit={onSubmit} className="flex items-center gap-2">
@@ -110,7 +108,7 @@ export function PullRequestsScreen() {
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
           placeholder="owner/name, a URL, or git@host:owner/name.git"
-          className="flex-1"
+          className="flex-1 font-mono"
           aria-label="Repository"
         />
         <Button variant="primary" type="submit" disabled={loading || !repo.trim()}>
@@ -129,32 +127,33 @@ export function PullRequestsScreen() {
       </form>
 
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">
+        <label className="mb-2 block text-xs font-medium text-muted">
           Local project path (for checkout)
         </label>
         <Input
           value={checkoutPath}
           onChange={(e) => setCheckoutPath(e.target.value)}
           placeholder="/absolute/path/to/local/clone — required to check out a PR"
+          className="font-mono"
           aria-label="Local project path"
         />
       </div>
 
       {notice && <StatusAlert type="success" message={notice} />}
-      {error && <StatusAlert type="error" title="Forge Error" message={error} />}
+      {error && <StatusAlert type="error" title="Forge error" message={error} />}
 
       {loading && !prs && <LoadingSpinner text="Loading pull requests…" />}
 
       {prs && prs.length === 0 && (
         <EmptyState
-          icon={<IconGitBranch className="h-6 w-6 text-geist-gray-700" />}
+          icon={<IconGitBranch className="h-5 w-5" />}
           title="No open pull requests"
           description="This repository has no open PRs, or the query returned none."
         />
       )}
 
       {prs && prs.length > 0 && (
-        <div className="space-y-3">
+        <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
           {prs.map((pr) => (
             <PullRequestRow
               key={pr.number}
@@ -167,12 +166,12 @@ export function PullRequestsScreen() {
               canCheckout={checkoutPath.trim().length > 0}
             />
           ))}
-        </div>
+        </Card>
       )}
 
       {!prs && !loading && !error && (
         <EmptyState
-          icon={<IconGitBranch className="h-6 w-6 text-geist-gray-700" />}
+          icon={<IconGitBranch className="h-5 w-5" />}
           title="Enter a repository"
           description="e.g. kirodotdev/KiroCrew — then press Load."
         />
@@ -230,35 +229,35 @@ function PullRequestRow({
   });
 
   return (
-    <Card padding={false} className="overflow-hidden">
+    <div>
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-geist-gray-alpha-100"
+        className="flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors duration-150 hover:bg-raised/50"
       >
-        <span className="mt-0.5 shrink-0 rounded bg-geist-gray-alpha-200 px-1.5 py-0.5 font-mono text-[11px] text-geist-gray-800">
+        <span className="mt-0.5 shrink-0 rounded-sm bg-raised px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted">
           #{pr.number}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-geist-gray-1000">{pr.title}</span>
+            <span className="truncate text-[13px] font-medium text-fg">{pr.title}</span>
             {pr.isDraft && (
-              <span className="shrink-0 rounded bg-geist-gray-alpha-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-geist-gray-800">
+              <span className="shrink-0 rounded-sm bg-raised px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                 Draft
               </span>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-geist-gray-700">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-meta">
             <span className="inline-flex items-center gap-1">
               <IconGitBranch className="h-3 w-3" />
               {pr.headRefName} → {pr.baseRefName}
             </span>
             {pr.authorLogin && <span>@{pr.authorLogin}</span>}
-            <span>{updated}</span>
+            <span className="tabular-nums">{updated}</span>
             {pr.labels.map((label) => (
               <span
                 key={label}
-                className="rounded-full bg-geist-gray-alpha-200 px-2 py-0.5 text-[10px] font-medium text-geist-gray-900"
+                className="rounded-full bg-raised px-2 py-0.5 font-sans text-[10px] font-medium text-muted"
               >
                 {label}
               </span>
@@ -270,7 +269,7 @@ function PullRequestRow({
           target="_blank"
           rel="noreferrer noopener"
           onClick={(e) => e.stopPropagation()}
-          className="shrink-0 rounded-[var(--radius-sm)] p-1.5 text-geist-gray-700 transition-colors hover:bg-geist-gray-alpha-200 hover:text-geist-gray-1000"
+          className="shrink-0 rounded-sm p-1.5 text-muted transition-colors duration-150 hover:bg-raised hover:text-fg"
           aria-label="Open on the forge"
         >
           <IconExternalLink className="h-3.5 w-3.5" />
@@ -278,9 +277,9 @@ function PullRequestRow({
       </button>
 
       {expanded && (
-        <div className="border-t border-geist-gray-alpha-200 bg-geist-gray-alpha-100 px-5 py-4">
+        <div className="border-t border-line-soft bg-canvas px-5 py-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-geist-gray-800">
+            <span className="text-xs font-semibold text-muted">
               Checks
             </span>
             <Button
@@ -304,14 +303,14 @@ function PullRequestRow({
             </Button>
           </div>
           {checksLoading && (
-            <div className="flex items-center gap-2 text-xs text-geist-gray-800">
+            <div className="flex items-center gap-2 text-xs text-muted">
               <IconSpinner className="h-3.5 w-3.5 animate-spin" />
               Loading checks…
             </div>
           )}
           {checksError && <StatusAlert type="error" message={checksError} />}
           {checks && checks.length === 0 && (
-            <p className="text-xs text-geist-gray-700">No CI checks reported for this PR.</p>
+            <p className="text-xs text-muted">No CI checks reported for this PR.</p>
           )}
           {checks && checks.length > 0 && (
             <div className="space-y-1.5">
@@ -322,7 +321,7 @@ function PullRequestRow({
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -330,31 +329,11 @@ const CHECK_STYLES: Record<
   PullRequestCheckStatus,
   { bg: string; text: string; label: string }
 > = {
-  success: {
-    bg: 'bg-geist-green-100 dark:bg-geist-green-1000',
-    text: 'text-geist-green-700 dark:text-geist-green-900',
-    label: 'Passed',
-  },
-  failure: {
-    bg: 'bg-geist-red-100 dark:bg-geist-red-1000',
-    text: 'text-geist-red-700 dark:text-geist-red-900',
-    label: 'Failed',
-  },
-  pending: {
-    bg: 'bg-geist-amber-100 dark:bg-geist-amber-1000',
-    text: 'text-geist-amber-900 dark:text-geist-amber-600',
-    label: 'Pending',
-  },
-  cancelled: {
-    bg: 'bg-geist-gray-alpha-200',
-    text: 'text-geist-gray-800',
-    label: 'Cancelled',
-  },
-  skipped: {
-    bg: 'bg-geist-gray-alpha-200',
-    text: 'text-geist-gray-800',
-    label: 'Skipped',
-  },
+  success: { bg: 'bg-success-soft', text: 'text-success', label: 'Passed' },
+  failure: { bg: 'bg-danger-soft', text: 'text-danger', label: 'Failed' },
+  pending: { bg: 'bg-warn-soft', text: 'text-warn', label: 'Pending' },
+  cancelled: { bg: 'bg-raised', text: 'text-muted', label: 'Cancelled' },
+  skipped: { bg: 'bg-raised', text: 'text-muted', label: 'Skipped' },
 };
 
 function CheckRow({ check }: { check: PullRequestCheck }) {
@@ -367,15 +346,13 @@ function CheckRow({ check }: { check: PullRequestCheck }) {
         : IconSpinner;
 
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-300 bg-geist-background-100 px-4 py-2.5">
-      <span
-        className={`flex h-5 w-5 items-center justify-center rounded ${style.bg} ${style.text}`}
-      >
+    <div className="flex items-center gap-3 rounded-sm border border-line-soft bg-surface px-3 py-2">
+      <span className={`flex h-5 w-5 items-center justify-center rounded-sm ${style.bg} ${style.text}`}>
         <Icon className={`h-3 w-3 ${check.status === 'pending' ? 'animate-spin' : ''}`} />
       </span>
-      <span className="min-w-0 flex-1 truncate text-[13px] text-geist-gray-900">{check.name}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] text-fg-2">{check.name}</span>
       {check.workflow && (
-        <span className="shrink-0 text-[11px] text-geist-gray-700">{check.workflow}</span>
+        <span className="shrink-0 text-[11px] text-meta">{check.workflow}</span>
       )}
       <span className={`shrink-0 text-[11px] font-medium ${style.text}`}>{style.label}</span>
       {check.url && (
@@ -383,7 +360,7 @@ function CheckRow({ check }: { check: PullRequestCheck }) {
           href={check.url}
           target="_blank"
           rel="noreferrer noopener"
-          className="shrink-0 text-geist-gray-700 transition-colors hover:text-geist-gray-1000"
+          className="shrink-0 text-muted transition-colors duration-150 hover:text-fg"
           aria-label="Open check"
         >
           <IconExternalLink className="h-3.5 w-3.5" />

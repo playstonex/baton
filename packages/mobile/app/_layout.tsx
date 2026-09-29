@@ -7,10 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
 import { HeroUINativeProvider } from 'heroui-native';
 import { useFonts } from 'expo-font';
-import {
-  SpaceGrotesk_500Medium,
-  SpaceGrotesk_700Bold,
-} from '@expo-google-fonts/space-grotesk';
+import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import {
   JetBrainsMono_400Regular,
   JetBrainsMono_600SemiBold,
@@ -27,6 +24,7 @@ import {
   getActiveHostId,
   migrateLegacyCredentialsIfNeeded,
   hostToConnection,
+  addHost,
 } from '../src/services/secure-storage';
 import { useDeepLinking } from '../src/hooks/useDeepLinking';
 import { Typography } from '../src/constants/theme';
@@ -38,6 +36,16 @@ function SessionNavigationWiring() {
   // Activates deep-link + push-notification → router navigation.
   useDeepLinking();
   const router = useRouter();
+
+  // Dev remote control (used by simulator screenshot automation): expose a
+  // navigate hook + theme setter on globalThis, driven over the Hermes CDP
+  // endpoint that Metro exposes in dev. Never present in release builds.
+  if (__DEV__) {
+    (global as unknown as Record<string, unknown>).__batonDev = {
+      navigate: (path: string) => router.navigate(path as never),
+      setTheme: useThemeStore.getState().setTheme,
+    };
+  }
 
   useEffect(() => {
     // Push notification tap → navigate to the session's chat screen.
@@ -69,8 +77,8 @@ export default function RootLayout() {
 
   // Display + mono faces for titles and machine data (see theme.FontFamily).
   const [fontsLoaded] = useFonts({
-    SpaceGrotesk_500Medium,
-    SpaceGrotesk_700Bold,
+    Inter_500Medium,
+    Inter_600SemiBold,
     JetBrainsMono_400Regular,
     JetBrainsMono_600SemiBold,
   });
@@ -82,6 +90,12 @@ export default function RootLayout() {
     initialized.current = true;
 
     loadTheme();
+    // Dev-only override for screenshot tours: EXPO_PUBLIC_DEV_THEME forces
+    // the theme after the saved preference loads. Inlined at bundle time.
+    const devTheme = process.env.EXPO_PUBLIC_DEV_THEME;
+    if (devTheme === 'light' || devTheme === 'dark') {
+      loadTheme().then(() => useThemeStore.getState().setTheme(devTheme));
+    }
     loadTerminalSettings();
     loadAgents();
     loadRecent();
@@ -91,10 +105,24 @@ export default function RootLayout() {
       // Migrate any legacy single-host credentials into the hosts array.
       await migrateLegacyCredentialsIfNeeded();
 
+      // Dev convenience: EXPO_PUBLIC_DEV_AUTOCONNECT=<daemon http url> saves
+      // and connects to that daemon on first launch, so simulator runs skip
+      // manual pairing. Unset in normal builds — the block never runs.
+      const devAutoConnect = process.env.EXPO_PUBLIC_DEV_AUTOCONNECT;
+
       // Load the multi-host list and active host.
-      const hosts = await loadHosts();
+      let hosts = await loadHosts();
+      let activeId = await getActiveHostId();
+      if (!activeId && hosts.length === 0 && devAutoConnect) {
+        const saved = await addHost({
+          mode: 'local',
+          localHttpUrl: devAutoConnect,
+          localWsUrl: devAutoConnect.replace(/^http/, 'ws').replace(/:\d+$/, ':3211'),
+        });
+        hosts = [saved];
+        activeId = saved.id;
+      }
       setHosts(hosts);
-      const activeId = await getActiveHostId();
       if (activeId) setActiveHost(activeId);
 
       // Auto-connect to the active host if there is one. setActiveHost above
@@ -112,8 +140,10 @@ export default function RootLayout() {
       const nowConnected = wsService.connected;
       setConnected(nowConnected);
       // Re-register push token on every reconnect: the daemon maps tokens by
-      // clientId, which changes per connection.
-      if (nowConnected) {
+      // clientId, which changes per connection. Skipped under the dev
+      // auto-connect env so the simulator run doesn't prompt for
+      // notification permission.
+      if (nowConnected && !process.env.EXPO_PUBLIC_DEV_AUTOCONNECT) {
         notificationService.initialize().then(() => notificationService.registerWithDaemon());
       }
     });

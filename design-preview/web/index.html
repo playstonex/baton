@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Web — Linear Redesign Preview</title>
+<style>
+  :root {
+    --bg: #08090a;
+    --panel: #0f1011;
+    --text: #f7f8f8;
+    --muted: #8a8f98;
+    --accent: #7170ff;
+    --hairline: rgba(255, 255, 255, 0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1200px 500px at 50% -10%, rgba(94, 106, 210, 0.10), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+    padding: 48px 24px 80px;
+  }
+  .wrap { max-width: 1480px; margin: 0 auto; }
+  header h1 {
+    font-size: 34px; letter-spacing: -0.02em; font-weight: 600;
+  }
+  header h1 .thin { color: var(--muted); font-weight: 500; }
+  header p { color: var(--muted); margin-top: 10px; font-size: 14px; line-height: 1.7; max-width: 760px; }
+  .chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 4px 12px;
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  h2 {
+    margin: 56px 0 20px; font-size: 13px; font-weight: 600;
+    letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2::before { content: ""; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); }
+  .row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 28px;
+  }
+  figure { margin: 0; }
+  .shot {
+    border-radius: 14px;
+    padding: 8px;
+    background: linear-gradient(160deg, #16171a, #0e0f11);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 2px 0 rgba(255,255,255,0.04) inset;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .shot:hover { transform: translateY(-4px); box-shadow: 0 32px 70px rgba(0,0,0,0.55); }
+  .shot img {
+    display: block; width: 100%; border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  figcaption { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+  figcaption b { color: var(--text); font-weight: 600; }
+  .tag {
+    font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border-radius: 6px;
+    border: 1px solid var(--hairline);
+  }
+  .tag.dark { color: #9fb6ff; }
+  .tag.light { color: #ffd479; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 12px; line-height: 1.8; border-top: 1px solid var(--hairline); padding-top: 20px; }
+  code { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11px; color: #9fb6ff; }
+  a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Baton Web <span class="thin">· Linear 重设计预览</span></h1>
+      <p>
+        按 Open Design 库 <code>design-systems/linear-app</code> 规范对全部页面重新设计的实机截图：
+        近黑画布 #08090a 上的亮度分层表面、半透明发丝描边、唯一彩色为靛紫 #5e6ad2 / #7170ff；
+        Inter Variable（'cv01' 'ss03'）+ 510/590 签名字重，数据全部来自实时 daemon。
+      </p>
+      <div class="chips">
+        <span class="chip">Display <b>Inter Variable</b></span>
+        <span class="chip">Mono <b>Geist Mono / Berkeley</b></span>
+        <span class="chip">Accent <b>#5e6ad2 / #7170ff</b></span>
+        <span class="chip">Canvas <b>#08090a</b></span>
+        <span class="chip">Borders <b>white 5–8%</b></span>
+        <span class="chip">Weights <b>400 / 510 / 590</b></span>
+      </div>
+    </header>
+
+    <h2>Light 模式</h2>
+    <div class="row">
+      <figure>
+        <div class="shot"><img src="dashboard-light.png" alt="Dashboard Light" /></div>
+        <figcaption><b>Dashboard</b><span class="tag light">LAUNCH + SESSIONS</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="api-providers-light.png" alt="API Providers Light" /></div>
+        <figcaption><b>API Providers</b><span class="tag light">UPSTREAM CONFIG</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="settings-light.png" alt="Settings Light" /></div>
+        <figcaption><b>Settings</b><span class="tag light">CONNECTION</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="analytics-light.png" alt="Analytics Light" /></div>
+        <figcaption><b>Analytics</b><span class="tag light">HEALTH + CHART</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="pipelines-light.png" alt="Pipelines Light" /></div>
+        <figcaption><b>Pipelines</b><span class="tag light">SEQUENTIAL AGENTS</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="pull-requests-light.png" alt="Pull Requests Light" /></div>
+        <figcaption><b>Pull Requests</b><span class="tag light">FORGE BROWSER</span></figcaption>
+      </figure>
+    </div>
+
+    <h2>Dark 模式（原生介质）</h2>
+    <div class="row">
+      <figure>
+        <div class="shot"><img src="dashboard-dark.png" alt="Dashboard Dark" /></div>
+        <figcaption><b>Dashboard</b><span class="tag dark">LAUNCH + SESSIONS</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="api-providers-dark.png" alt="API Providers Dark" /></div>
+        <figcaption><b>API Providers</b><span class="tag dark">UPSTREAM CONFIG</span></figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="settings-dark.png" alt="Settings Dark" /></div>
+        <figcaption><b>Settings</b><span class="tag dark">CONNECTION</span></figcaption>
+      </figure>
+    </div>
+
+    <footer>
+      截图来源：iPhone 18 Pro Max 之外的另一半 —— Chrome 1440px 视口，Vite dev server（:5173），实时运行的 daemon（:3210）。<br />
+      运行方式：<code>pnpm --filter @baton/app dev</code> · 设计令牌：<code>packages/app/src/app.css</code>（Linear 双主题）·
+      组件层：<code>packages/app/src/lib/ui.tsx</code> · 移动端同款设计的预览见 <a href="../index.html">design-preview/index.html</a>。
+    </footer>
+  </div>
+</body>
+</html>

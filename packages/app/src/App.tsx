@@ -78,35 +78,40 @@ export function App() {
     });
   }, []);
 
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-2.5 rounded-sm px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-150 ${
+      isActive
+        ? 'bg-raised text-fg'
+        : 'text-fg-2 hover:bg-raised/60 hover:text-fg'
+    }`;
+
   return (
-    <div className="flex h-[100dvh] bg-geist-background-200 dark:bg-geist-background-100">
+    <div className="flex h-[100dvh] bg-canvas">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/30 transition-opacity duration-200 md:hidden"
+          className="fixed inset-0 z-30 bg-overlay transition-opacity duration-200 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed z-40 flex h-full w-[260px] flex-col border-r border-geist-gray-alpha-400 bg-geist-background-100 transition-transform duration-200 md:static md:translate-x-0 ${
+        className={`fixed z-40 flex h-full w-[240px] flex-col border-r border-line-soft bg-panel transition-transform duration-200 md:static md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-2.5 px-5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-geist-gray-1000 text-xs font-bold text-geist-background-100">
+          <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-accent text-[11px] font-bold text-accent-on">
             B
           </div>
-          <span className="text-sm font-semibold tracking-tight text-geist-gray-1000">Baton</span>
+          <span className="text-[13px] font-semibold tracking-tight text-fg">Baton</span>
         </div>
 
-        <div className="mx-5 mb-2 h-px bg-geist-gray-alpha-200" />
-
         {/* Navigation */}
-        <nav className="flex flex-1 flex-col space-y-0.5 px-3">
-          <div className="mb-2 px-3 pt-2 text-[10px] font-semibold uppercase tracking-widest text-geist-gray-800">
+        <nav className="flex flex-1 flex-col space-y-0.5 overflow-y-auto px-3">
+          <div className="mb-1.5 px-2.5 pt-3 text-[11px] font-medium uppercase tracking-[0.08em] text-meta">
             Main
           </div>
           {NAV_ITEMS_MAIN.map(({ to, label, end, icon: Icon }) => (
@@ -115,22 +120,18 @@ export function App() {
               to={to}
               end={end}
               onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-geist-gray-alpha-200 text-geist-gray-1000'
-                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100 hover:text-geist-gray-1000'
-                }`
-              }
+              className={navLinkClass}
             >
-              <Icon className="h-[18px] w-[18px] shrink-0" />
+              <Icon
+                className={`h-4 w-4 shrink-0 ${location.pathname === to ? 'text-fg-2' : 'text-muted'}`}
+              />
               {label}
             </NavLink>
           ))}
 
-          <div className="mx-2 my-3 h-px bg-geist-gray-alpha-200" />
+          <div className="mx-2 my-3 h-px bg-line-soft" />
 
-          <div className="mb-2 px-3 pt-1 text-[10px] font-semibold uppercase tracking-widest text-geist-gray-800">
+          <div className="mb-1.5 px-2.5 pt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-meta">
             System
           </div>
           {NAV_ITEMS_SYSTEM.map(({ to, label, end, icon: Icon }) => (
@@ -139,27 +140,23 @@ export function App() {
               to={to}
               end={end}
               onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-geist-gray-alpha-200 text-geist-gray-1000'
-                    : 'text-geist-gray-800 hover:bg-geist-gray-alpha-100 hover:text-geist-gray-1000'
-                }`
-              }
+              className={navLinkClass}
             >
-              <Icon className="h-[18px] w-[18px] shrink-0" />
+              <Icon
+                className={`h-4 w-4 shrink-0 ${location.pathname === to ? 'text-fg-2' : 'text-muted'}`}
+              />
               {label}
             </NavLink>
           ))}
 
           {/* Status + Theme toggle */}
-          <div className="mt-auto px-1 pt-4">
-            <div className="flex items-center justify-between rounded-[var(--radius-sm)] bg-geist-gray-alpha-100 px-3 py-2.5">
+          <div className="mt-auto px-1 pb-4 pt-4">
+            <div className="flex items-center justify-between rounded-sm bg-raised/60 px-2.5 py-2">
               <div className="flex items-center gap-2">
                 <StatusDot status={connected ? 'connected' : 'disconnected'} />
                 <span
                   className={`text-xs font-medium ${
-                    connected ? 'text-geist-green-700' : 'text-geist-red-700'
+                    connected ? 'text-success' : 'text-danger'
                   }`}
                 >
                   {connected ? 'Online' : 'Offline'}
@@ -169,16 +166,16 @@ export function App() {
                 type="button"
                 onClick={toggleDark}
                 aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-                className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] text-geist-gray-800 transition-colors hover:bg-geist-gray-alpha-200 hover:text-geist-gray-1000 focus-visible:focus-ring"
+                className="flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-colors hover:bg-active hover:text-fg focus-visible:focus-ring"
               >
-                <span className="relative h-4 w-4">
+                <span className="relative h-3.5 w-3.5">
                   <IconMoon
-                    className={`absolute inset-0 h-4 w-4 transition-all duration-300 ${
+                    className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-300 ${
                       dark ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'
                     }`}
                   />
                   <IconSun
-                    className={`absolute inset-0 h-4 w-4 transition-all duration-300 ${
+                    className={`absolute inset-0 h-3.5 w-3.5 transition-all duration-300 ${
                       dark ? '-rotate-90 scale-0 opacity-0' : 'rotate-0 scale-100 opacity-100'
                     }`}
                   />
@@ -192,24 +189,24 @@ export function App() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="flex h-14 items-center gap-3 border-b border-geist-gray-alpha-400 bg-geist-background-100 px-4 md:hidden">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line-soft bg-panel px-4 md:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-geist-gray-800 transition-colors hover:bg-geist-gray-alpha-200 hover:text-geist-gray-1000 focus-visible:focus-ring"
+            className="flex h-8 w-8 items-center justify-center rounded-sm text-muted transition-colors hover:bg-raised hover:text-fg focus-visible:focus-ring"
             aria-label="Toggle sidebar"
           >
-            <IconMenu className="h-5 w-5" />
+            <IconMenu className="h-4.5 w-4.5" />
           </button>
-          <div className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] bg-geist-gray-1000 text-[10px] font-bold text-geist-background-100">
+          <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-accent text-[11px] font-bold text-accent-on">
             B
           </div>
-          <span className="text-sm font-semibold tracking-tight text-geist-gray-1000">Baton</span>
+          <span className="text-[13px] font-semibold tracking-tight text-fg">Baton</span>
         </header>
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">
-          <div className="mx-auto max-w-[1440px] px-8 py-10 md:px-12 lg:px-16">
+          <div className="mx-auto max-w-[1200px] px-6 py-8 md:px-10 md:py-10">
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}

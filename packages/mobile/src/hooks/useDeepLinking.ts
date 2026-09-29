@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 
+import { useThemeStore } from '../stores/theme';
+
 /**
  * Handle inbound deep links of the form `baton://session/<sessionId>`.
  *
@@ -27,6 +29,15 @@ export function useDeepLinking(): void {
 
     function handleUrl(url: string | null) {
       if (!url) return;
+      // Dev automation hook (simulator screenshot tours): baton://theme/light
+      // and baton://theme/dark flip the theme. Dev builds only.
+      if (__DEV__ && url.startsWith('baton://theme/')) {
+        const mode = url.slice('baton://theme/'.length);
+        if (mode === 'light' || mode === 'dark') {
+          useThemeStore.getState().setTheme(mode);
+        }
+        return;
+      }
       const parsed = parseSessionUrl(url);
       if (parsed) navigateToSession(parsed);
     }

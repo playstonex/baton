@@ -353,6 +353,28 @@ export default function ChatScreen() {
       }
     });
 
+    // Replay the session's event history on attach — without this a fresh
+    // attach (new device, app restart) renders an empty conversation.
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        for (const event of msg.events) {
+          addEvent(event);
+        }
+      }
+    });
+
+    // Dev hydration: the daemon's WS replay doesn't cover SDK sessions, so
+    // under the dev auto-connect env pull the event log over HTTP once.
+    if (process.env.EXPO_PUBLIC_DEV_AUTOCONNECT) {
+      apiFetch<unknown[]>(`/api/agents/${sessionId}/events`)
+        .then((events) => {
+          for (const event of events) {
+            addEvent(event as Parameters<typeof addEvent>[0]);
+          }
+        })
+        .catch(() => {});
+    }
+
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
         setStatus(msg.status as string);
@@ -426,6 +448,7 @@ export default function ChatScreen() {
 
     return () => {
       unsubEvent();
+      unsubEventHistory();
       unsubStatus();
       unsubState();
       unsubModels();
@@ -1469,11 +1492,7 @@ export default function ChatScreen() {
                     ? c.isDark
                       ? Glass.opacity.dark.subtle
                       : Glass.opacity.light.subtle
-                    : running
-                      ? Colors.primary[500]
-                      : c.isDark
-                        ? Colors.surface[50]
-                        : Colors.surface[900],
+                    : Colors.primary[500],
                   transform: [{ scale: pressed ? 0.9 : 1 }],
                 },
               ]}
@@ -1484,15 +1503,7 @@ export default function ChatScreen() {
               <Ionicons
                 name={running ? 'add' : 'arrow-up'}
                 size={14}
-                color={
-                  sendDisabled
-                    ? c.textTertiary
-                    : running
-                      ? '#ffffff'
-                      : c.isDark
-                        ? Colors.surface[900]
-                        : '#ffffff'
-                }
+                color={sendDisabled ? c.textTertiary : '#ffffff'}
               />
             </Pressable>
           </View>
@@ -1822,15 +1833,17 @@ function MessageBubble({
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.userRow}>
-          <View style={[styles.userBubble, { backgroundColor: Colors.primary[500] }]}>
+          <View style={[styles.userBubble, { backgroundColor: c.accentBg }]}>
             <Text
-              style={styles.userText}
+              style={[styles.userText, { color: c.textPrimary }]}
               numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
             >
               {msg.content}
             </Text>
             {isLong && (
-              <Text style={styles.userCollapseHint}>{msg.isCollapsed ? 'Show more' : ''}</Text>
+              <Text style={[styles.userCollapseHint, { color: c.textTertiary }]}>
+                {msg.isCollapsed ? 'Show more' : ''}
+              </Text>
             )}
           </View>
         </View>
@@ -1842,9 +1855,7 @@ function MessageBubble({
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.assistantRow}>
-          <View
-            style={[styles.assistantBubble, { backgroundColor: c.card, borderColor: c.cardBorder }]}
-          >
+          <View style={styles.assistantBubble}>
             <MarkdownText content={msg.content} colors={c} isStreaming={msg.isStreaming} />
             {msg.isStreaming && <TypingIndicator colors={c} />}
           </View>
@@ -2152,21 +2163,16 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
     borderCurve: 'continuous',
   },
-  userText: { ...Typography.subhead, fontSize: 14, color: '#fff', lineHeight: 19 },
+  userText: { ...Typography.subhead, fontSize: 14, lineHeight: 19 },
   userCollapseHint: {
     ...Typography.caption2,
-    color: 'rgba(255,255,255,0.6)',
     marginTop: 4,
   },
   assistantRow: { alignItems: 'flex-start' },
   assistantBubble: {
-    maxWidth: '80%',
-    paddingHorizontal: Spacing.lg - 2,
-    paddingVertical: 10,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    borderCurve: 'continuous',
-    borderWidth: 1,
+    maxWidth: '100%',
+    paddingHorizontal: 2,
+    paddingVertical: 2,
   },
   assistantText: { ...Typography.subhead, fontSize: 14, lineHeight: 19 },
   systemRow: { alignItems: 'center' },

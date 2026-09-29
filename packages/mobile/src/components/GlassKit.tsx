@@ -174,7 +174,11 @@ export function GlassButton({
 }) {
   const isDisabled = disabled || loading;
   const accentColor =
-    variant === 'danger' ? '#FF3B30' : variant === 'secondary' ? c.textSecondary : Colors.primary[500];
+    variant === 'danger'
+      ? Colors.danger[400]
+      : variant === 'secondary'
+        ? c.textSecondary
+        : Colors.primary[300];
   return (
     <Pressable
       onPress={onPress}
@@ -196,9 +200,9 @@ export function GlassButton({
           {
             backgroundColor:
               variant === 'primary'
-                ? Colors.primary[500] + '20'
+                ? Colors.primary[500]
                 : variant === 'danger'
-                  ? '#FF3B30' + '15'
+                  ? Colors.danger[400] + '1a'
                   : c.isDark
                     ? Glass.opacity.dark.subtle
                     : Glass.opacity.light.subtle,
@@ -206,12 +210,12 @@ export function GlassButton({
             borderWidth: StyleSheet.hairlineWidth,
             borderColor:
               variant === 'primary'
-                ? c.isDark
-                  ? Glass.opacity.dark.borderActive
-                  : Glass.opacity.light.borderActive
-                : c.isDark
-                  ? Glass.opacity.dark.border
-                  : Glass.opacity.light.border,
+                ? 'transparent'
+                : variant === 'danger'
+                  ? Colors.danger[400] + '55'
+                  : c.isDark
+                    ? Glass.opacity.dark.border
+                    : Glass.opacity.light.border,
           },
         ]}
         pointerEvents="none"
@@ -224,9 +228,9 @@ export function GlassButton({
             {
               color:
                 variant === 'primary'
-                  ? Colors.primary[500]
+                  ? '#ffffff'
                   : variant === 'danger'
-                    ? '#FF3B30'
+                    ? Colors.danger[400]
                     : c.textPrimary,
               fontWeight: '600',
             },
@@ -387,7 +391,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
   },
-  statValue: { ...Typography.statValue, fontWeight: '700' },
+  statValue: { ...Typography.statValue, fontWeight: '600' },
   statBottom: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statLabel: { ...Typography.caption2 },
 

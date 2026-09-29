@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3210',
+      // ^/api/ (regex) so page routes like /api-providers are NOT proxied
+      '^/api/': 'http://localhost:3210',
       '/ws': { target: 'ws://localhost:3211', ws: true },
     },
   },

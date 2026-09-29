@@ -103,27 +103,27 @@ export function PipelinesScreen() {
     }, 1000);
   }
 
-  const PIPELINE_STATUS_BORDER: Record<string, string> = {
-    pending: 'border-geist-gray-alpha-400',
-    running: 'border-geist-blue-500',
-    completed: 'border-geist-green-600',
-    failed: 'border-geist-red-600',
+  const PIPELINE_STATUS_ACCENT: Record<string, string> = {
+    pending: 'border-line-soft',
+    running: 'border-accent/40',
+    completed: 'border-success/40',
+    failed: 'border-danger/40',
   };
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <h2 className="text-xl font-bold text-geist-gray-1000">Pipelines</h2>
-        <p className="mt-1 text-sm text-geist-gray-700">
+        <h2 className="text-xl font-semibold tracking-[-0.02em] text-fg">Pipelines</h2>
+        <p className="mt-1 text-[13px] text-muted">
           Chain agents sequentially to automate multi-step workflows
         </p>
       </div>
 
-      <Card>
-        <SectionHeader title="New Pipeline" />
+      <Card className="p-6">
+        <SectionHeader title="New pipeline" />
 
         <div className="mb-5">
-          <label className="mb-1.5 block text-xs font-medium text-geist-gray-800">Pipeline Name</label>
+          <label className="mb-2 block text-xs font-medium text-muted">Pipeline name</label>
           <Input
             placeholder="e.g. review-and-fix"
             value={newName}
@@ -132,24 +132,24 @@ export function PipelinesScreen() {
         </div>
 
         <div className="mb-5">
-          <label className="mb-2.5 block text-xs font-medium text-geist-gray-800">Steps</label>
+          <label className="mb-2.5 block text-xs font-medium text-muted">Steps</label>
           <div className="space-y-0">
             {newSteps.map((step, i) => (
               <div key={step.id} className="relative">
                 {i > 0 && (
                   <div className="flex items-center py-2 pl-4">
-                    <div className="h-5 w-px bg-geist-gray-alpha-300" />
-                    <IconArrowRight className="mx-2 h-3 w-3 text-geist-gray-alpha-500" />
+                    <div className="h-5 w-px bg-line" />
+                    <IconArrowRight className="mx-2 h-3 w-3 text-line-strong" />
                   </div>
                 )}
-                <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 p-4">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-geist-gray-alpha-200 text-xs font-bold text-geist-gray-800">
+                <div className="flex items-center gap-3 rounded-sm border border-line bg-field p-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-raised text-xs font-semibold tabular-nums text-muted">
                     {i + 1}
                   </span>
                   <select
                     value={step.agentType}
                     onChange={(e) => updateStep(i, { agentType: e.target.value as AgentType })}
-                    className="h-8 rounded-[var(--radius-sm)] border border-geist-gray-alpha-400 bg-geist-background-100 px-2.5 text-[13px] font-medium text-geist-gray-1000 outline-none transition-colors hover:border-geist-gray-alpha-600 focus:border-geist-blue-700"
+                    className="h-7 rounded-sm border border-line bg-surface px-2 text-xs font-medium text-fg outline-none transition-colors duration-150 hover:border-line-strong focus:border-accent"
                   >
                     {AGENT_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -170,7 +170,7 @@ export function PipelinesScreen() {
                       size="sm"
                       variant="tertiary"
                       onClick={() => removeStep(i)}
-                      className="min-w-0 shrink-0 px-2 text-geist-gray-700"
+                      className="min-w-0 shrink-0 px-1.5 text-muted"
                     >
                       <IconX className="h-3.5 w-3.5" />
                     </Button>
@@ -181,10 +181,10 @@ export function PipelinesScreen() {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={addStep}>
             <IconPlus className="mr-1.5 h-3.5 w-3.5" />
-            Add Step
+            Add step
           </Button>
           <Button
             variant="primary"
@@ -193,17 +193,17 @@ export function PipelinesScreen() {
             disabled={creating || !newName.trim()}
             className="ml-auto"
           >
-            {creating ? 'Creating…' : 'Create & Run'}
+            {creating ? 'Creating…' : 'Create & run'}
           </Button>
         </div>
       </Card>
 
       <div>
-        <SectionHeader title="All Pipelines" count={pipelines.length} />
+        <SectionHeader title="All pipelines" count={pipelines.length} />
 
         {pipelines.length === 0 ? (
           <EmptyState
-            icon={<IconPipeline className="h-6 w-6 text-geist-gray-700" />}
+            icon={<IconPipeline className="h-5 w-5" />}
             title="No pipelines yet"
             description="Create one above to run agents sequentially."
           />
@@ -214,7 +214,7 @@ export function PipelinesScreen() {
                 key={p.id}
                 pipeline={p}
                 onRun={() => runPipeline(p.id)}
-                statusBorder={PIPELINE_STATUS_BORDER}
+                statusAccent={PIPELINE_STATUS_ACCENT}
               />
             ))}
           </div>
@@ -225,34 +225,32 @@ export function PipelinesScreen() {
 }
 
 const STEP_STATUS_STYLES: Record<string, string> = {
-  running:
-    'border-geist-blue-200 bg-geist-blue-100 dark:border-geist-blue-1000 dark:bg-geist-blue-1000',
-  completed:
-    'border-geist-green-200 bg-geist-green-100 dark:border-geist-green-1000 dark:bg-geist-green-1000',
-  failed: 'border-geist-red-200 bg-geist-red-100 dark:border-geist-red-1000 dark:bg-geist-red-1000',
+  running: 'border-accent/40 bg-accent-soft',
+  completed: 'border-success/40 bg-success-soft',
+  failed: 'border-danger/40 bg-danger-soft',
 };
 
 const PipelineCard = memo(function PipelineCard({
   pipeline,
   onRun,
-  statusBorder,
+  statusAccent,
 }: {
   pipeline: Pipeline;
   onRun: () => void;
-  statusBorder: Record<string, string>;
+  statusAccent: Record<string, string>;
 }) {
   const isRunning = pipeline.status === 'running';
 
   return (
-    <Card className={`border-2 ${statusBorder[pipeline.status] ?? 'border-geist-gray-alpha-400'}`}>
+    <Card className={`border ${statusAccent[pipeline.status] ?? 'border-line-soft'}`}>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold text-geist-gray-1000">{pipeline.name}</span>
+          <span className="text-[13px] font-semibold text-fg">{pipeline.name}</span>
           <StatusBadge status={pipeline.status} />
         </div>
         <div className="flex items-center gap-2">
           {isRunning && (
-            <span className="text-xs text-geist-gray-700">
+            <span className="text-xs tabular-nums text-meta">
               Step {pipeline.currentStepIndex + 1}/{pipeline.steps.length}
             </span>
           )}
@@ -270,18 +268,18 @@ const PipelineCard = memo(function PipelineCard({
           const result = pipeline.results[i];
           return (
             <div key={step.id} className="flex items-center gap-1.5">
-              {i > 0 && <IconArrowRight className="h-3 w-3 text-geist-gray-alpha-500" />}
+              {i > 0 && <IconArrowRight className="h-3 w-3 text-line-strong" />}
               <div
-                className={`flex items-center gap-2.5 rounded-[var(--radius-sm)] border px-4 py-2.5 ${
+                className={`flex items-center gap-2.5 rounded-sm border px-3 py-2 ${
                   STEP_STATUS_STYLES[result?.status ?? ''] ??
-                  'border-geist-gray-alpha-400 bg-geist-background-100'
+                  'border-line bg-field'
                 }`}
               >
                 <StatusDot status={result?.status ?? 'pending'} />
-                <span className="text-xs font-medium text-geist-gray-900">
+                <span className="text-xs font-medium text-fg-2">
                   {AGENT_LABELS[step.agentType] ?? step.agentType}
                 </span>
-                <span className="text-[10px] text-geist-gray-700">
+                <span className="font-mono text-[10px] text-meta">
                   {step.projectPath.split('/').pop()}
                 </span>
               </div>
