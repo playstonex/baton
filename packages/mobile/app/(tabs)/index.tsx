@@ -202,7 +202,10 @@ export default function DashboardScreen() {
   // "Active Sessions" means LIVE sessions — stopped ones are dead weight in
   // the list (they're not tappable and pile up across daemon restarts).
   const liveAgents = useMemo(() => agents.filter((a) => a.status !== 'stopped'), [agents]);
-  const activeSessionIds = useMemo(() => new Set(agents.map((a) => a.id)), [agents]);
+  // History dedup keys off LIVE agents only: a session stopped during this
+  // daemon's lifetime then falls through to Session History, where it stays
+  // tappable — instead of vanishing from both lists at once.
+  const activeSessionIds = useMemo(() => new Set(liveAgents.map((a) => a.id)), [liveAgents]);
 
   const recentSessionList = useMemo(
     () => sessions.filter((s) => !activeSessionIds.has(s.id)),
