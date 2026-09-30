@@ -278,7 +278,10 @@ jobs:
               echo
             fi
             echo "## Changes${PREVIOUS:+ since ${PREVIOUS}}"
-            git log --no-merges --pretty='- %s (%h)' "$RANGE" | head -100
+            # write to a file first: `git log | head` can SIGPIPE on long
+            # ranges, and pipefail turns that into a failed release step
+            git log --no-merges --pretty='- %s (%h)' "$RANGE" > /tmp/commits.log || true
+            head -100 /tmp/commits.log
             echo
             echo "## Assets"
             echo "- \`baton-<target>\` — CLI · \`baton-relay-<target>\` — relay · \`baton-daemon-<target>.tar.gz\` — daemon + PTY"
