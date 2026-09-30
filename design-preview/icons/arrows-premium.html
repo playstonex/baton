@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Baton Relay — Premium Arrows</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0e12; font-family: -apple-system, "PingFang SC", sans-serif; padding: 60px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 430px); gap: 44px 40px; }
+  .board h3 { color: #f7f8f8; font-size: 21px; font-weight: 700; margin-top: 18px; }
+  .board p { color: #8a8f98; font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  .board .en { color: #6f747e; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .frame { width: 430px; height: 430px; border-radius: 96px; overflow: hidden;
+           box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+  .frame svg { display: block; width: 430px; height: 430px; }
+  .hint { color: #8a8f98; font-size: 13px; margin-bottom: 28px; line-height: 1.7; max-width: 900px; }
+  h1 { color: #f7f8f8; font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>Relay Premium <span style="color:#6f747e;font-weight:500">· 材质三变体</span></h1>
+<p class="hint">玻璃 / 金属 / 午夜蓝。每个箭头都有:渐变体 + 顶部受光 + 底部沉影 + 投影深度 + 细颗粒。单图预览:?t=1 … ?t=3</p>
+
+<div class="grid">
+  <!-- 1 OBSIDIAN GLASS · deep refined -->
+  <div class="board" id="board-1">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="g1-bg" cx="72%" cy="14%" r="115%">
+          <stop offset="0%" stop-color="#262a3d"/><stop offset="55%" stop-color="#101116"/><stop offset="100%" stop-color="#090a0f"/>
+        </radialGradient>
+        <radialGradient id="g1-glow" cx="74%" cy="18%" r="42%">
+          <stop offset="0%" stop-color="#5e6ad2" stop-opacity="0.4"/><stop offset="100%" stop-color="#5e6ad2" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="g1-glow2" cx="12%" cy="92%" r="45%">
+          <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.2"/><stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="g1-sweep" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.05"/><stop offset="55%" stop-color="#ffffff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="g1-front" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="24%" stop-color="#f0f3fb"/>
+          <stop offset="56%" stop-color="#ccd3ec"/>
+          <stop offset="82%" stop-color="#a9b2d6"/>
+          <stop offset="100%" stop-color="#96a0c8"/>
+        </linearGradient>
+        <linearGradient id="g1-spec" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgba(255,255,255,0.85)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+        </linearGradient>
+        <linearGradient id="g1-shade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgba(31,34,58,0)"/><stop offset="100%" stop-color="rgba(31,34,58,0.4)"/>
+        </linearGradient>
+        <linearGradient id="g1-back" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#93a0ff"/>
+          <stop offset="30%" stop-color="#6366f1"/>
+          <stop offset="100%" stop-color="#3d47a1"/>
+        </linearGradient>
+        <filter id="g1-shadow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="18"/></filter>
+        <filter id="g1-shadow2" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="44"/></filter>
+        <filter id="g1-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
+        <mask id="g1-front-mask">
+          <path d="M346 262 L566 512 L346 762" fill="none" stroke="#ffffff" stroke-width="140"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </mask>
+        <mask id="g1-back-mask">
+          <path d="M600 262 L820 512 L600 762" fill="none" stroke="#ffffff" stroke-width="118"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </mask>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#g1-bg)"/>
+      <rect width="1024" height="1024" fill="url(#g1-glow)"/>
+      <rect width="1024" height="1024" fill="url(#g1-glow2)"/>
+      <rect width="1024" height="1024" fill="url(#g1-sweep)"/>
+      <!-- back chevron: indigo glass, receding -->
+      <path d="M600 262 L820 512 L600 762" fill="none" stroke="url(#g1-back)" stroke-width="118"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <g mask="url(#g1-back-mask)">
+        <rect x="460" y="170" width="480" height="200" fill="url(#g1-spec)" opacity="0.55"/>
+      </g>
+      <!-- front chevron: two-layer shadow -->
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#04050a" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.55" filter="url(#g1-shadow)" transform="translate(10 16)"/>
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#04050a" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.3" filter="url(#g1-shadow2)" transform="translate(24 34)"/>
+      <!-- light rim separating glyph from bg -->
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="146"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- front chevron: smooth glass body + specular fade + bottom shade -->
+      <g mask="url(#g1-front-mask)">
+        <rect x="140" y="140" width="660" height="760" fill="url(#g1-front)"/>
+        <rect x="140" y="140" width="660" height="760" fill="url(#g1-spec)"/>
+        <rect x="140" y="140" width="660" height="760" fill="url(#g1-shade)"/>
+      </g>
+      <rect width="1024" height="1024" filter="url(#g1-noise)"/>
+    </svg>
+    </div>
+    <h3>Obsidian Glass <span class="en">深度精修</span></h3>
+    <p>平滑五段玻璃渐变、顶部镜面高光渐隐、底部沉影、亮边勾边、双层投影、背景双氛围光。</p>
+  </div>
+
+  <!-- 2 PLATINUM -->
+  <div class="board" id="board-2">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="p2-bg" x1="0" y1="0" x2="0.9" y2="1">
+          <stop offset="0%" stop-color="#312e81"/>
+          <stop offset="50%" stop-color="#4338ca"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+        <radialGradient id="p2-mesh" cx="18%" cy="12%" r="55%">
+          <stop offset="0%" stop-color="#818cf8" stop-opacity="0.7"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="p2-metal" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fbfbfd"/>
+          <stop offset="30%" stop-color="#dfe3ef"/>
+          <stop offset="52%" stop-color="#aab1c9"/>
+          <stop offset="70%" stop-color="#e4e7f2"/>
+          <stop offset="100%" stop-color="#9aa2bd"/>
+        </linearGradient>
+        <filter id="p2-shadow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="24"/></filter>
+        <filter id="p2-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0"/></filter>
+        <mask id="p2-mask">
+          <path d="M330 180 L664 512 L330 844" fill="none" stroke="#ffffff" stroke-width="170"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </mask>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#p2-bg)"/>
+      <rect width="1024" height="1024" fill="url(#p2-mesh)"/>
+      <path d="M330 180 L664 512 L330 844" fill="none" stroke="#0a0a1a" stroke-width="170"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.4" filter="url(#p2-shadow)" transform="translate(18 24)"/>
+      <g mask="url(#p2-mask)">
+        <rect x="120" y="120" width="700" height="800" fill="url(#p2-metal)"/>
+        <rect x="120" y="120" width="700" height="150" fill="rgba(255,255,255,0.6)"/>
+      </g>
+      <rect width="1024" height="1024" filter="url(#p2-noise)"/>
+    </svg>
+    </div>
+    <h3>Platinum <span class="en">铂金</span></h3>
+    <p>金属渐变箭头(五段银灰 + 顶部受光),投影悬浮在靛紫渐变上。最有「器物感」的一版。</p>
+  </div>
+
+  <!-- 3 MIDNIGHT -->
+  <div class="board" id="board-3">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="m3-bg" cx="50%" cy="38%" r="100%">
+          <stop offset="0%" stop-color="#16204d"/><stop offset="55%" stop-color="#0d1229"/><stop offset="100%" stop-color="#070811"/>
+        </radialGradient>
+        <radialGradient id="m3-glow" cx="50%" cy="46%" r="40%">
+          <stop offset="0%" stop-color="#4752c4" stop-opacity="0.5"/><stop offset="100%" stop-color="#4752c4" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="m3-front" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c3cbf2"/>
+        </linearGradient>
+        <filter id="m3-shadow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="22"/></filter>
+        <filter id="m3-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
+        <mask id="m3-front-mask">
+          <path d="M346 262 L566 512 L346 762" fill="none" stroke="#ffffff" stroke-width="140"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </mask>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#m3-bg)"/>
+      <rect width="1024" height="1024" fill="url(#m3-glow)"/>
+      <!-- back chevron: ghost white -->
+      <path d="M600 262 L820 512 L600 762" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="118"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- front chevron: indigo glass + white top light -->
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#05060c" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.45" filter="url(#m3-shadow)" transform="translate(12 20)"/>
+      <g mask="url(#m3-front-mask)">
+        <rect x="140" y="180" width="620" height="680" fill="url(#m3-front)"/>
+        <rect x="140" y="180" width="620" height="170" fill="rgba(255,255,255,0.5)"/>
+        <rect x="140" y="690" width="620" height="180" fill="rgba(20,24,64,0.35)"/>
+      </g>
+      <rect width="1024" height="1024" filter="url(#m3-noise)"/>
+    </svg>
+    </div>
+    <h3>Midnight <span class="en">午夜蓝</span></h3>
+    <p>午夜蓝底 + 中心径向光,白玻璃箭头 + 幽灵白后箭头。安静、高级、有格调。</p>
+  </div>
+</div>
+
+<script>
+const only = new URLSearchParams(location.search).get('t');
+if (only) {
+  const boards = document.querySelectorAll('.board');
+  const idx = parseInt(only, 10) - 1;
+  document.querySelectorAll('h1, .hint, .grid').forEach(el => el.style.display = 'none');
+  boards.forEach(b => { b.style.display = 'none'; });
+  const svg = boards[idx]?.querySelector('svg');
+  if (svg) {
+    svg.style.position = 'fixed';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.width = '1024px';
+    svg.style.height = '1024px';
+    svg.style.zIndex = '99';
+    document.body.appendChild(svg);
+    document.body.style.padding = '0';
+  }
+}
+</script>
+</body>
+</html>

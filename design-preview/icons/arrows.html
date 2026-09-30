@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Baton Relay — Arrow Icons</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0e12; font-family: -apple-system, "PingFang SC", sans-serif; padding: 60px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 430px); gap: 44px 40px; }
+  .board h3 { color: #f7f8f8; font-size: 21px; font-weight: 700; margin-top: 18px; }
+  .board p { color: #8a8f98; font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  .board .en { color: #6f747e; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .frame { width: 430px; height: 430px; border-radius: 96px; overflow: hidden;
+           box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+  .frame svg { display: block; width: 430px; height: 430px; }
+  .hint { color: #8a8f98; font-size: 13px; margin-bottom: 28px; line-height: 1.7; max-width: 900px; }
+  h1 { color: #f7f8f8; font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>Relay <span style="color:#6f747e;font-weight:500">· 箭头方案精修</span></h1>
+<p class="hint">双箭头 = 任务接力。四个变体共享同一几何:前箭头粗(白/黑),后箭头细且退后(靛紫),深度投影。
+单图预览:?t=1 … ?t=4</p>
+
+<div class="grid">
+  <!-- 1 GRADIENT -->
+  <div class="board" id="board-1">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="v1-bg" x1="0" y1="0" x2="0.9" y2="1">
+          <stop offset="0%" stop-color="#312e81"/>
+          <stop offset="50%" stop-color="#4338ca"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+        <radialGradient id="v1-mesh" cx="80%" cy="14%" r="55%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.5"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="v1-back" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#5e6ad2"/>
+        </linearGradient>
+        <filter id="v1-shadow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="22"/></filter>
+        <radialGradient id="v1-vig" cx="50%" cy="50%" r="76%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
+        </radialGradient>
+        <filter id="v1-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#v1-bg)"/>
+      <rect width="1024" height="1024" fill="url(#v1-mesh)"/>
+      <!-- back chevron (indigo, receding) -->
+      <path d="M600 262 L820 512 L600 762" fill="none" stroke="url(#v1-back)" stroke-width="118"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <!-- front chevron shadow -->
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#0a0a1a" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.35" filter="url(#v1-shadow)" transform="translate(16 22)"/>
+      <!-- front chevron (white) -->
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#f7f8f8" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <rect width="1024" height="1024" fill="url(#v1-vig)"/>
+      <rect width="1024" height="1024" filter="url(#v1-noise)"/>
+    </svg>
+    </div>
+    <h3>Relay · Gradient <span class="en">主推</span></h3>
+    <p>渐变底 + 白色前箭头 + 靛紫后箭头,带投影深度。App Store 最上镜的一版。</p>
+  </div>
+
+  <!-- 2 DARK -->
+  <div class="board" id="board-2">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="v2-back" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#7170ff"/><stop offset="100%" stop-color="#5e6ad2"/>
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="#0a0a0b"/>
+      <path d="M600 262 L820 512 L600 762" fill="none" stroke="url(#v2-back)" stroke-width="118"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#f7f8f8" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <h3>Relay · Dark <span class="en">暗色</span></h3>
+    <p>纯黑底。白 + 靛紫,零装饰,Codex 式克制。</p>
+  </div>
+
+  <!-- 3 LIGHT -->
+  <div class="board" id="board-3">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="v3-back" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#5e6ad2"/>
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="#f7f8f8"/>
+      <path d="M600 262 L820 512 L600 762" fill="none" stroke="url(#v3-back)" stroke-width="118"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M346 262 L566 512 L346 762" fill="none" stroke="#17181a" stroke-width="140"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <h3>Relay · Light <span class="en">纸白</span></h3>
+    <p>纸白底 + 近黑前箭头,和暗色版成对。</p>
+  </div>
+
+  <!-- 4 MONO — single massive chevron -->
+  <div class="board" id="board-4">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="v4-bg" x1="0" y1="0" x2="0.9" y2="1">
+          <stop offset="0%" stop-color="#312e81"/>
+          <stop offset="50%" stop-color="#4338ca"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+        <linearGradient id="v4-ch" x1="0" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c7d2fe"/>
+        </linearGradient>
+        <filter id="v4-shadow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="24"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#v4-bg)"/>
+      <path d="M330 180 L664 512 L330 844" fill="none" stroke="#0a0a1a" stroke-width="170"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.35" filter="url(#v4-shadow)" transform="translate(20 26)"/>
+      <path d="M330 180 L664 512 L330 844" fill="none" stroke="url(#v4-ch)" stroke-width="170"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <h3>Relay · Mono <span class="en">极简</span></h3>
+    <p>单支巨型箭头,渐变白 + 投影。最简、最大胆的一版。</p>
+  </div>
+</div>
+
+<script>
+const only = new URLSearchParams(location.search).get('t');
+if (only) {
+  const boards = document.querySelectorAll('.board');
+  const idx = parseInt(only, 10) - 1;
+  document.querySelectorAll('h1, .hint, .grid').forEach(el => el.style.display = 'none');
+  boards.forEach(b => { b.style.display = 'none'; });
+  const svg = boards[idx]?.querySelector('svg');
+  if (svg) {
+    svg.style.position = 'fixed';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.width = '1024px';
+    svg.style.height = '1024px';
+    svg.style.zIndex = '99';
+    document.body.appendChild(svg);
+    document.body.style.padding = '0';
+  }
+}
+</script>
+</body>
+</html>

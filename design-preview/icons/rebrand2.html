@@ -290,6 +290,65 @@
     <h3>Baton <span class="en">指挥棒 × AI 星</span></h3>
     <p>指挥棒末端点亮 AI 星星:一根指挥所有 agent 的魔法棒。星随棒动,棒止于星。</p>
   </div>
+  <!-- 8 BATON AI v2 -->
+  <div class="board" id="board-8">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="w2-bg" x1="0" y1="0" x2="0.85" y2="1">
+          <stop offset="0%" stop-color="#312e81"/>
+          <stop offset="42%" stop-color="#4338ca"/>
+          <stop offset="78%" stop-color="#7c3aed"/>
+          <stop offset="100%" stop-color="#c026d3"/>
+        </linearGradient>
+        <radialGradient id="w2-mesh" cx="82%" cy="12%" r="55%">
+          <stop offset="0%" stop-color="#ddd6fe" stop-opacity="0.5"/><stop offset="100%" stop-color="#ddd6fe" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="w2-glowbg" cx="68%" cy="30%" r="45%">
+          <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.55"/><stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="w2-stick" x1="270" y1="800" x2="640" y2="358" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#aab4e8"/><stop offset="45%" stop-color="#e0e5ff"/><stop offset="100%" stop-color="#ffffff"/>
+        </linearGradient>
+        <linearGradient id="w2-star" x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="65%" stop-color="#dbe3ff"/><stop offset="100%" stop-color="#a5b4fc"/>
+        </linearGradient>
+        <radialGradient id="w2-vig" cx="50%" cy="50%" r="76%">
+          <stop offset="60%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.34"/>
+        </radialGradient>
+        <filter id="w2-shadow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="20"/></filter>
+        <filter id="w2-soft" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="36"/></filter>
+        <filter id="w2-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#w2-bg)"/>
+      <rect width="1024" height="1024" fill="url(#w2-mesh)"/>
+      <rect width="1024" height="1024" fill="url(#w2-glowbg)"/>
+      <!-- star glow behind everything at the tip -->
+      <circle cx="660" cy="330" r="170" fill="#a78bfa" opacity="0.6" filter="url(#w2-soft)"/>
+      <!-- wand drop shadow (depth) -->
+      <polygon points="339,862 692,414 631,362 292,830" fill="#0a0a1a" opacity="0.35" filter="url(#w2-shadow)"/>
+      <!-- tapered wand: grip thick → tip slim, gradient lavender→white -->
+      <polygon points="317,840 671,384 609,332 222,760" fill="url(#w2-stick)"/>
+      <circle cx="270" cy="800" r="62" fill="#aab4e8"/>
+      <circle cx="640" cy="358" r="40" fill="#ffffff"/>
+      <!-- the AI star -->
+      <path d="M660 90 C 700 210, 735 290, 845 330 C 735 370, 700 450, 660 570 C 620 450, 585 370, 475 330 C 585 290, 620 210, 660 90 Z"
+            fill="url(#w2-star)"/>
+      <!-- companion sparkle -->
+      <path d="M872 128 C 882 194, 900 212, 966 222 C 900 232, 882 250, 872 316 C 862 250, 844 232, 778 222 C 844 212, 862 194, 872 128 Z"
+            fill="#e6e9f4" opacity="0.95"/>
+      <!-- magic dust trail -->
+      <circle cx="536" cy="648" r="11" fill="#ffffff" opacity="0.55"/>
+      <circle cx="488" cy="706" r="8" fill="#c7d2fe" opacity="0.4"/>
+      <circle cx="446" cy="754" r="5" fill="#a5b4fc" opacity="0.3"/>
+      <rect width="1024" height="1024" fill="url(#w2-vig)"/>
+      <rect width="1024" height="1024" filter="url(#w2-noise)"/>
+    </svg>
+    </div>
+    <h3>Baton AI <span class="en">魔杖 · 精修</span></h3>
+    <p>锥形魔杖带投影(深度),四芒星带光晕,尖端洒下魔法尘埃——刚施完魔法的一瞬。</p>
+  </div>
 </div>
 
 <script>
