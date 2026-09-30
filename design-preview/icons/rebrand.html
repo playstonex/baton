@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Baton Rebrand — Name × Icon Concepts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101116; font-family: -apple-system, "PingFang SC", sans-serif; padding: 60px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 430px); gap: 44px 40px; }
+  .board h3 { color: #f7f8f8; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; margin-top: 18px; }
+  .board p { color: #8a8f98; font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  .board .en { color: #6f747e; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .frame { width: 430px; height: 430px; border-radius: 40px; overflow: hidden;
+           box-shadow: 0 24px 60px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.07); }
+  .frame svg { display: block; width: 430px; height: 430px; }
+  .hint { color: #6f747e; font-size: 13px; margin-bottom: 28px; line-height: 1.7; max-width: 900px; }
+  h1 { color: #f7f8f8; font-size: 30px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>Baton Rebrand <span style="color:#6f747e;font-weight:500">· 名称 × 图标 概念集</span></h1>
+<p class="hint">参考同类 AI Agent 产品(Claude / Gemini / Cursor / Raycast)的图标语言:单一几何符号 + 渐变 + 暗底。
+每个方案 = 新名称 + 匹配图标。选定后我会同步改名(app.json / iOS 显示名)并重打全平台图标。
+单图预览:?t=1 … ?t=6</p>
+
+<div class="grid">
+  <!-- 1 SWARM -->
+  <div class="board">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="s-bg" cx="60%" cy="35%" r="95%">
+          <stop offset="0%" stop-color="#14161d"/><stop offset="60%" stop-color="#0c0d10"/><stop offset="100%" stop-color="#08090a"/>
+        </radialGradient>
+        <linearGradient id="s-hex" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#828fff"/><stop offset="100%" stop-color="#5e6ad2"/>
+        </linearGradient>
+        <filter id="s-blur" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="30"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#s-bg)"/>
+      <circle cx="620" cy="520" r="280" fill="#5e6ad2" opacity="0.22" filter="url(#s-blur)"/>
+      <path d="M640 300 L780 380 L780 540 L640 620 L500 540 L500 380 Z" fill="url(#s-hex)"/>
+      <path d="M640 330 L754 395 L754 525 L640 590 L526 525 L526 395 Z" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="8"/>
+      <path d="M380 380 L470 432 L470 536 L380 588 L290 536 L290 432 Z" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="10"/>
+      <path d="M500 660 L566 698 L566 774 L500 812 L434 774 L434 698 Z" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="9"/>
+      <circle cx="640" cy="460" r="26" fill="#ffffff" opacity="0.95"/>
+    </svg>
+    </div>
+    <h3>Swarm <span class="en">蜂群</span></h3>
+    <p>一群 agent 协同作战。六边形蜂巢 = 群体智能,中心发亮的格子是正在工作的那个。</p>
+  </div>
+
+  <!-- 2 PRISM -->
+  <div class="board">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="p-bg" cx="50%" cy="40%" r="95%">
+          <stop offset="0%" stop-color="#131419"/><stop offset="60%" stop-color="#0c0d10"/><stop offset="100%" stop-color="#08090a"/>
+        </radialGradient>
+        <filter id="p-blur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#p-bg)"/>
+      <rect x="60" y="486" width="260" height="26" rx="13" fill="#e6e9f4"/>
+      <polygon points="512,300 682,596 342,596" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.4)" stroke-width="8" stroke-linejoin="round"/>
+      <line x1="320" y1="499" x2="512" y2="499" stroke="rgba(255,255,255,0.5)" stroke-width="10"/>
+      <line x1="640" y1="560" x2="960" y2="470" stroke="#7170ff" stroke-width="16" stroke-linecap="round" filter="url(#p-blur)" opacity="0.9"/>
+      <line x1="640" y1="560" x2="960" y2="560" stroke="#a78bfa" stroke-width="16" stroke-linecap="round" filter="url(#p-blur)" opacity="0.9"/>
+      <line x1="640" y1="560" x2="960" y2="650" stroke="#38bdf8" stroke-width="16" stroke-linecap="round" filter="url(#p-blur)" opacity="0.9"/>
+      <line x1="648" y1="566" x2="948" y2="482" stroke="#7170ff" stroke-width="10" stroke-linecap="round"/>
+      <line x1="648" y1="566" x2="948" y2="556" stroke="#a78bfa" stroke-width="10" stroke-linecap="round"/>
+      <line x1="648" y1="566" x2="948" y2="644" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+    </svg>
+    </div>
+    <h3>Prism <span class="en">棱镜</span></h3>
+    <p>一句指令进入,拆解成多路 agent 并行。白光进,光谱出。</p>
+  </div>
+
+  <!-- 3 RELAY -->
+  <div class="board">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="r-bg" cx="42%" cy="45%" r="95%">
+          <stop offset="0%" stop-color="#131419"/><stop offset="60%" stop-color="#0c0d10"/><stop offset="100%" stop-color="#08090a"/>
+        </radialGradient>
+        <linearGradient id="r-ch" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#9a97ff"/><stop offset="100%" stop-color="#5e6ad2"/>
+        </linearGradient>
+        <filter id="r-blur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="28"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#r-bg)"/>
+      <path d="M330 290 L560 512 L330 734" fill="none" stroke="url(#r-ch)" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M330 290 L560 512 L330 734" fill="none" stroke="#7170ff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round" filter="url(#r-blur)" opacity="0.35"/>
+      <path d="M560 330 L700 486 L700 538 L560 694" fill="none" stroke="rgba(255,255,255,0.30)" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <h3>Relay <span class="en">接力</span></h3>
+    <p>任务在 agent 之间接力传递,永不停歇。双箭头 = 交接与推进。</p>
+  </div>
+
+  <!-- 4 ORBIT -->
+  <div class="board">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="o-bg" cx="50%" cy="42%" r="95%">
+          <stop offset="0%" stop-color="#131419"/><stop offset="60%" stop-color="#0c0d10"/><stop offset="100%" stop-color="#08090a"/>
+        </radialGradient>
+        <filter id="o-blur" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="26"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#o-bg)"/>
+      <ellipse cx="512" cy="512" rx="330" ry="150" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="9" transform="rotate(-24 512 512)"/>
+      <ellipse cx="512" cy="512" rx="330" ry="150" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="9" transform="rotate(24 512 512)"/>
+      <circle cx="512" cy="512" r="74" fill="#7170ff"/>
+      <circle cx="512" cy="512" r="74" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="6"/>
+      <circle cx="512" cy="512" r="130" fill="#7170ff" opacity="0.3" filter="url(#o-blur)"/>
+      <circle cx="292" cy="420" r="30" fill="#e6e9f4" transform="rotate(-24 512 512) translate(330 0)"/>
+      <circle cx="292" cy="420" r="24" fill="#a78bfa" transform="rotate(24 512 512) translate(330 0)"/>
+    </svg>
+    </div>
+    <h3>Orbit <span class="en">轨道</span></h3>
+    <p>所有 agent 围绕同一个中枢运转。你在中心,它们各就其轨。</p>
+  </div>
+
+  <!-- 5 FLUX -->
+  <div class="board">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="f-bg" cx="50%" cy="45%" r="95%">
+          <stop offset="0%" stop-color="#131419"/><stop offset="60%" stop-color="#0c0d10"/><stop offset="100%" stop-color="#08090a"/>
+        </radialGradient>
+        <linearGradient id="f-l1" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#828fff"/><stop offset="100%" stop-color="#7170ff"/>
+        </linearGradient>
+        <linearGradient id="f-l2" x1="1" y1="0" x2="0" y2="0">
+          <stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#7170ff"/>
+        </linearGradient>
+        <filter id="f-blur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="24"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#f-bg)"/>
+      <path d="M280 400 C 380 250, 640 250, 740 400" fill="none" stroke="url(#f-l1)" stroke-width="76" stroke-linecap="round"/>
+      <path d="M744 624 C 644 774, 384 774, 284 624" fill="none" stroke="url(#f-l2)" stroke-width="76" stroke-linecap="round"/>
+      <circle cx="744" cy="400" r="34" fill="#a78bfa"/>
+      <circle cx="280" cy="624" r="34" fill="#5e6ad2"/>
+      <circle cx="512" cy="512" r="200" fill="#5e6ad2" opacity="0.14" filter="url(#f-blur)"/>
+    </svg>
+    </div>
+    <h3>Flux <span class="en">流</span></h3>
+    <p>指令与结果双向流动,循环不休。两条轨道 = 输入与输出的永恒回路。</p>
+  </div>
+
+  <!-- 6 SPARK -->
+  <div class="board">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="k-bg" cx="50%" cy="40%" r="95%">
+          <stop offset="0%" stop-color="#131419"/><stop offset="60%" stop-color="#0c0d10"/><stop offset="100%" stop-color="#08090a"/>
+        </radialGradient>
+        <linearGradient id="k-star" x1="0" y1="0" x2="0.7" y2="1">
+          <stop offset="0%" stop-color="#a78bfa"/><stop offset="60%" stop-color="#7170ff"/><stop offset="100%" stop-color="#5e6ad2"/>
+        </linearGradient>
+        <filter id="k-blur" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="26"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#k-bg)"/>
+      <circle cx="512" cy="512" r="240" fill="#5e6ad2" opacity="0.2" filter="url(#k-blur)"/>
+      <path d="M512 140 C 540 380, 574 414, 812 442 C 574 470, 540 504, 512 744 C 484 504, 450 470, 212 442 C 450 414, 484 380, 512 140 Z" fill="url(#k-star)" transform="rotate(0 512 512) translate(0 60)"/>
+      <path d="M790 260 C 798 330, 812 344, 882 352 C 812 360, 798 374, 790 444 C 782 374, 768 360, 698 352 C 768 344, 782 330, 790 260 Z" fill="#e6e9f4" opacity="0.9"/>
+    </svg>
+    </div>
+    <h3>Spark <span class="en">星火</span></h3>
+    <p>一次点击,点燃整条 agent 流水线。主星 + 伴星,呼应多 agent 编排。</p>
+  </div>
+</div>
+
+<script>
+const only = new URLSearchParams(location.search).get('t');
+if (only) {
+  const boards = document.querySelectorAll('.board');
+  const idx = parseInt(only, 10) - 1;
+  document.querySelectorAll('h1, .hint, .grid').forEach(el => el.style.display = 'none');
+  boards.forEach(b => { b.style.display = 'none'; });
+  const svg = boards[idx]?.querySelector('svg');
+  if (svg) {
+    svg.style.position = 'fixed';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.width = '1024px';
+    svg.style.height = '1024px';
+    svg.style.zIndex = '99';
+    document.body.appendChild(svg);
+  }
+}
+</script>
+</body>
+</html>

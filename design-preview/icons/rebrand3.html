@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Baton Rebrand R3 — Codex Mono</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0e12; font-family: -apple-system, "PingFang SC", sans-serif; padding: 60px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 430px); gap: 44px 40px; }
+  .board h3 { color: #f7f8f8; font-size: 21px; font-weight: 700; margin-top: 18px; }
+  .board p { color: #8a8f98; font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  .board .en { color: #6f747e; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .frame { width: 430px; height: 430px; border-radius: 96px; overflow: hidden;
+           box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+  .frame svg { display: block; width: 430px; height: 430px; }
+  .hint { color: #8a8f98; font-size: 13px; margin-bottom: 28px; line-height: 1.7; max-width: 900px; }
+  h1 { color: #f7f8f8; font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>Rebrand R3 <span style="color:#6f747e;font-weight:500">· Codex 式单色精修</span></h1>
+<p class="hint">参考 OpenAI/Codex 的做法:单色、扁平、工程精度。三个方向(Aurora 提示符 / Beam 光束 / Loop 环)× 明暗双形态。
+单图预览:?t=1 … ?t=6</p>
+
+<div class="grid">
+  <!-- 1 PROMPT DARK -->
+  <div class="board" id="board-1">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1024" height="1024" fill="#0a0a0b"/>
+      <path d="M370 244 L646 512 L370 780" fill="none" stroke="#f7f8f8" stroke-width="150"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <h3>Prompt · Dark <span class="en">Aurora 精修</span></h3>
+    <p>终端提示符 ❯,纯黑底纯白符号。AI 编码 agent 的身份符号,零装饰。</p>
+  </div>
+
+  <!-- 2 PROMPT CURSOR -->
+  <div class="board" id="board-2">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1024" height="1024" fill="#0a0a0b"/>
+      <path d="M280 300 L500 512 L280 724" fill="none" stroke="#f7f8f8" stroke-width="128"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="556" y="700" width="200" height="44" rx="22" fill="#f7f8f8"/>
+    </svg>
+    </div>
+    <h3>Prompt · Cursor <span class="en">Aurora 精修</span></h3>
+    <p>❯ 加上等待输入的光标条:「我在听」。静态图标里藏着交互感。</p>
+  </div>
+
+  <!-- 3 BEAM DARK -->
+  <div class="board" id="board-3">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1024" height="1024" fill="#0a0a0b"/>
+      <line x1="250" y1="790" x2="612" y2="418" stroke="#f7f8f8" stroke-width="112" stroke-linecap="round"/>
+      <circle cx="762" cy="262" r="86" fill="#f7f8f8"/>
+      <circle cx="762" cy="262" r="132" fill="none" stroke="#f7f8f8" stroke-width="12" opacity="0.5"/>
+    </svg>
+    </div>
+    <h3>Beam · Dark <span class="en">Beam 精修</span></h3>
+    <p>白色光束 + 同心圆环轨道点。精度感替代辉光,工程制图的气质。</p>
+  </div>
+
+  <!-- 4 BEAM LIGHT -->
+  <div class="board" id="board-4">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1024" height="1024" fill="#f7f8f8"/>
+      <line x1="250" y1="790" x2="612" y2="418" stroke="#17181a" stroke-width="112" stroke-linecap="round"/>
+      <circle cx="762" cy="262" r="86" fill="#17181a"/>
+      <circle cx="762" cy="262" r="132" fill="none" stroke="#17181a" stroke-width="12" opacity="0.3"/>
+    </svg>
+    </div>
+    <h3>Beam · Light <span class="en">Beam 精修</span></h3>
+    <p>纸白底 + 近黑符号。App Store 里最耐看的一类,和暗色版成对。</p>
+  </div>
+
+  <!-- 5 LOOP DARK -->
+  <div class="board" id="board-5">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1024" height="1024" fill="#0a0a0b"/>
+      <circle cx="512" cy="512" r="270" fill="none" stroke="#f7f8f8" stroke-width="118"
+              stroke-linecap="round" stroke-dasharray="1413.7 282.8" transform="rotate(-60 512 512)"/>
+    </svg>
+    </div>
+    <h3>Loop · Dark <span class="en">Loop 精修</span></h3>
+    <p>进度环 + 缺口处的任务点:「agent 正在工作」。最克制的一版。</p>
+  </div>
+
+  <!-- 6 LOOP LIGHT -->
+  <div class="board" id="board-6">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1024" height="1024" fill="#f7f8f8"/>
+      <circle cx="512" cy="512" r="270" fill="none" stroke="#17181a" stroke-width="118"
+              stroke-linecap="round" stroke-dasharray="1413.7 282.8" transform="rotate(-60 512 512)"/>
+    </svg>
+    </div>
+    <h3>Loop · Light <span class="en">Loop 精修</span></h3>
+    <p>纸白底版本。单色双形态,系统级图标的做法。</p>
+  </div>
+</div>
+
+<script>
+const only = new URLSearchParams(location.search).get('t');
+if (only) {
+  const boards = document.querySelectorAll('.board');
+  const idx = parseInt(only, 10) - 1;
+  document.querySelectorAll('h1, .hint, .grid').forEach(el => el.style.display = 'none');
+  boards.forEach(b => { b.style.display = 'none'; });
+  const svg = boards[idx]?.querySelector('svg');
+  if (svg) {
+    svg.style.position = 'fixed';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.width = '1024px';
+    svg.style.height = '1024px';
+    svg.style.zIndex = '99';
+    document.body.appendChild(svg);
+    document.body.style.padding = '0';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Baton Rebrand R2 — Bold Gradients</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0e12; font-family: -apple-system, "PingFang SC", sans-serif; padding: 60px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 430px); gap: 44px 40px; }
+  .board h3 { color: #f7f8f8; font-size: 22px; font-weight: 700; margin-top: 18px; }
+  .board p { color: #8a8f98; font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  .board .en { color: #6f747e; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; }
+  .frame { width: 430px; height: 430px; border-radius: 96px; overflow: hidden;
+           box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+  .frame svg { display: block; width: 430px; height: 430px; }
+  .hint { color: #8a8f98; font-size: 13px; margin-bottom: 28px; line-height: 1.7; max-width: 900px; }
+  h1 { color: #f7f8f8; font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h1>Rebrand R2 <span style="color:#6f747e;font-weight:500">· 全幅渐变 × 粗壮符号</span></h1>
+<p class="hint">本轮配方:全幅高饱和渐变 + 符号占满画面(对齐 Claude / Gemini / Raycast 的做法)。
+单图预览:?t=1 … ?t=6。选定名称后:同步改名 + 重打全平台图标 + 重构验证。</p>
+
+<div class="grid">
+  <!-- 1 AURORA — prompt chevron on aurora gradient -->
+  <div class="board" id="board-1">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="au-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#4338ca"/>
+          <stop offset="45%" stop-color="#6d28d9"/>
+          <stop offset="80%" stop-color="#a21caf"/>
+          <stop offset="100%" stop-color="#312e81"/>
+        </linearGradient>
+        <radialGradient id="au-mesh1" cx="20%" cy="15%" r="60%">
+          <stop offset="0%" stop-color="#818cf8" stop-opacity="0.85"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="au-mesh2" cx="85%" cy="85%" r="60%">
+          <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.5"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#au-bg)"/>
+      <rect width="1024" height="1024" fill="url(#au-mesh1)"/>
+      <rect width="1024" height="1024" fill="url(#au-mesh2)"/>
+      <path d="M330 250 L590 512 L330 774" fill="none" stroke="#ffffff" stroke-width="150" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M560 330 L740 512 L560 694" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="130" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </div>
+    <h3>Aurora <span class="en">极光</span></h3>
+    <p>终端提示符 ❯ 放大成主视觉——AI 编码 agent 的身份符号。极光渐变 = 多 agent 并行的能量场。</p>
+  </div>
+
+  <!-- 2 NOVA — bold star on violet -->
+  <div class="board" id="board-2">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="no-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#7c3aed"/>
+          <stop offset="50%" stop-color="#6d28d9"/>
+          <stop offset="100%" stop-color="#4338ca"/>
+        </linearGradient>
+        <radialGradient id="no-mesh" cx="75%" cy="20%" r="70%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.75"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="no-star" x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#ddd6fe"/>
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#no-bg)"/>
+      <rect width="1024" height="1024" fill="url(#no-mesh)"/>
+      <path d="M512 132 C 548 420, 592 464, 880 500 C 592 536, 548 580, 512 868 C 476 580, 432 536, 144 500 C 432 464, 476 420, 512 132 Z" fill="url(#no-star)"/>
+      <circle cx="790" cy="220" r="56" fill="#ffffff" opacity="0.95"/>
+    </svg>
+    </div>
+    <h3>Nova <span class="en">新星</span></h3>
+    <p>紫罗兰底 + 白色四芒星,一次点击引爆 agent 集群。最「AI 原生」的一版。</p>
+  </div>
+
+  <!-- 3 HEXA — solid hex cluster -->
+  <div class="board" id="board-3">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hx-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#312e81"/>
+          <stop offset="55%" stop-color="#4f46e5"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+        <linearGradient id="hx-w" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e7ff"/>
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#hx-bg)"/>
+      <path d="M420 210 L580 302 L580 486 L420 578 L260 486 L260 302 Z" fill="url(#hx-w)"/>
+      <path d="M660 400 L800 481 L800 643 L660 724 L520 643 L520 481 Z" fill="#ffffff" opacity="0.55"/>
+      <path d="M420 590 L560 671 L560 833 L420 924 L280 833 L280 671 Z" fill="#c7d2fe" opacity="0.92"/>
+      <circle cx="500" cy="394" r="34" fill="#4f46e5"/>
+    </svg>
+    </div>
+    <h3>Hexa <span class="en">蜂巢</span></h3>
+    <p>三个实心蜂巢 = agent 蜂群。实心体块,小尺寸下依然清晰。</p>
+  </div>
+
+  <!-- 4 BEAM — bold diagonal beam -->
+  <div class="board" id="board-4">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bm-bg" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stop-color="#1e1b4b"/>
+          <stop offset="45%" stop-color="#4338ca"/>
+          <stop offset="100%" stop-color="#8b5cf6"/>
+        </linearGradient>
+        <radialGradient id="bm-dot" cx="35%" cy="35%" r="80%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c7d2fe"/>
+        </radialGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#bm-bg)"/>
+      <line x1="250" y1="800" x2="770" y2="280" stroke="#ffffff" stroke-width="118" stroke-linecap="round"/>
+      <circle cx="790" cy="260" r="120" fill="#a78bfa" opacity="0.55"/>
+      <circle cx="790" cy="260" r="86" fill="url(#bm-dot)"/>
+    </svg>
+    </div>
+    <h3>Beam <span class="en">光束</span></h3>
+    <p>上一版的指挥棒,换成正确做法:粗壮光束 + 大光球,填满画布。</p>
+  </div>
+
+  <!-- 5 LOOP — chunky ring -->
+  <div class="board" id="board-5">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lp-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#4f46e5"/>
+          <stop offset="55%" stop-color="#7c3aed"/>
+          <stop offset="100%" stop-color="#2563eb"/>
+        </linearGradient>
+        <linearGradient id="lp-ring" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c7d2fe"/>
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#lp-bg)"/>
+      <circle cx="512" cy="512" r="290" fill="none" stroke="url(#lp-ring)" stroke-width="128"
+              stroke-linecap="round" stroke-dasharray="1495 327" transform="rotate(115 512 512)"/>
+      <circle cx="512" cy="512" r="96" fill="#ffffff"/>
+    </svg>
+    </div>
+    <h3>Loop <span class="en">循环</span></h3>
+    <p>指令 → 执行 → 结果的永恒回路。缺口 + 圆点 = 正在进行的任务。</p>
+  </div>
+
+  <!-- 6 OTTO — bot face -->
+  <div class="board" id="board-6">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="ot-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#6d28d9"/>
+          <stop offset="55%" stop-color="#4f46e5"/>
+          <stop offset="100%" stop-color="#2563eb"/>
+        </linearGradient>
+        <linearGradient id="ot-head" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e7ff"/>
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#ot-bg)"/>
+      <line x1="512" y1="150" x2="512" y2="290" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
+      <circle cx="512" cy="128" r="34" fill="#a78bfa"/>
+      <rect x="222" y="290" width="580" height="470" rx="150" fill="url(#ot-head)"/>
+      <circle cx="392" cy="525" r="62" fill="#4f46e5"/>
+      <circle cx="632" cy="525" r="62" fill="#4f46e5"/>
+      <rect x="430" y="660" width="164" height="26" rx="13" fill="#c7d2fe"/>
+    </svg>
+    </div>
+    <h3>Otto <span class="en">机器人</span></h3>
+    <p>给你的第一个 AI 员工一张脸。友好、圆润、过目不忘。</p>
+  </div>
+</div>
+
+<script>
+const only = new URLSearchParams(location.search).get('t');
+if (only) {
+  const boards = document.querySelectorAll('.board');
+  const idx = parseInt(only, 10) - 1;
+  document.querySelectorAll('h1, .hint, .grid').forEach(el => el.style.display = 'none');
+  boards.forEach(b => { b.style.display = 'none'; });
+  const svg = boards[idx]?.querySelector('svg');
+  if (svg) {
+    svg.style.position = 'fixed';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.width = '1024px';
+    svg.style.height = '1024px';
+    svg.style.zIndex = '99';
+    document.body.appendChild(svg);
+    document.body.style.padding = '0';
+  }
+}
+</script>
+</body>
+</html>
