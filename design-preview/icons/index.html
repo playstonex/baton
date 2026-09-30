@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Baton App Icon — Concepts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #141519; font-family: -apple-system, "PingFang SC", sans-serif; }
+  .tile { position: absolute; width: 1024px; height: 1024px; }
+  .small { position: absolute; transform-origin: top left; }
+  .label {
+    position: absolute; color: #8a8f98; font-size: 26px; letter-spacing: 2px;
+    font-weight: 600; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div style="border:1px solid rgba(113,112,255,0.4); background:rgba(94,106,210,0.12); color:#c9cdf5; border-radius:10px; padding:12px 18px; font-size:13px; line-height:1.8; max-width:900px; position:absolute; left:80px; top:8px; z-index:10;">
+  ✅ <b style="color:#fff">概念 A(Baton)已接入</b> —
+  iOS AppIcon.appiconset/icon-1024.png ·
+  Android mipmap ic_launcher(+adaptive foreground,bg #08090a)·
+  Expo assets/icon.png + adaptive-icon.png ·
+  Web favicon.png / apple-touch-icon.png。
+  概念 B / C 主图保留在本目录,替换只需重跑接入步骤。
+</div>
+<!-- ─── Concept A: Baton glyph ─── -->
+<div class="tile" id="tile-a" style="left:80px; top:80px;">
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="a-bg" cx="62%" cy="28%" r="90%">
+      <stop offset="0%" stop-color="#15171d"/>
+      <stop offset="55%" stop-color="#0c0d10"/>
+      <stop offset="100%" stop-color="#08090a"/>
+    </radialGradient>
+    <radialGradient id="a-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7170ff" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#5e6ad2" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#5e6ad2" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="a-stick" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#b9bfd8"/>
+      <stop offset="55%" stop-color="#e6e9f4"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <filter id="a-blur" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#a-bg)"/>
+  <circle cx="700" cy="330" r="360" fill="url(#a-glow)"/>
+  <!-- motion arcs behind the tip -->
+  <path d="M 610 158 A 190 190 0 0 1 812 300" fill="none" stroke="rgba(113,112,255,0.30)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M 588 236 A 118 118 0 0 1 736 352" fill="none" stroke="rgba(113,112,255,0.20)" stroke-width="11" stroke-linecap="round"/>
+  <!-- the baton: slim tapered shaft with rounded caps -->
+  <line x1="318" y1="764" x2="668" y2="356" stroke="url(#a-stick)" stroke-width="30" stroke-linecap="round"/>
+  <!-- grip section, slightly darker -->
+  <line x1="318" y1="764" x2="446" y2="613" stroke="#8d93b4" stroke-width="30" stroke-linecap="round"/>
+  <!-- glowing tip -->
+  <circle cx="700" cy="330" r="52" fill="#7170ff" filter="url(#a-blur)" opacity="0.9"/>
+  <circle cx="700" cy="330" r="30" fill="#828fff"/>
+  <circle cx="700" cy="330" r="30" fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="6"/>
+  <!-- hairline inner edge -->
+  <rect x="1" y="1" width="1022" height="1022" rx="230" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+</svg>
+</div>
+
+<!-- ─── Concept B: B monogram ─── -->
+<div class="tile" id="tile-b" style="left:1144px; top:80px;">
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="b-bg" cx="50%" cy="30%" r="95%">
+      <stop offset="0%" stop-color="#14151b"/>
+      <stop offset="60%" stop-color="#0c0d10"/>
+      <stop offset="100%" stop-color="#08090a"/>
+    </radialGradient>
+    <linearGradient id="b-letter" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#9a97ff"/>
+      <stop offset="55%" stop-color="#7170ff"/>
+      <stop offset="100%" stop-color="#5e6ad2"/>
+    </linearGradient>
+    <filter id="b-blur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="34"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#b-bg)"/>
+  <ellipse cx="512" cy="540" rx="330" ry="300" fill="#5e6ad2" opacity="0.28" filter="url(#b-blur)"/>
+  <text x="512" y="540" text-anchor="middle" dominant-baseline="central"
+        font-family="-apple-system, 'SF Pro Display', 'Inter', sans-serif"
+        font-size="640" font-weight="700" letter-spacing="-18"
+        fill="url(#b-letter)">B</text>
+  <rect x="1" y="1" width="1022" height="1022" rx="230" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+</svg>
+</div>
+
+<!-- ─── Concept C: Orchestration nodes ─── -->
+<div class="tile" id="tile-c" style="left:2208px; top:80px;">
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="c-bg" cx="50%" cy="42%" r="92%">
+      <stop offset="0%" stop-color="#131418"/>
+      <stop offset="60%" stop-color="#0c0d10"/>
+      <stop offset="100%" stop-color="#08090a"/>
+    </radialGradient>
+    <filter id="c-blur" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#c-bg)"/>
+  <circle cx="512" cy="640" r="300" fill="#5e6ad2" opacity="0.16" filter="url(#c-blur)"/>
+  <!-- edges -->
+  <line x1="330" y1="330" x2="694" y2="330" stroke="rgba(255,255,255,0.30)" stroke-width="12"/>
+  <line x1="330" y1="330" x2="512" y2="660" stroke="rgba(255,255,255,0.30)" stroke-width="12"/>
+  <line x1="694" y1="330" x2="512" y2="660" stroke="rgba(255,255,255,0.30)" stroke-width="12"/>
+  <!-- plain agent nodes -->
+  <circle cx="330" cy="330" r="52" fill="#e6e9f4"/>
+  <circle cx="694" cy="330" r="52" fill="#e6e9f4"/>
+  <!-- orchestrator node -->
+  <circle cx="512" cy="660" r="66" fill="#5e6ad2"/>
+  <circle cx="512" cy="660" r="66" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="6"/>
+  <circle cx="512" cy="660" r="112" fill="#7170ff" opacity="0.35" filter="url(#c-blur)"/>
+  <rect x="1" y="1" width="1022" height="1022" rx="230" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+</svg>
+</div>
+
+<!-- ─── Small-size legibility row (generated by script below) ─── -->
+
+<script>
+const only = new URLSearchParams(location.search).get('t');
+if (only) {
+  for (const id of ['tile-a','tile-b','tile-c']) {
+    if (id !== 'tile-' + only) document.getElementById(id).style.display = 'none';
+  }
+  const t = document.getElementById('tile-' + only);
+  if (t) { t.style.left = '0px'; t.style.top = '0px'; }
+}
+</script>
+<script>
+const only2 = new URLSearchParams(location.search).get('t');
+if (only2) {
+  const keep = 'tile-' + only2;
+  const observer = new MutationObserver(() => {
+    document.querySelectorAll('.small, .label').forEach(el => el.remove());
+  });
+  observer.observe(document.body, { childList: true });
+}
+</script>
+<script>
+// duplicate the three SVGs into small sizes by cloning nodes
+function cloneTile(id, sizes, y, x0) {
+  const src = document.getElementById(id).querySelector('svg');
+  let x = x0;
+  for (const s of sizes) {
+    const wrap = document.createElement('div');
+    wrap.className = 'small';
+    wrap.style.left = x + 'px';
+    wrap.style.top = y + 'px';
+    wrap.style.width = s + 'px';
+    wrap.style.height = s + 'px';
+    const c = src.cloneNode(true);
+    c.setAttribute('width', s);
+    c.setAttribute('height', s);
+    wrap.appendChild(c);
+    document.body.appendChild(wrap);
+    x += s + 28;
+  }
+  return x;
+}
+let nx = cloneTile('tile-a', [120, 60, 180], 1180, 80);
+nx = cloneTile('tile-b', [120, 60, 180], 1180, nx + 60);
+cloneTile('tile-c', [120, 60, 180], 1180, nx + 60);
+const lbl = document.createElement('div'); lbl.className='label'; lbl.style.left='80px'; lbl.style.top='1140px'; lbl.textContent='A · Baton'; document.body.appendChild(lbl);
+const lbl2 = document.createElement('div'); lbl2.className='label'; lbl2.style.left='1144px'; lbl2.style.top='1140px'; lbl2.textContent='B · Monogram'; document.body.appendChild(lbl2);
+const lbl3 = document.createElement('div'); lbl3.className='label'; lbl3.style.left='2208px'; lbl3.style.top='1140px'; lbl3.textContent='C · Nodes'; document.body.appendChild(lbl3);
+</script>
+</body>
+</html>
