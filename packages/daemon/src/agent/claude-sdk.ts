@@ -122,6 +122,10 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
 
     const options: Record<string, unknown> = {
       maxTurns: 50,
+      // Without this the controller below is a no-op: stop()/abort() never
+      // reaches the query and the session keeps running (and showing as
+      // "Running") after the user taps Stop.
+      abortController: this.controller,
     };
     if (this.selectedModel) options.model = this.selectedModel;
     else options.model = 'claude-sonnet-7-20251119';
@@ -150,10 +154,12 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
             onEvent({ type: 'status_change', status: 'thinking', timestamp: Date.now() });
             this.processAssistantMessage(msg, onEvent);
           } else if (msg.type === 'result') {
+            // A result only ends the current turn — the streaming-input query
+            // stays alive for the next prompt. 'stopped' is reserved for real
+            // session end (loop exit below); emitting it per-turn used to make
+            // clients believe the session was over while the daemon kept it
+            // registered as "Running".
             onEvent({ type: 'status_change', status: 'idle', timestamp: Date.now() });
-            if (msg.subtype === 'success') {
-              onEvent({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
-            }
           }
         }
       } catch (err) {
@@ -162,6 +168,9 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
           onEvent({ type: 'error', message: error.message, timestamp: Date.now() });
         }
       }
+      // Reaching here means the query is exhausted (maxTurns reached, error,
+      // or stop() abort) — the session is genuinely over.
+      onEvent({ type: 'status_change', status: 'stopped', timestamp: Date.now() });
     })();
 
     return { write, stop };

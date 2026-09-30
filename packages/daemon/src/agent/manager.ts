@@ -134,6 +134,47 @@ export class AgentManager {
     }
   }
 
+  /**
+   * Sync an SDK adapter's reported status into the canonical AgentProcess
+   * without re-broadcasting (the caller already forwards the raw event).
+   * Terminal states are never left: a late adapter event must not resurrect
+   * a stopped/error session.
+   */
+  private syncSdkStatus(id: string, status: AgentProcess['status']): void {
+    const managed = this.agents.get(id);
+    if (!managed) return;
+    if (managed.state.status === 'stopped' || managed.state.status === 'error') return;
+    if (managed.state.status === status) return;
+    const at = Date.now();
+    switch (status) {
+      case 'stopped':
+        managed.state = { status: 'stopped', at, exitCode: 0 };
+        break;
+      case 'error':
+        managed.state = { status: 'error', at, error: 'Adapter reported error' };
+        break;
+      case 'idle':
+        managed.state = { status: 'idle', at, lastActivity: at };
+        break;
+      case 'running':
+        managed.state = { status: 'running', at, toolCount: 0 };
+        break;
+      case 'thinking':
+        managed.state = { status: 'thinking', at };
+        break;
+      case 'executing':
+        managed.state = { status: 'executing', at, tool: 'unknown' };
+        break;
+      case 'waiting_input':
+        managed.state = { status: 'waiting_input', at, prompt: '' };
+        break;
+      default:
+        return; // 'starting'/'initializing' are spawn-internal — never synced
+    }
+    managed.process.status = status;
+    this.persist(id);
+  }
+
   // ── Persistence ────────────────────────────────────────────────
 
   private get batonHome(): string {
@@ -457,6 +498,15 @@ export class AgentManager {
 
       if (managed.state.status === 'initializing') {
         this.transition(id, 'running');
+      } else if (event.type === 'status_change') {
+        // Mirror adapter-reported status into the daemon's canonical state so
+        // /api/agents, agent_list and attach-time status_update tell the
+        // truth. Without this every SDK session stayed 'running' forever.
+        // Deliberately not transition(): the raw event is already recorded
+        // and broadcast below — going through the state machine here would
+        // duplicate it, and adapters may legitimately report sequences the
+        // map rejects (events racing a stop()).
+        this.syncSdkStatus(id, event.status);
       }
 
       if (event.type === 'tool_use' && managed.state.status === 'running') {
@@ -509,6 +559,16 @@ export class AgentManager {
 
     if (managed.sdk) {
       await managed.sdk.stop();
+      // No PTY onExit will fire for SDK sessions — mark them stopped here or
+      // they linger in the live list as unkillable "Running" rows.
+      try {
+        this.transition(id, 'stopped', { exitCode: 0 });
+      } catch {
+        managed.state = { status: 'stopped', at: Date.now(), exitCode: 0 };
+        managed.process.status = 'stopped';
+        managed.process.stoppedAt = new Date().toISOString();
+        this.persist(id);
+      }
     }
     if (managed.pty) {
       managed.pty.kill();

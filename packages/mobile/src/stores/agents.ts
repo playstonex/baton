@@ -32,7 +32,12 @@ export const useAgentStore = create<AgentState>()((set) => ({
     }),
   addAgent: (agent) =>
     set((state) => {
-      const agents = [...state.agents, agent];
+      // Optimistic insert from the start flow — the WS agent_list push will
+      // replace the whole array, but until then a re-add of the same session
+      // must not produce duplicate dashboard rows.
+      const agents = state.agents.some((a) => a.id === agent.id)
+        ? state.agents.map((a) => (a.id === agent.id ? { ...a, ...agent } : a))
+        : [...state.agents, agent];
       persistAgents(agents);
       return { agents };
     }),
