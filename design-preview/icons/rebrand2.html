@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>Baton Rebrand R2 — Bold Gradients</title>
+<title>Baton Rebrand R2.5 — Refined</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0d0e12; font-family: -apple-system, "PingFang SC", sans-serif; padding: 60px; }
@@ -18,117 +18,162 @@
 </style>
 </head>
 <body>
-<h1>Rebrand R2 <span style="color:#6f747e;font-weight:500">· 全幅渐变 × 粗壮符号</span></h1>
-<p class="hint">本轮配方:全幅高饱和渐变 + 符号占满画面(对齐 Claude / Gemini / Raycast 的做法)。
-单图预览:?t=1 … ?t=6。选定名称后:同步改名 + 重打全平台图标 + 重构验证。</p>
+<h1>Rebrand R2.5 <span style="color:#6f747e;font-weight:500">· 六案精修</span></h1>
+<p class="hint">在 R2 基础上逐案精修:颗粒质感、暗角景深、光效层次、构图修正。单图预览:?t=1 … ?t=6</p>
 
 <div class="grid">
-  <!-- 1 AURORA — prompt chevron on aurora gradient -->
+  <!-- 1 AURORA refined -->
   <div class="board" id="board-1">
     <div class="frame">
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="au-bg" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stop-color="#4338ca"/>
-          <stop offset="45%" stop-color="#6d28d9"/>
-          <stop offset="80%" stop-color="#a21caf"/>
+          <stop offset="42%" stop-color="#6d28d9"/>
+          <stop offset="78%" stop-color="#9d174d"/>
           <stop offset="100%" stop-color="#312e81"/>
         </linearGradient>
-        <radialGradient id="au-mesh1" cx="20%" cy="15%" r="60%">
-          <stop offset="0%" stop-color="#818cf8" stop-opacity="0.85"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+        <radialGradient id="au-mesh1" cx="18%" cy="12%" r="65%">
+          <stop offset="0%" stop-color="#818cf8" stop-opacity="0.9"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
         </radialGradient>
-        <radialGradient id="au-mesh2" cx="85%" cy="85%" r="60%">
-          <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.5"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+        <radialGradient id="au-mesh2" cx="88%" cy="88%" r="55%">
+          <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.4"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
         </radialGradient>
+        <radialGradient id="au-vig" cx="50%" cy="50%" r="74%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.32"/>
+        </radialGradient>
+        <filter id="au-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0"/></filter>
       </defs>
       <rect width="1024" height="1024" fill="url(#au-bg)"/>
       <rect width="1024" height="1024" fill="url(#au-mesh1)"/>
       <rect width="1024" height="1024" fill="url(#au-mesh2)"/>
-      <path d="M330 250 L590 512 L330 774" fill="none" stroke="#ffffff" stroke-width="150" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M560 330 L740 512 L560 694" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="130" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M296 236 L576 512 L296 788" fill="none" stroke="#ffffff" stroke-width="152"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M642 322 L828 512 L642 702" fill="none" stroke="#ffffff" stroke-opacity="0.42" stroke-width="148"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <rect width="1024" height="1024" fill="url(#au-vig)"/>
+      <rect width="1024" height="1024" filter="url(#au-noise)"/>
     </svg>
     </div>
     <h3>Aurora <span class="en">极光</span></h3>
-    <p>终端提示符 ❯ 放大成主视觉——AI 编码 agent 的身份符号。极光渐变 = 多 agent 并行的能量场。</p>
+    <p>精修:双箭头拉开间距形成「快进」节奏;暗角 + 颗粒给足景深;青色辅光移到对角平衡构图。</p>
   </div>
 
-  <!-- 2 NOVA — bold star on violet -->
+  <!-- 2 NOVA refined -->
   <div class="board" id="board-2">
     <div class="frame">
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="no-bg" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stop-color="#7c3aed"/>
-          <stop offset="50%" stop-color="#6d28d9"/>
-          <stop offset="100%" stop-color="#4338ca"/>
+          <stop offset="50%" stop-color="#5b21b6"/>
+          <stop offset="100%" stop-color="#3730a3"/>
         </linearGradient>
-        <radialGradient id="no-mesh" cx="75%" cy="20%" r="70%">
-          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.75"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        <radialGradient id="no-mesh" cx="78%" cy="16%" r="70%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.8"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
         </radialGradient>
-        <linearGradient id="no-star" x1="0" y1="0" x2="0.6" y2="1">
-          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#ddd6fe"/>
+        <linearGradient id="no-star" x1="0" y1="0" x2="0.55" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="70%" stop-color="#ede9fe"/><stop offset="100%" stop-color="#c4b5fd"/>
         </linearGradient>
+        <filter id="no-glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="40"/></filter>
+        <radialGradient id="no-vig" cx="50%" cy="50%" r="74%">
+          <stop offset="60%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
+        </radialGradient>
+        <filter id="no-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.055 0"/></filter>
       </defs>
       <rect width="1024" height="1024" fill="url(#no-bg)"/>
       <rect width="1024" height="1024" fill="url(#no-mesh)"/>
-      <path d="M512 132 C 548 420, 592 464, 880 500 C 592 536, 548 580, 512 868 C 476 580, 432 536, 144 500 C 432 464, 476 420, 512 132 Z" fill="url(#no-star)"/>
-      <circle cx="790" cy="220" r="56" fill="#ffffff" opacity="0.95"/>
+      <path d="M512 150 C 546 420, 590 464, 860 498 C 590 532, 546 576, 512 846 C 478 576, 434 532, 164 498 C 434 464, 478 420, 512 150 Z"
+            fill="#c4b5fd" opacity="0.55" filter="url(#no-glow)"/>
+      <path d="M512 150 C 546 420, 590 464, 860 498 C 592 534, 548 578, 512 848 C 476 578, 432 534, 164 498 C 432 464, 476 420, 512 150 Z"
+            fill="url(#no-star)" transform="rotate(6 512 500)"/>
+      <circle cx="812" cy="212" r="52" fill="#ffffff"/>
+      <rect width="1024" height="1024" fill="url(#no-vig)"/>
+      <rect width="1024" height="1024" filter="url(#no-noise)"/>
     </svg>
     </div>
     <h3>Nova <span class="en">新星</span></h3>
-    <p>紫罗兰底 + 白色四芒星,一次点击引爆 agent 集群。最「AI 原生」的一版。</p>
+    <p>精修:星芒加 6° 动势旋转,背后加柔光晕;伴星收小升高;颗粒 + 暗角收边。</p>
   </div>
 
-  <!-- 3 HEXA — solid hex cluster -->
+  <!-- 3 HEXA refined -->
   <div class="board" id="board-3">
     <div class="frame">
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="hx-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#312e81"/>
-          <stop offset="55%" stop-color="#4f46e5"/>
+          <stop offset="0%" stop-color="#3730a3"/>
+          <stop offset="52%" stop-color="#4f46e5"/>
           <stop offset="100%" stop-color="#7c3aed"/>
         </linearGradient>
         <linearGradient id="hx-w" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e7ff"/>
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#dbe3ff"/>
         </linearGradient>
+        <radialGradient id="hx-vig" cx="50%" cy="46%" r="76%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.28"/>
+        </radialGradient>
+        <filter id="hx-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
       </defs>
       <rect width="1024" height="1024" fill="url(#hx-bg)"/>
-      <path d="M420 210 L580 302 L580 486 L420 578 L260 486 L260 302 Z" fill="url(#hx-w)"/>
-      <path d="M660 400 L800 481 L800 643 L660 724 L520 643 L520 481 Z" fill="#ffffff" opacity="0.55"/>
-      <path d="M420 590 L560 671 L560 833 L420 924 L280 833 L280 671 Z" fill="#c7d2fe" opacity="0.92"/>
-      <circle cx="500" cy="394" r="34" fill="#4f46e5"/>
+      <g transform="translate(512 470)">
+        <path d="M0 -190 L165 -95 L165 95 L0 190 L-165 95 L-165 -95 Z" fill="url(#hx-w)"/>
+        <circle cx="0" cy="0" r="36" fill="#4f46e5"/>
+      </g>
+      <g transform="translate(775 660)">
+        <path d="M0 -172 L149 -86 L149 86 L0 172 L-149 86 L-149 -86 Z" fill="#c7d2fe" opacity="0.95"/>
+      </g>
+      <g transform="translate(250 660)">
+        <path d="M0 -172 L149 -86 L149 86 L0 172 L-149 86 L-149 -86 Z" fill="#818cf8" opacity="0.9"/>
+      </g>
+      <rect width="1024" height="1024" fill="url(#hx-vig)"/>
+      <rect width="1024" height="1024" filter="url(#hx-noise)"/>
     </svg>
     </div>
     <h3>Hexa <span class="en">蜂巢</span></h3>
-    <p>三个实心蜂巢 = agent 蜂群。实心体块,小尺寸下依然清晰。</p>
+    <p>精修:改为真正的蜂巢正三角排列(间距 = √3·s);主巢白色 + 芯点,副巢两级明度;构图居中。</p>
   </div>
 
-  <!-- 4 BEAM — bold diagonal beam -->
+  <!-- 4 BEAM refined -->
   <div class="board" id="board-4">
     <div class="frame">
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="bm-bg" x1="0" y1="1" x2="1" y2="0">
           <stop offset="0%" stop-color="#1e1b4b"/>
-          <stop offset="45%" stop-color="#4338ca"/>
+          <stop offset="48%" stop-color="#4338ca"/>
           <stop offset="100%" stop-color="#8b5cf6"/>
         </linearGradient>
-        <radialGradient id="bm-dot" cx="35%" cy="35%" r="80%">
+        <radialGradient id="bm-mesh" cx="80%" cy="18%" r="60%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.55"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="bm-dot" cx="35%" cy="32%" r="80%">
           <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c7d2fe"/>
         </radialGradient>
+        <radialGradient id="bm-vig" cx="50%" cy="50%" r="76%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
+        </radialGradient>
+        <filter id="bm-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
       </defs>
       <rect width="1024" height="1024" fill="url(#bm-bg)"/>
-      <line x1="250" y1="800" x2="770" y2="280" stroke="#ffffff" stroke-width="118" stroke-linecap="round"/>
-      <circle cx="790" cy="260" r="120" fill="#a78bfa" opacity="0.55"/>
-      <circle cx="790" cy="260" r="86" fill="url(#bm-dot)"/>
+      <rect width="1024" height="1024" fill="url(#bm-mesh)"/>
+      <line x1="330" y1="700" x2="530" y2="540" stroke="#ffffff" stroke-opacity="0.25" stroke-width="30" stroke-linecap="round"/>
+      <line x1="240" y1="795" x2="770" y2="270" stroke="#ffffff" stroke-width="118" stroke-linecap="round"/>
+      <circle cx="790" cy="255" r="132" fill="#a78bfa" opacity="0.45"/>
+      <circle cx="790" cy="255" r="88" fill="url(#bm-dot)"/>
+      <circle cx="790" cy="255" r="118" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="8"/>
+      <rect width="1024" height="1024" fill="url(#bm-vig)"/>
+      <rect width="1024" height="1024" filter="url(#bm-noise)"/>
     </svg>
     </div>
     <h3>Beam <span class="en">光束</span></h3>
-    <p>上一版的指挥棒,换成正确做法:粗壮光束 + 大光球,填满画布。</p>
+    <p>精修:光束加渐白高光芯与回声短线;光球加同心环 + 柔晕;右上补光平衡对角。</p>
   </div>
 
-  <!-- 5 LOOP — chunky ring -->
+  <!-- 5 LOOP refined -->
   <div class="board" id="board-5">
     <div class="frame">
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
@@ -136,47 +181,114 @@
         <linearGradient id="lp-bg" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stop-color="#4f46e5"/>
           <stop offset="55%" stop-color="#7c3aed"/>
-          <stop offset="100%" stop-color="#2563eb"/>
+          <stop offset="100%" stop-color="#1d4ed8"/>
         </linearGradient>
-        <linearGradient id="lp-ring" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#c7d2fe"/>
-        </linearGradient>
+        <radialGradient id="lp-mesh" cx="22%" cy="80%" r="60%">
+          <stop offset="0%" stop-color="#818cf8" stop-opacity="0.6"/><stop offset="100%" stop-color="#818cf8" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="lp-dot" cx="38%" cy="32%" r="80%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#dbe3ff"/>
+        </radialGradient>
+        <radialGradient id="lp-vig" cx="50%" cy="50%" r="76%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
+        </radialGradient>
+        <filter id="lp-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
       </defs>
       <rect width="1024" height="1024" fill="url(#lp-bg)"/>
-      <circle cx="512" cy="512" r="290" fill="none" stroke="url(#lp-ring)" stroke-width="128"
-              stroke-linecap="round" stroke-dasharray="1495 327" transform="rotate(115 512 512)"/>
-      <circle cx="512" cy="512" r="96" fill="#ffffff"/>
+      <rect width="1024" height="1024" fill="url(#lp-mesh)"/>
+      <circle cx="512" cy="512" r="372" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="26"
+              stroke-linecap="round" stroke-dasharray="500 1838" transform="rotate(30 512 512)"/>
+      <circle cx="512" cy="512" r="282" fill="none" stroke="#ffffff" stroke-width="126"
+              stroke-linecap="round" stroke-dasharray="1470 300" transform="rotate(118 512 512)"/>
+      <circle cx="512" cy="512" r="94" fill="url(#lp-dot)"/>
+      <rect width="1024" height="1024" fill="url(#lp-vig)"/>
+      <rect width="1024" height="1024" filter="url(#lp-noise)"/>
     </svg>
     </div>
     <h3>Loop <span class="en">循环</span></h3>
-    <p>指令 → 执行 → 结果的永恒回路。缺口 + 圆点 = 正在进行的任务。</p>
+    <p>精修:缺口转向正上方 + 外圈回声弧呼应;中心点改渐白球体;暗角 + 颗粒收边。</p>
   </div>
 
-  <!-- 6 OTTO — bot face -->
+  <!-- 6 OTTO refined -->
   <div class="board" id="board-6">
     <div class="frame">
     <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="ot-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#6d28d9"/>
-          <stop offset="55%" stop-color="#4f46e5"/>
-          <stop offset="100%" stop-color="#2563eb"/>
+          <stop offset="0%" stop-color="#7c3aed"/>
+          <stop offset="52%" stop-color="#4f46e5"/>
+          <stop offset="100%" stop-color="#1d4ed8"/>
         </linearGradient>
+        <radialGradient id="ot-mesh" cx="80%" cy="14%" r="60%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.6"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        </radialGradient>
         <linearGradient id="ot-head" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e7ff"/>
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#d6ddff"/>
         </linearGradient>
+        <radialGradient id="ot-vig" cx="50%" cy="50%" r="76%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.28"/>
+        </radialGradient>
+        <filter id="ot-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
+        <filter id="ot-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="18"/></filter>
       </defs>
       <rect width="1024" height="1024" fill="url(#ot-bg)"/>
-      <line x1="512" y1="150" x2="512" y2="290" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
-      <circle cx="512" cy="128" r="34" fill="#a78bfa"/>
-      <rect x="222" y="290" width="580" height="470" rx="150" fill="url(#ot-head)"/>
-      <circle cx="392" cy="525" r="62" fill="#4f46e5"/>
-      <circle cx="632" cy="525" r="62" fill="#4f46e5"/>
-      <rect x="430" y="660" width="164" height="26" rx="13" fill="#c7d2fe"/>
+      <rect width="1024" height="1024" fill="url(#ot-mesh)"/>
+      <line x1="512" y1="168" x2="512" y2="300" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
+      <circle cx="512" cy="140" r="36" fill="#a78bfa"/>
+      <circle cx="512" cy="140" r="60" fill="#a78bfa" opacity="0.4" filter="url(#ot-soft)"/>
+      <rect x="222" y="300" width="580" height="460" rx="148" fill="url(#ot-head)"/>
+      <circle cx="390" cy="520" r="64" fill="#4f46e5"/>
+      <circle cx="378" cy="506" r="16" fill="#8b9cf7"/>
+      <circle cx="634" cy="520" r="64" fill="#4f46e5"/>
+      <circle cx="622" cy="506" r="16" fill="#8b9cf7"/>
+      <path d="M436 660 Q 512 700 588 660" fill="none" stroke="#c7d2fe" stroke-width="26" stroke-linecap="round"/>
+      <rect width="1024" height="1024" fill="url(#ot-vig)"/>
+      <rect width="1024" height="1024" filter="url(#ot-noise)"/>
     </svg>
     </div>
     <h3>Otto <span class="en">机器人</span></h3>
-    <p>给你的第一个 AI 员工一张脸。友好、圆润、过目不忘。</p>
+    <p>精修:眼睛加高光点「活了」,嘴改成微笑弧,天线球加辉光,头部加顶光渐变。</p>
+  </div>
+  <!-- 7 BATON AI -->
+  <div class="board" id="board-7">
+    <div class="frame">
+    <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bt2-bg" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stop-color="#1e1b4b"/>
+          <stop offset="48%" stop-color="#4338ca"/>
+          <stop offset="100%" stop-color="#8b5cf6"/>
+        </linearGradient>
+        <radialGradient id="bt2-mesh" cx="80%" cy="16%" r="60%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.5"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="bt2-star" cx="42%" cy="34%" r="80%">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="55%" stop-color="#dbe3ff"/><stop offset="100%" stop-color="#8b9cf7"/>
+        </radialGradient>
+        <radialGradient id="bt2-vig" cx="50%" cy="50%" r="76%">
+          <stop offset="62%" stop-color="#000000" stop-opacity="0"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
+        </radialGradient>
+        <filter id="bt2-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="38"/></filter>
+        <filter id="bt2-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0"/></filter>
+      </defs>
+      <rect width="1024" height="1024" fill="url(#bt2-bg)"/>
+      <rect width="1024" height="1024" fill="url(#bt2-mesh)"/>
+      <circle cx="668" cy="378" r="215" fill="#7170ff" opacity="0.5" filter="url(#bt2-glow)"/>
+      <line x1="252" y1="788" x2="700" y2="352" stroke="#ffffff" stroke-width="114" stroke-linecap="round"/>
+      <line x1="252" y1="788" x2="376" y2="666" stroke="#c7d2fe" stroke-opacity="0.9" stroke-width="114" stroke-linecap="round"/>
+      <path d="M700 140 C 726 292, 776 342, 928 368 C 776 394, 726 444, 700 596 C 674 444, 624 394, 472 368 C 624 342, 674 292, 700 140 Z"
+            fill="url(#bt2-star)"/>
+      <path d="M862 148 C 872 224, 892 244, 968 254 C 892 264, 872 284, 862 360 C 852 284, 832 264, 756 254 C 832 244, 852 224, 862 148 Z"
+            fill="#e6e9f4" opacity="0.95"/>
+      <rect width="1024" height="1024" fill="url(#bt2-vig)"/>
+      <rect width="1024" height="1024" filter="url(#bt2-noise)"/>
+    </svg>
+    </div>
+    <h3>Baton <span class="en">指挥棒 × AI 星</span></h3>
+    <p>指挥棒末端点亮 AI 星星:一根指挥所有 agent 的魔法棒。星随棒动,棒止于星。</p>
   </div>
 </div>
 
