@@ -1,6 +1,7 @@
 import {
   StyleSheet,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   TextInput,
   FlatList,
@@ -1120,6 +1121,8 @@ export default function ChatScreen() {
             renderItem={renderGroupedItem}
             onScroll={handleScroll}
             scrollEventThrottle={64}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             maxToRenderPerBatch={10}
             windowSize={5}
             removeClippedSubviews={true}
@@ -1509,6 +1512,8 @@ export default function ChatScreen() {
           </View>
         </View>
 
+        {/* context pills ride with the keyboard — only while composing */}
+        {inputFocused && (
         <View style={styles.secondaryBar}>
           <Pressable
             ref={runtimeBtnRef}
@@ -1590,6 +1595,7 @@ export default function ChatScreen() {
             <ContextProgressRing fraction={contextFraction} color={c.textTertiary} />
           )}
         </View>
+        )}
       </View>
 
       {promptModal?.visible && (
@@ -2186,11 +2192,11 @@ const styles = StyleSheet.create({
 
   composerWrapper: {
     paddingHorizontal: Spacing.md + 2,
-    paddingTop: Spacing.sm + 2,
+    paddingTop: Spacing.sm - 2,
   },
 
   composerCard: {
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,
     borderCurve: 'continuous',
     overflow: 'hidden',
@@ -2214,12 +2220,12 @@ const styles = StyleSheet.create({
 
   composerInputRow: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: 4,
+    paddingTop: Spacing.sm + 1,
+    paddingBottom: 2,
   },
   composerInput: {
     ...Typography.subhead,
-    minHeight: 36,
+    minHeight: 34,
     maxHeight: 120,
     padding: 0,
   },
@@ -2228,7 +2234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg - 2,
     paddingTop: 2,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.sm - 2,
     gap: Spacing.sm,
   },
 
@@ -2279,7 +2285,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.sm + 2,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.sm - 2,
     paddingBottom: 2,
     gap: Spacing.sm - 2,
   },
