@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from 'heroui-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import { apiFetch } from '../services/api';
 import { useThemeColors } from '../hooks/useThemeColors';
+import { FileIconTile } from './FileIconTile';
 
 interface DirEntry {
   name: string;
@@ -78,7 +80,7 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
           { backgroundColor: pressed ? c.subtle : c.card, borderBottomColor: c.cardBorder },
         ]}
       >
-        <Text style={[styles.rowIcon, { color: c.textTertiary }]}>📁</Text>
+        <FileIconTile isDir name={item.name} size="sm" />
         <Text style={[styles.rowName, { color: c.textPrimary }]} numberOfLines={1}>
           {item.name}
         </Text>
@@ -111,7 +113,9 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
           onPress={goUp}
           style={[styles.row, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}
         >
-          <Text style={[styles.rowIcon, { color: c.textTertiary }]}>⬆️</Text>
+          <View style={[styles.upTile, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
+            <Ionicons name="arrow-up" size={14} color={c.textSecondary} />
+          </View>
           <Text style={[styles.rowName, { color: c.textSecondary }]}>..</Text>
         </Pressable>
 
@@ -168,6 +172,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowIcon: { fontSize: 18, marginRight: 10 },
+  upTile: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   rowName: { flex: 1, fontSize: 15 },
   chevron: { fontSize: 20, fontWeight: '300' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },

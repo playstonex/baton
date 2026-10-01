@@ -7,6 +7,7 @@ import { Spinner } from 'heroui-native';
 import { useAgentStore } from '../../src/stores/agents';
 import { apiFetch, getDaemonUrl } from '../../src/services/api';
 import { FilePreview } from '../../src/components/FilePreview';
+import { FileIconTile } from '../../src/components/FileIconTile';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { FontFamily, Colors, Typography, Spacing, CornerRadius, Glass } from '../../src/constants/theme';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -21,42 +22,6 @@ interface FileEntry {
   path: string;
   isDir: boolean;
   size: number;
-}
-
-interface FileIconMap {
-  [key: string]: { icon: string; color: string };
-}
-
-const FILE_ICONS: FileIconMap = {
-  ts: { icon: 'logo-nodejs', color: '#3178c6' },
-  tsx: { icon: 'logo-react', color: '#61dafb' },
-  js: { icon: 'logo-nodejs', color: '#f7df1e' },
-  jsx: { icon: 'logo-react', color: '#61dafb' },
-  json: { icon: 'code-slash', color: '#5b9bd5' },
-  css: { icon: 'color-palette', color: '#264de4' },
-  html: { icon: 'globe', color: '#e34c26' },
-  md: { icon: 'document-text', color: '#8b949e' },
-  py: { icon: 'logo-python', color: '#3776ab' },
-  rb: { icon: 'logo-ruby', color: '#cc342d' },
-  rs: { icon: 'cog', color: '#dea584' },
-  go: { icon: 'code-slash', color: '#00add8' },
-  sh: { icon: 'terminal', color: '#4eaa25' },
-  yaml: { icon: 'settings', color: '#cb171e' },
-  yml: { icon: 'settings', color: '#cb171e' },
-  toml: { icon: 'settings', color: '#9c4221' },
-  sql: { icon: 'server', color: '#336791' },
-  png: { icon: 'image', color: '#e8710a' },
-  jpg: { icon: 'image', color: '#e8710a' },
-  jpeg: { icon: 'image', color: '#e8710a' },
-  svg: { icon: 'image', color: '#ffb13b' },
-  gif: { icon: 'image', color: '#e8710a' },
-  lock: { icon: 'lock-closed', color: '#6e7681' },
-  env: { icon: 'key', color: '#ecd53f' },
-  gitignore: { icon: 'git-branch', color: '#f05032' },
-};
-
-function getFileIconInfo(ext: string): { icon: string; color: string } {
-  return FILE_ICONS[ext] ?? { icon: 'document', color: '#8b949e' };
 }
 
 function getExtension(filename: string): string {
@@ -272,8 +237,6 @@ export default function FilesScreen() {
             </View>
           }
           renderItem={({ item }) => {
-            const ext = getExtension(item.name);
-            const iconInfo = getFileIconInfo(ext);
             return (
               <Pressable
                 onPress={() => (item.isDir ? fetchDir(item.path) : openFile(item.path, item.name))}
@@ -290,17 +253,7 @@ export default function FilesScreen() {
                     : 'transparent',
                 })}
               >
-                <View style={{
-                  width: 32, height: 32, borderRadius: CornerRadius.small,
-                  alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: item.isDir ? c.accentBg : c.elevated,
-                }}>
-                  {item.isDir ? (
-                    <Ionicons name="folder-outline" size={18} color={Colors.primary[300]} />
-                  ) : (
-                    <Ionicons name={iconInfo.icon as React.ComponentProps<typeof Ionicons>['name']} size={18} color={iconInfo.color} />
-                  )}
-                </View>
+                <FileIconTile isDir={item.isDir} name={item.name} />
                 <Text
                   style={{
                     ...Typography.subhead,
