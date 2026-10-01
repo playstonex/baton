@@ -295,8 +295,20 @@ export class WebSocketService {
     this.backgroundDisconnectTimer = setTimeout(() => {
       this.backgroundDisconnectTimer = null;
       if (this._connected) {
-        // Intentional — suppress the auto-reconnect in onclose.
-        this.disconnect();
+        // Intentional — suppress the auto-reconnect in onclose. Deliberately
+        // keep the AppState subscription: it is what reconnects us on
+        // return-to-foreground. Tearing it down here (via disconnect())
+        // used to leave the app permanently offline after one background
+        // grace period — HTTP still worked, so the dashboard showed stale
+        // "running" rows while chat had no connection at all.
+        this.intentionalClose = true;
+        this.clearBackgroundDisconnect();
+        this.stopHeartbeat();
+        this.activeSessionId = null;
+        this.ws?.close();
+        this.ws = null;
+        this._connected = false;
+        this.notifyStateChange();
       }
     }, WebSocketService.BACKGROUND_DISCONNECT_MS);
   }
