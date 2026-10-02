@@ -15,6 +15,7 @@ export interface ThemeColors {
   cardBorder: string;
   elevated: string;
   subtle: string;
+  separator: string;
   inputBg: string;
   inputBorder: string;
   textPrimary: string;

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
+import { Text, Pressable, StyleSheet, LayoutAnimation } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
 import { TypingIndicator } from './TypingIndicator';
@@ -10,6 +10,10 @@ interface Props {
   isStreaming?: boolean;
 }
 
+/**
+ * Quiet inline row (Codex-style) — no filled card, just a collapsible
+ * "Thought process" line that keeps the transcript visually calm.
+ */
 export const ThinkingBlock = React.memo(function ThinkingBlock({ content, colors, isStreaming }: Props) {
   const [expanded, setExpanded] = useState(false);
 
@@ -19,46 +23,45 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({ content, colors
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.subtle }]}>
-      <Pressable style={styles.header} onPress={toggle}>
-        <Ionicons
-          name="chevron-forward"
-          size={10}
-          color={colors.textSecondary}
-          style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}
-        />
-        <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>
-          Thinking
-        </Text>
-        {isStreaming && <TypingIndicator colors={colors} />}
-      </Pressable>
+    <Pressable
+      style={styles.container}
+      onPress={toggle}
+      hitSlop={4}
+      accessibilityLabel={expanded ? 'Collapse thought process' : 'Expand thought process'}
+    >
+      <Ionicons
+        name="chevron-forward"
+        size={10}
+        color={colors.textTertiary}
+        style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}
+      />
+      <Text style={[styles.label, { color: colors.textTertiary }]}>
+        {isStreaming ? 'Thinking' : 'Thought process'}
+      </Text>
+      {isStreaming && <TypingIndicator colors={colors} />}
       {expanded && (
-        <Text style={[styles.content, { color: colors.textSecondary }]}>
-          {content}
-        </Text>
+        <Text style={[styles.content, { color: colors.textSecondary }]}>{content}</Text>
       )}
-    </View>
+    </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12,
-    padding: 12,
-  },
-  header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
+    paddingVertical: 2,
   },
-  headerLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+  label: {
+    fontSize: 12.5,
+    fontWeight: '500',
   },
   content: {
     fontSize: 12,
     lineHeight: 18,
-    opacity: 0.85,
-    marginTop: 8,
+    width: '100%',
+    paddingLeft: 17,
   },
 });

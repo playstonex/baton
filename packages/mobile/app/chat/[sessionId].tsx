@@ -1,7 +1,5 @@
 import {
   StyleSheet,
-  KeyboardAvoidingView,
-  Keyboard,
   Platform,
   TextInput,
   FlatList,
@@ -11,24 +9,40 @@ import {
   Modal,
   ActionSheetIOS,
   Alert,
-  Linking,
   Clipboard,
+  LayoutAnimation,
   NativeScrollEvent,
   NativeSyntheticEvent,
   ScrollView,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeInDown,
+  interpolate,
+  useAnimatedKeyboard,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import Svg, { Circle } from 'react-native-svg';
 import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
 import { apiFetch } from '../../src/services/api';
-import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Radius, Glass, Shadows } from '../../src/constants/theme';
+import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Glass, Shadows } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { GlassButton } from '../../src/components/GlassKit';
+import {
+  ComposerSettingsSheet,
+  type ThinkingMode,
+  type ThinkingLevel,
+  type ServiceTier,
+  type AccessMode,
+} from '../../src/components/ComposerSettingsSheet';
 import {
   AgentQuestionCard,
   type QuestionItem,
@@ -53,13 +67,6 @@ import {
   type MenuOption,
 } from '../../src/components/messages';
 
-type ThinkingMode = 'none' | 'auto' | 'level';
-type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
-
-type AccessMode = 'on-request' | 'full-access';
-type ServiceTier = 'default' | 'fast';
-type RuntimeMode = 'local' | 'cloud';
-
 type GroupedItem =
   | { type: 'message'; msg: ChatMessage }
   | { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
@@ -76,67 +83,37 @@ const THINKING_LEVEL_SHORT: Record<string, string> = {
   xhigh: 'XHi',
 };
 
+/** Empty-state quick starts — 'review' opens the real diff viewer, 'prompt' prefills. */
+const EMPTY_SUGGESTIONS: Array<{
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  text: string;
+  action: 'prompt' | 'review';
+}> = [
+  { icon: 'git-compare-outline', text: 'Review all changed files', action: 'review' },
+  { icon: 'flask-outline', text: 'Run tests and fix the failures', action: 'prompt' },
+  { icon: 'cube-outline', text: "Explain this project's architecture", action: 'prompt' },
+];
+
 const isRunning = (s: string) => s === 'running' || s === 'thinking' || s === 'executing';
 
 const HEADER_HEIGHT = 48;
 
-const RING_SIZE = 20;
-const RING_STROKE = 2;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-function ContextProgressRing({ fraction, color }: { fraction: number; color: string }) {
-  const strokeDashoffset = RING_CIRCUMFERENCE * (1 - Math.min(fraction, 1));
-  const pct = Math.round(fraction * 100);
-
-  let ringColor = color;
-  if (fraction > 0.85) ringColor = Colors.danger[400];
-  else if (fraction > 0.65) ringColor = Colors.warning[400];
-
+/** Breathing halo behind the running status dot — iOS-style live indicator. */
+function PulsingDot({ color }: { color: string }) {
+  const opacity = useSharedValue(1);
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withTiming(0.25, { duration: 900, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [opacity]);
+  const haloStyle = useAnimatedStyle(() => ({ opacity: 0.35 * opacity.value }));
   return (
-    <View style={progressStyles.container}>
-      <Svg width={RING_SIZE} height={RING_SIZE}>
-        <Circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          stroke={color}
-          strokeWidth={RING_STROKE}
-          fill="none"
-          opacity={0.2}
-        />
-        <Circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          stroke={ringColor}
-          strokeWidth={RING_STROKE}
-          fill="none"
-          strokeDasharray={RING_CIRCUMFERENCE}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-        />
-      </Svg>
-      <Text style={[progressStyles.label, { color: ringColor }]}>{pct}</Text>
-    </View>
+    <Animated.View style={[styles.statusDotPulse, { backgroundColor: color }, haloStyle]} />
   );
 }
 
-const progressStyles = StyleSheet.create({
-  container: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    position: 'absolute',
-    fontSize: 7,
-    fontWeight: '600',
-  },
-});
 
 function showActionSheet(
   title: string,
@@ -167,12 +144,6 @@ function showActionSheet(
       { text: options[cancelButtonIndex], style: 'cancel' as const },
     ]);
   }
-}
-
-function shortModelName(model: string | null): string {
-  if (!model) return 'Model';
-  const parts = model.split('-');
-  return parts.length > 1 ? parts.slice(-2).join('-') : model;
 }
 
 export default function ChatScreen() {
@@ -263,8 +234,6 @@ export default function ChatScreen() {
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('medium');
   const [serviceTier, setServiceTier] = useState<ServiceTier>('default');
   const [accessMode, setAccessMode] = useState<AccessMode>('on-request');
-  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>('local');
-  const [planMode, setPlanMode] = useState(false);
   const [gitBranches, setGitBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState('main');
   const [contextFraction, setContextFraction] = useState(0);
@@ -289,6 +258,7 @@ export default function ChatScreen() {
     onSubmit: (text: string) => void;
   } | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [menu, setMenu] = useState<{
     title?: string;
     options: MenuOption[];
@@ -296,13 +266,8 @@ export default function ChatScreen() {
     anchor?: { x: number; y: number; width: number; height: number };
   } | null>(null);
   const flatRef = useRef<FlatList>(null);
-  const attachBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
-  const reasoningBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
-  const runtimeBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
-  const accessBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
-  const branchBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
-  const gitActionsBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
-  const modelBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const inputRef = useRef<TextInput>(null);
+  const moreBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
 
@@ -492,6 +457,16 @@ export default function ChatScreen() {
     return messages.slice(start);
   }, [messages, visibleCount]);
 
+  // Jump-to-latest pill fades/slides in the native way instead of popping.
+  const scrollBtnProgress = useSharedValue(0);
+  useEffect(() => {
+    scrollBtnProgress.value = withTiming(isNearBottom ? 0 : 1, { duration: Glass.morph.fast });
+  }, [isNearBottom, scrollBtnProgress]);
+  const scrollBtnStyle = useAnimatedStyle(() => ({
+    opacity: scrollBtnProgress.value,
+    transform: [{ translateY: interpolate(scrollBtnProgress.value, [0, 1], [8, 0]) }],
+  }));
+
   const hasMore = messages.length > visibleCount;
 
   const groupedData = useMemo(() => {
@@ -545,6 +520,7 @@ export default function ChatScreen() {
   }
 
   function toggleBurst(burstId: string) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedBursts((prev) => {
       const next = new Set(prev);
       if (next.has(burstId)) {
@@ -558,12 +534,7 @@ export default function ChatScreen() {
 
   function showMessageActions(msg: ChatMessage) {
     const options = ['Copy Message'];
-    if (msg.role === 'user') {
-      options.push('Retry');
-    }
-    if (msg.role === 'assistant') {
-      options.push('Select Text');
-    }
+    if (msg.role === 'user') options.push('Edit Message');
     options.push('Cancel');
     showActionSheet('Actions', options, options.length - 1, (index) => {
       if (index === 0) {
@@ -571,6 +542,7 @@ export default function ChatScreen() {
       }
       if (index === 1 && msg.role === 'user') {
         setInput(msg.content);
+        inputRef.current?.focus();
       }
     });
   }
@@ -687,103 +659,6 @@ export default function ChatScreen() {
     }
   }, [running, agentStatus, promptQueue]);
 
-  async function openAttachmentMenu() {
-    const anchor = await measureAnchor(attachBtnRef);
-    setMenu({
-      title: 'Attach',
-      anchor,
-      options: [
-        { label: planMode ? '\u2713 Plan Mode' : 'Plan Mode', selected: planMode },
-        { label: 'Photo Library', disabled: true },
-        { label: 'Take Photo', disabled: true },
-      ],
-      onSelect: (index) => {
-        if (index === 0) setPlanMode(!planMode);
-      },
-    });
-  }
-
-  async function openReasoningMenu() {
-    const anchor = await measureAnchor(reasoningBtnRef);
-    const options: MenuOption[] = [
-      {
-        label: `${thinkingMode === 'none' ? '\u2713 ' : ''}Off`,
-        selected: thinkingMode === 'none',
-      },
-      {
-        label: `${thinkingMode === 'auto' ? '\u2713 ' : ''}Auto`,
-        selected: thinkingMode === 'auto',
-      },
-      { separator: true },
-      {
-        label: `${thinkingMode === 'level' && thinkingLevel === 'minimal' ? '\u2713 ' : ''}Minimal`,
-        selected: thinkingMode === 'level' && thinkingLevel === 'minimal',
-      },
-      {
-        label: `${thinkingMode === 'level' && thinkingLevel === 'low' ? '\u2713 ' : ''}Low`,
-        selected: thinkingMode === 'level' && thinkingLevel === 'low',
-      },
-      {
-        label: `${thinkingMode === 'level' && thinkingLevel === 'medium' ? '\u2713 ' : ''}Medium`,
-        selected: thinkingMode === 'level' && thinkingLevel === 'medium',
-      },
-      {
-        label: `${thinkingMode === 'level' && thinkingLevel === 'high' ? '\u2713 ' : ''}High`,
-        selected: thinkingMode === 'level' && thinkingLevel === 'high',
-      },
-      {
-        label: `${thinkingMode === 'level' && thinkingLevel === 'xhigh' ? '\u2713 ' : ''}X-High`,
-        selected: thinkingMode === 'level' && thinkingLevel === 'xhigh',
-      },
-      { separator: true },
-      { label: 'Normal Speed', selected: serviceTier === 'default' },
-      { label: 'Fast Speed', selected: serviceTier === 'fast' },
-    ];
-    setMenu({
-      title: 'Thinking & Speed',
-      anchor,
-      options,
-      onSelect: (index) => {
-        if (index === 0) {
-          setThinkingMode('none');
-          sendThinkingConfig('none');
-        } else if (index === 1) {
-          setThinkingMode('auto');
-          sendThinkingConfig('auto');
-        } else if (index === 3) {
-          setThinkingMode('level');
-          setThinkingLevel('minimal');
-          sendThinkingConfig('level', 'minimal');
-        } else if (index === 4) {
-          setThinkingMode('level');
-          setThinkingLevel('low');
-          sendThinkingConfig('level', 'low');
-        } else if (index === 5) {
-          setThinkingMode('level');
-          setThinkingLevel('medium');
-          sendThinkingConfig('level', 'medium');
-        } else if (index === 6) {
-          setThinkingMode('level');
-          setThinkingLevel('high');
-          sendThinkingConfig('level', 'high');
-        } else if (index === 7) {
-          setThinkingMode('level');
-          setThinkingLevel('xhigh');
-          sendThinkingConfig('level', 'xhigh');
-        } else if (index === 8) {
-          setThinkingMode('level');
-          setThinkingLevel('medium');
-        } else if (index === 9) {
-          setServiceTier('default');
-          wsService.send({ type: 'service_tier_select', sessionId, tier: 'default' });
-        } else if (index === 10) {
-          setServiceTier('fast');
-          wsService.send({ type: 'service_tier_select', sessionId, tier: 'fast' });
-        }
-      },
-    });
-  }
-
   function sendThinkingConfig(mode: ThinkingMode, level?: ThinkingLevel) {
     if (!sessionId) return;
     wsService.send({
@@ -798,51 +673,8 @@ export default function ChatScreen() {
     });
   }
 
-  async function openRuntimePicker() {
-    const anchor = await measureAnchor(runtimeBtnRef);
-    setMenu({
-      title: 'Continue in',
-      anchor,
-      options: [
-        { label: 'Cloud', selected: runtimeMode === 'cloud' },
-        { label: 'Local', selected: runtimeMode === 'local' },
-      ],
-      onSelect: (index) => {
-        if (index === 0) {
-          setRuntimeMode('cloud');
-          Linking.openURL('https://chatgpt.com/codex').catch(() => {});
-        }
-        if (index === 1) {
-          setRuntimeMode('local');
-        }
-      },
-    });
-  }
-
-  async function openAccessModeMenu() {
-    const anchor = await measureAnchor(accessBtnRef);
-    setMenu({
-      title: 'Access Mode',
-      anchor,
-      options: [
-        { label: 'Ask (On-Request)', selected: accessMode === 'on-request' },
-        { label: 'Full Access', selected: accessMode === 'full-access' },
-      ],
-      onSelect: (index) => {
-        if (index === 0) {
-          setAccessMode('on-request');
-          wsService.send({ type: 'access_mode_select', sessionId, mode: 'on-request' });
-        }
-        if (index === 1) {
-          setAccessMode('full-access');
-          wsService.send({ type: 'access_mode_select', sessionId, mode: 'full-access' });
-        }
-      },
-    });
-  }
-
   async function openGitBranchMenu() {
-    const anchor = await measureAnchor(branchBtnRef);
+    const anchor = await measureAnchor(moreBtnRef);
     const displayBranches = gitBranches.slice(0, 7);
     const options: MenuOption[] = displayBranches.map((b) => ({
       label: b,
@@ -876,26 +708,34 @@ export default function ChatScreen() {
     });
   }
 
-  async function openGitActionsMenu() {
-    const anchor = await measureAnchor(gitActionsBtnRef);
+  async function openMoreMenu() {
+    const anchor = await measureAnchor(moreBtnRef);
     setMenu({
-      title: 'Git Actions',
+      title: 'Session',
       anchor,
       options: [
+        { label: 'Terminal' },
+        { separator: true },
         { label: 'Review All Changes' },
-        { label: 'Status' },
         { label: 'Commit...' },
         { label: 'Push' },
         { label: 'Pull' },
+        { label: 'Status' },
+        { label: 'Switch Branch...' },
+        { separator: true },
+        {
+          label: sessionOwner === 'remote' ? 'Yield Control to Desktop' : 'Take Control',
+          selected: sessionOwner === 'remote',
+        },
       ],
       onSelect: (index) => {
         if (index === 0) {
-          setShowDiffReview(true);
-        }
-        if (index === 1) {
-          wsService.send({ type: 'git_status_request', sessionId });
+          router.push(`/terminal/${sessionId}`);
         }
         if (index === 2) {
+          setShowDiffReview(true);
+        }
+        if (index === 3) {
           setPromptModal({
             visible: true,
             title: 'Commit',
@@ -907,11 +747,25 @@ export default function ChatScreen() {
             },
           });
         }
-        if (index === 3) {
+        if (index === 4) {
           wsService.send({ type: 'git_push', sessionId });
         }
-        if (index === 4) {
+        if (index === 5) {
           wsService.send({ type: 'git_pull', sessionId });
+        }
+        if (index === 6) {
+          wsService.send({ type: 'git_status_request', sessionId });
+        }
+        if (index === 7) {
+          openGitBranchMenu();
+        }
+        if (index === 9) {
+          if (sessionOwner === 'remote') {
+            wsService.send({ type: 'control', action: 'release_session', sessionId });
+            setSessionOwner('local');
+          } else {
+            toggleSessionControl();
+          }
         }
       },
     });
@@ -919,15 +773,32 @@ export default function ChatScreen() {
 
   const statusColor = STATUS_COLORS[agentStatus] ?? Colors.surface[400];
   const sendDisabled = !input.trim();
+  const hasInput = !sendDisabled;
+  /** Mini status badge on the ≡ tune button — current thinking mode. */
+  const thinkingBadge =
+    thinkingMode === 'none'
+      ? 'Off'
+      : thinkingMode === 'auto'
+        ? 'Auto'
+        : THINKING_LEVEL_SHORT[thinkingLevel];
 
-  function renderGroupedItem({ item }: { item: GroupedItem }) {
+  // Morph the composer action slot (send ↔ stop ↔ steer) the native way —
+  // fires only on state boundaries, not per keystroke.
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [running, hasInput]);
+
+  function renderGroupedItem({ item, index }: { item: GroupedItem; index: number }) {
     if (item.type === 'burst') {
+      const isStreaming = running && index === groupedData.length - 1;
       return (
         <ToolBurstRenderer
           burst={item}
           colors={c}
+          isStreaming={isStreaming}
           isExpanded={expandedBursts.has(item.id)}
           onToggle={() => toggleBurst(item.id)}
+          onReview={() => setShowDiffReview(true)}
         />
       );
     }
@@ -943,12 +814,26 @@ export default function ChatScreen() {
     );
   }
 
+  // Keyboard tracking on the UI thread (the keyboardLayoutGuide equivalent):
+  // the content area's animated bottom inset makes everything below it —
+  // docked cards, queue, composer — hug the keyboard frame in real time,
+  // including interactive swipe-to-dismiss. Android relies on window resize.
+  const keyboard = useAnimatedKeyboard();
+  const listKeyboardInset = useAnimatedStyle(() => ({
+    flex: 1,
+    paddingBottom: Platform.OS === 'ios' ? keyboard.height.value : 0,
+  }));
+  // The keyboard frame already covers the home-indicator area — collapse the
+  // safe-area padding as it rises so the field sits flush on the keyboard.
+  const composerStyle = useAnimatedStyle(() => ({
+    paddingHorizontal: Spacing.md + 2,
+    paddingTop: Spacing.sm - 2,
+    paddingBottom:
+      Platform.OS === 'ios' ? Math.max(0, insets.bottom - keyboard.height.value) : insets.bottom,
+  }));
+
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: c.bg }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <View style={[styles.container, { backgroundColor: c.bg }]}>
       <View style={styles.headerOverlay}>
         <BlurView
           tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
@@ -957,22 +842,35 @@ export default function ChatScreen() {
         >
           <View style={{ height: insets.top }} />
           <View style={styles.headerContent}>
-            <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
-              {running && (
-                <View style={[styles.statusDotPulse, { backgroundColor: statusColor }]} />
-              )}
-              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            </View>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [styles.headerAction, { opacity: pressed ? 0.4 : 1 }]}
+              hitSlop={4}
+              accessibilityLabel="Collapse"
+            >
+              <Ionicons name="chevron-down" size={20} color={c.textSecondary} />
+            </Pressable>
             <Pressable
               onPress={() => setShowDiffReview(true)}
-              style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.6 : 1 }]}
             >
-              <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
-                {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
-              </Text>
+              <View style={styles.headerNameRow}>
+                <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
+                  {running && <PulsingDot color={statusColor} />}
+                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                </View>
+                <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
+                  {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
+                </Text>
+              </View>
               <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
+                {currentBranch ? (
+                  <Text style={styles.headerMono}>{currentBranch + '  \u2022  '}</Text>
+                ) : null}
                 {agentStatus.replace('_', ' ')}
-                {gitStatus ? ` \u2022 ${gitStatus.split('\n').filter(Boolean).length} changed` : ''}
+                {contextFraction > 0.01
+                  ? `  \u2022  ${Math.round(contextFraction * 100)}%`
+                  : ''}
               </Text>
             </Pressable>
             <View style={styles.spacer} />
@@ -983,22 +881,14 @@ export default function ChatScreen() {
                 style={({ pressed }) => [
                   styles.headerDiffPill,
                   {
-                    backgroundColor: pressed
-                      ? c.subtle
-                      : c.isDark
-                        ? Glass.opacity.dark.subtle
-                        : Glass.opacity.light.subtle,
-                    borderColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
-                    opacity: pressed ? 0.8 : 1,
-                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    backgroundColor: Colors.primary[500] + (c.isDark ? '24' : '14'),
+                    opacity: pressed ? 0.55 : 1,
                   },
                 ]}
                 hitSlop={4}
               >
-                <Ionicons name="document-text-outline" size={13} color={Colors.primary[500]} />
-                <Text style={[styles.headerDiffPillText, { color: Colors.primary[500] }]}>
+                <Ionicons name="git-compare-outline" size={12} color={Colors.primary[400]} />
+                <Text style={[styles.headerDiffPillText, { color: Colors.primary[400] }]}>
                   {gitStatus.split('\n').filter(Boolean).length}
                 </Text>
               </Pressable>
@@ -1009,21 +899,13 @@ export default function ChatScreen() {
               style={({ pressed }) => [
                 styles.headerControlPill,
                 {
-                  backgroundColor: pressed
-                    ? c.subtle
-                    : sessionOwner === 'remote'
+                  backgroundColor:
+                    sessionOwner === 'remote'
                       ? c.successBg
                       : c.isDark
                         ? Glass.opacity.dark.subtle
                         : Glass.opacity.light.subtle,
-                  borderColor:
-                    sessionOwner === 'remote'
-                      ? 'transparent'
-                      : c.isDark
-                        ? Glass.opacity.dark.border
-                        : Glass.opacity.light.border,
-                  opacity: pressed ? 0.8 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                  opacity: pressed ? 0.55 : 1,
                 },
               ]}
               hitSlop={4}
@@ -1043,35 +925,13 @@ export default function ChatScreen() {
               </Text>
             </Pressable>
             <Pressable
-              ref={gitActionsBtnRef}
-              onPress={openGitActionsMenu}
-              style={({ pressed }) => [
-                styles.headerAction,
-                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
-              ]}
+              ref={moreBtnRef}
+              onPress={openMoreMenu}
+              style={({ pressed }) => [styles.headerAction, { opacity: pressed ? 0.4 : 1 }]}
               hitSlop={4}
+              accessibilityLabel="More actions"
             >
-              <Ionicons name="git-branch-outline" size={16} color={c.textTertiary} />
-            </Pressable>
-            <Pressable
-              onPress={() => router.push(`/terminal/${sessionId}`)}
-              style={({ pressed }) => [
-                styles.headerAction,
-                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
-              ]}
-              hitSlop={4}
-            >
-              <Ionicons name="terminal-outline" size={18} color={c.textTertiary} />
-            </Pressable>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                styles.headerAction,
-                { marginLeft: 2, opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
-              ]}
-              hitSlop={4}
-            >
-              <Ionicons name="chevron-down" size={20} color={c.textTertiary} />
+              <Ionicons name="ellipsis-horizontal" size={18} color={c.textSecondary} />
             </Pressable>
           </View>
           {/* Hairline under the glass nav — separates it from scrolling content. */}
@@ -1088,28 +948,51 @@ export default function ChatScreen() {
         </BlurView>
       </View>
 
-      {messages.length === 0 ? (
+      <Animated.View style={listKeyboardInset}>
+        <View style={styles.contentArea}>
+          {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View
             style={[
-              styles.emptyIconWrap,
+              styles.emptyOrb,
               {
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.subtle
-                  : Glass.opacity.light.subtle,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: c.isDark
-                  ? Glass.opacity.dark.border
-                  : Glass.opacity.light.border,
+                backgroundColor: Colors.primary[500] + (c.isDark ? '30' : '12'),
+                borderWidth: 1,
+                borderColor: Colors.primary[500] + (c.isDark ? '59' : '2E'),
               },
             ]}
           >
-            <Ionicons name="chatbubble-outline" size={26} color={c.textTertiary} />
+            <Text style={[styles.emptyOrbGlyph, { color: Colors.primary[400] }]}>{'\u276F'}</Text>
           </View>
-          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>Start a conversation</Text>
-          <Text style={[styles.emptySub, { color: c.textTertiary }]}>
-            Type a message below to interact with the agent
+          <Text style={styles.emptyTitle}>Start a conversation</Text>
+          <Text style={styles.emptySub}>
+            Remote-control your coding agent — ask, review, steer.
           </Text>
+          <View style={styles.suggestionList}>
+            {EMPTY_SUGGESTIONS.map((s) => (
+              <Pressable
+                key={s.text}
+                onPress={() => {
+                  if (s.action === 'review') {
+                    setShowDiffReview(true);
+                  } else {
+                    setInput(s.text);
+                    inputRef.current?.focus();
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.suggestionItem,
+                  { backgroundColor: c.subtle, opacity: pressed ? 0.55 : 1 },
+                ]}
+              >
+                <Ionicons name={s.icon} size={16} color={c.textTertiary} />
+                <Text style={[styles.suggestionText, { color: c.textSecondary }]} numberOfLines={1}>
+                  {s.text}
+                </Text>
+                <Ionicons name="chevron-forward" size={13} color={c.textTertiary} />
+              </Pressable>
+            ))}
+          </View>
         </View>
       ) : (
         <View style={styles.listContainer}>
@@ -1119,8 +1002,10 @@ export default function ChatScreen() {
             keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
             contentContainerStyle={[styles.messageList, { paddingTop: insets.top + HEADER_HEIGHT }]}
             renderItem={renderGroupedItem}
+            extraData={[running, expandedBursts]}
+            maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
             onScroll={handleScroll}
-            scrollEventThrottle={64}
+            scrollEventThrottle={16}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             maxToRenderPerBatch={10}
@@ -1143,38 +1028,35 @@ export default function ChatScreen() {
               ) : null
             }
           />
-          {!isNearBottom && (
+          <Animated.View
+            style={[
+              styles.scrollToBottomBtn,
+              scrollBtnStyle,
+              {
+                bottom: insets.bottom + 140,
+                backgroundColor: c.isDark
+                  ? Glass.opacity.dark.elevated
+                  : Glass.opacity.light.elevated,
+              },
+            ]}
+            pointerEvents={isNearBottom ? 'none' : 'auto'}
+          >
             <Pressable
-              style={({ pressed }) => [
-                styles.scrollToBottomBtn,
-                {
-                  bottom: insets.bottom + 140,
-                  backgroundColor: c.isDark
-                    ? Glass.opacity.dark.elevated
-                    : Glass.opacity.light.elevated,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: c.isDark
-                    ? Glass.opacity.dark.border
-                    : Glass.opacity.light.border,
-                  transform: [{ scale: pressed ? 0.92 : 1 }],
-                },
-              ]}
               onPress={scrollToBottom}
               hitSlop={4}
+              style={StyleSheet.absoluteFill}
+              accessibilityLabel="Scroll to latest"
             >
-              <BlurView
-                tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-                intensity={Glass.blur.tooltip}
-                style={StyleSheet.absoluteFill}
-              />
               <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
             </Pressable>
-          )}
+          </Animated.View>
         </View>
-      )}
+        )}
+        </View>
+      </Animated.View>
 
       {(activePermission || waitingApproval) && (
-        <View style={styles.dockedCardWrapper}>
+        <Animated.View entering={FadeInDown.duration(Glass.morph.fast)} style={styles.dockedCardWrapper}>
           <AgentQuestionCard
             permission={
               activePermission ?? {
@@ -1188,47 +1070,34 @@ export default function ChatScreen() {
             onReject={() => rejectAction(activePermission?.requestId)}
             compact
           />
-        </View>
+        </Animated.View>
       )}
 
       {activePrompt && activePrompt.questions?.length > 0 && (
-        <View style={styles.dockedCardWrapper}>
+        <Animated.View entering={FadeInDown.duration(Glass.morph.fast)} style={styles.dockedCardWrapper}>
           <AgentQuestionCard
             question={activePrompt.questions[0]}
             onAnswer={answerQuestion}
             compact
           />
-        </View>
+        </Animated.View>
       )}
 
       {promptQueue.length > 0 && (
-        <View
-          style={[
-            styles.queueStrip,
-            {
-              backgroundColor: c.isDark
-                ? Glass.opacity.dark.elevated
-                : Glass.opacity.light.surface,
-              borderColor: c.isDark
-                ? Glass.opacity.dark.border
-                : Glass.opacity.light.border,
-            },
-          ]}
+        <Animated.View
+          entering={FadeInDown.duration(Glass.morph.fast)}
+          style={[styles.queueStrip, { backgroundColor: c.subtle }]}
         >
-          <BlurView
-            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-            intensity={Glass.blur.card}
-            style={StyleSheet.absoluteFill}
-          />
           <View style={styles.queueHeaderRow}>
             <View style={styles.queueTitleGroup}>
-              <Ionicons name="time-outline" size={14} color={Colors.primary[500]} />
-              <Text style={[styles.queueCountText, { color: c.textPrimary }]}>
-                Queue ({promptQueue.length})
+              <Ionicons name="time-outline" size={13} color={Colors.primary[400]} />
+              <Text style={[styles.queueTag, { color: Colors.primary[400] }]}>Queued</Text>
+              <Text style={[styles.queueCountText, { color: c.textTertiary }]}>
+                {promptQueue.length}
               </Text>
             </View>
             <Pressable onPress={clearQueue} hitSlop={6}>
-              <Text style={[Typography.caption2, { color: Colors.danger[400], fontWeight: '600' }]}>
+              <Text style={[Typography.caption2, { color: c.textTertiary, fontWeight: '600' }]}>
                 Clear
               </Text>
             </Pressable>
@@ -1241,17 +1110,7 @@ export default function ChatScreen() {
             {promptQueue.map((item, idx) => (
               <View
                 key={idx}
-                style={[
-                  styles.queueChip,
-                  {
-                    backgroundColor: c.isDark
-                      ? Glass.opacity.dark.subtle
-                      : Glass.opacity.light.elevated,
-                    borderColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
-                  },
-                ]}
+                style={[styles.queueChip, { backgroundColor: c.elevated }]}
               >
                 <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
                 <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
@@ -1263,10 +1122,10 @@ export default function ChatScreen() {
               </View>
             ))}
           </ScrollView>
-        </View>
+        </Animated.View>
       )}
 
-      <View style={[styles.composerWrapper, { paddingBottom: insets.bottom }]}>
+      <Animated.View style={composerStyle}>
         {autocomplete && (
           <AgentInputAutocomplete
             type={autocomplete.type}
@@ -1277,212 +1136,74 @@ export default function ChatScreen() {
             onClose={() => setInputFocused(false)}
           />
         )}
-        <View
-          style={[
-            styles.composerCard,
-            {
-              backgroundColor: c.isDark
-                ? Glass.opacity.dark.surface
-                : Glass.opacity.light.surface,
-              borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-            },
-          ]}
-        >
-          <BlurView
-            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-            intensity={Glass.blur.card}
-            style={StyleSheet.absoluteFill}
+
+        <View style={[styles.composerField, { backgroundColor: c.subtle }]}>
+          <Pressable
+            onPress={() => {
+              wsService.send({ type: 'model_list_request', sessionId });
+              setSettingsOpen(true);
+            }}
+            style={({ pressed }) => [
+              styles.tuneButton,
+              {
+                backgroundColor: c.isDark
+                  ? 'rgba(25,26,29,0.85)'
+                  : 'rgba(255,255,255,0.92)',
+                opacity: pressed ? 0.55 : 1,
+              },
+            ]}
+            hitSlop={4}
+            accessibilityLabel="Composer settings"
+          >
+            <Ionicons name="reorder-three-outline" size={16} color={c.textSecondary} />
+            <View style={[styles.tuneBadge, { backgroundColor: Colors.primary[500] }]}>
+              <Text style={styles.tuneBadgeText}>{thinkingBadge}</Text>
+            </View>
+          </Pressable>
+
+          <TextInput
+            ref={inputRef}
+            style={[styles.composerInput, { color: c.textPrimary }]}
+            value={input}
+            onChangeText={setInput}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            onSubmitEditing={() => {
+              if (running) {
+                if (input.trim()) {
+                  enqueuePrompt(input.trim());
+                  setInput('');
+                }
+              } else {
+                sendChat();
+              }
+            }}
+            returnKeyType="send"
+            placeholder={running ? 'Type to queue next prompt...' : 'Ask anything...'}
+            placeholderTextColor={c.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            multiline
           />
 
-          {planMode && (
-            <View
-              style={[
-                styles.planBadge,
-                {
-                  backgroundColor: Colors.warning[400] + (c.isDark ? '26' : '1A'),
-                },
-              ]}
-            >
-              <Ionicons name="list-outline" size={11} color={Colors.warning[400]} />
-              <Text style={[styles.planBadgeText, { color: Colors.warning[400] }]}>Plan</Text>
-            </View>
-          )}
-
-          <View style={styles.composerInputRow}>
-            <TextInput
-              style={[styles.composerInput, { color: c.textPrimary }]}
-              value={input}
-              onChangeText={setInput}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setInputFocused(false)}
-              onSubmitEditing={() => {
-                if (running) {
-                  if (input.trim()) {
-                    enqueuePrompt(input.trim());
-                    setInput('');
-                  }
-                } else {
-                  sendChat();
-                }
-              }}
-              returnKeyType="send"
-              placeholder={running ? 'Type to queue next prompt...' : 'Ask anything...'}
-              placeholderTextColor={c.textTertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              multiline
-            />
-          </View>
-
-          <View style={styles.bottomBar}>
+          {running && input.trim().length === 0 ? (
             <Pressable
-              ref={attachBtnRef}
+              onPress={cancelTurn}
               style={({ pressed }) => [
-                styles.metaButton,
-                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] },
+                styles.sendButton,
+                { backgroundColor: c.subtle, opacity: pressed ? 0.55 : 1 },
               ]}
               hitSlop={4}
-              accessibilityLabel="Attach"
-              onPress={openAttachmentMenu}
+              accessibilityLabel="Stop"
             >
-              <Ionicons name="add" size={18} color={c.textTertiary} />
+              <Ionicons name="stop" size={13} color={Colors.danger[400]} />
             </Pressable>
-
-            <Pressable
-              ref={modelBtnRef}
-              style={({ pressed }) => [
-                styles.modelButton,
-                { opacity: pressed ? 0.6 : 1 },
-              ]}
-              hitSlop={4}
-              accessibilityLabel="Select model"
-              onPress={async () => {
-                wsService.send({ type: 'model_list_request', sessionId });
-                const anchor = await measureAnchor(modelBtnRef);
-                const availableModels = Array.from(new Set([...providerModels, ...models]));
-                setMenu({
-                  title: 'Model',
-                  anchor,
-                  options: availableModels.map((m) => ({
-                    label: shortModelName(m),
-                    selected: m === selectedModel,
-                  })),
-                  onSelect: (index) => {
-                    setSelectedModel(availableModels[index]);
-                    wsService.send({
-                      type: 'model_select',
-                      sessionId,
-                      model: availableModels[index],
-                    });
-                  },
-                });
-              }}
-            >
-              {serviceTier === 'fast' && (
-                <Ionicons name="flash" size={10} color={Colors.warning[400]} style={{ marginRight: 2 }} />
-              )}
-              <Text style={[styles.modelLabel, { color: c.textTertiary }]}>
-                {shortModelName(selectedModel)}
-              </Text>
-              <Ionicons
-                name="chevron-down"
-                size={10}
-                color={c.textTertiary}
-                style={{ marginLeft: 2 }}
-              />
-            </Pressable>
-
-            <Pressable
-              ref={reasoningBtnRef}
-              style={({ pressed }) => [
-                styles.metaButton,
-                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] },
-              ]}
-              hitSlop={4}
-              accessibilityLabel="Reasoning effort"
-              onPress={openReasoningMenu}
-            >
-              <View style={styles.reasoningButtonInner}>
-                <Ionicons
-                  name="bulb-outline"
-                  size={16}
-                  color={thinkingMode === 'level' ? Colors.warning[400] : c.textTertiary}
-                />
-                {thinkingMode === 'level' && (
-                  <Text style={[styles.reasoningBadge, { color: Colors.warning[400] }]}>
-                    {THINKING_LEVEL_SHORT[thinkingLevel]}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
-
-            <View style={styles.spacer} />
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.metaButton,
-                { opacity: pressed ? 0.6 : 1, transform: [{ scale: pressed ? 0.92 : 1 }] },
-              ]}
-              hitSlop={4}
-              accessibilityLabel="Voice input"
-              onPress={() => {}}
-            >
-              <Ionicons name="mic-outline" size={18} color={c.textTertiary} />
-            </Pressable>
-
-            {running && (
-              <Pressable
-                onPress={cancelTurn}
-                style={({ pressed }) => [
-                  styles.stopButton,
-                  {
-                    backgroundColor: c.isDark
-                      ? Glass.opacity.dark.elevated
-                      : Glass.opacity.light.elevated,
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
-                    transform: [{ scale: pressed ? 0.92 : 1 }],
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Stop"
-              >
-                <Ionicons name="stop" size={12} color={Colors.danger[400]} />
-              </Pressable>
-            )}
-
-            {running && input.trim().length > 0 && (
-              <Pressable
-                onPress={sendSteer}
-                style={({ pressed }) => [
-                  styles.steerButton,
-                  {
-                    backgroundColor: c.isDark
-                      ? Glass.opacity.dark.elevated
-                      : Glass.opacity.light.elevated,
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
-                    transform: [{ scale: pressed ? 0.95 : 1 }],
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Steer immediately"
-              >
-                <Ionicons name="flash" size={12} color={Colors.warning[400]} />
-                <Text style={[styles.steerLabel, { color: c.textPrimary }]}>Steer</Text>
-              </Pressable>
-            )}
-
+          ) : (
             <Pressable
               onPress={() => {
                 if (running) {
                   if (input.trim()) {
-                    enqueuePrompt(input.trim());
-                    setInput('');
+                    sendSteer();
                   }
                 } else {
                   sendChat();
@@ -1491,112 +1212,58 @@ export default function ChatScreen() {
               style={({ pressed }) => [
                 styles.sendButton,
                 {
-                  backgroundColor: sendDisabled
-                    ? c.isDark
-                      ? Glass.opacity.dark.subtle
-                      : Glass.opacity.light.subtle
-                    : Colors.primary[500],
-                  transform: [{ scale: pressed ? 0.9 : 1 }],
+                  backgroundColor: running || !sendDisabled ? Colors.primary[500] : c.subtle,
+                  opacity: pressed ? 0.7 : 1,
                 },
               ]}
-              disabled={sendDisabled}
+              disabled={!running && sendDisabled}
               hitSlop={4}
-              accessibilityLabel={running ? 'Queue prompt' : 'Send'}
+              accessibilityLabel={running ? 'Steer now' : 'Send'}
             >
               <Ionicons
-                name={running ? 'add' : 'arrow-up'}
-                size={14}
-                color={sendDisabled ? c.textTertiary : '#ffffff'}
+                name={running ? 'flash' : 'arrow-up'}
+                size={15}
+                color={running || !sendDisabled ? '#ffffff' : c.textTertiary}
               />
             </Pressable>
-          </View>
-        </View>
-
-        {/* context pills ride with the keyboard — only while composing */}
-        {inputFocused && (
-        <View style={styles.secondaryBar}>
-          <Pressable
-            ref={runtimeBtnRef}
-            style={({ pressed }) => [
-              styles.secondaryPill,
-              {
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.subtle
-                  : Glass.opacity.light.subtle,
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.7 : 1,
-                transform: [{ scale: pressed ? 0.96 : 1 }],
-              },
-            ]}
-            hitSlop={4}
-            onPress={openRuntimePicker}
-          >
-            <Ionicons
-              name={runtimeMode === 'cloud' ? 'cloud-outline' : 'laptop-outline'}
-              size={13}
-              color={c.textTertiary}
-            />
-            <Text style={[styles.secondaryLabel, { color: c.textTertiary }]}>
-              {runtimeMode === 'cloud' ? 'Cloud' : 'Local'}
-            </Text>
-            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-          </Pressable>
-
-          <Pressable
-            ref={accessBtnRef}
-            style={({ pressed }) => [
-              styles.secondaryPill,
-              {
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.subtle
-                  : Glass.opacity.light.subtle,
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.7 : 1,
-                transform: [{ scale: pressed ? 0.96 : 1 }],
-              },
-            ]}
-            hitSlop={4}
-            onPress={openAccessModeMenu}
-          >
-            <Ionicons
-              name={accessMode === 'full-access' ? 'shield-outline' : 'shield-checkmark-outline'}
-              size={13}
-              color={c.textTertiary}
-            />
-            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-          </Pressable>
-
-          <View style={styles.spacer} />
-
-          <Pressable
-            ref={branchBtnRef}
-            style={({ pressed }) => [
-              styles.secondaryPill,
-              {
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.subtle
-                  : Glass.opacity.light.subtle,
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.7 : 1,
-                transform: [{ scale: pressed ? 0.96 : 1 }],
-              },
-            ]}
-            hitSlop={4}
-            onPress={openGitBranchMenu}
-          >
-            <Ionicons name="git-branch-outline" size={13} color={c.textTertiary} />
-            <Text style={[styles.secondaryLabel, { color: c.textTertiary, fontFamily: FontFamily.mono, fontSize: 11 }]}>
-              {currentBranch}
-            </Text>
-            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-          </Pressable>
-
-          {contextFraction > 0 && (
-            <ContextProgressRing fraction={contextFraction} color={c.textTertiary} />
           )}
         </View>
-        )}
-      </View>
+      </Animated.View>
+
+      <ComposerSettingsSheet
+        visible={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        colors={c}
+        models={Array.from(new Set([...providerModels, ...models]))}
+        selectedModel={selectedModel}
+        onSelectModel={(m) => {
+          setSelectedModel(m);
+          wsService.send({ type: 'model_select', sessionId, model: m });
+        }}
+        thinkingMode={thinkingMode}
+        thinkingLevel={thinkingLevel}
+        onThinking={(mode, level) => {
+          setThinkingMode(mode);
+          if (level) setThinkingLevel(level);
+          sendThinkingConfig(mode, level);
+        }}
+        serviceTier={serviceTier}
+        onServiceTier={(tier) => {
+          setServiceTier(tier);
+          wsService.send({ type: 'service_tier_select', sessionId, tier });
+        }}
+        accessMode={accessMode}
+        onAccessMode={(mode) => {
+          setAccessMode(mode);
+          wsService.send({ type: 'access_mode_select', sessionId, mode });
+        }}
+        onInsertFile={() => {
+          setInput((prev) => (prev.trim() ? prev.replace(/\s+$/, '') + ' @' : '@'));
+          inputRef.current?.focus();
+        }}
+        onReview={() => setShowDiffReview(true)}
+        onCommand={(command) => enqueuePrompt(command)}
+      />
 
       {promptModal?.visible && (
         <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
@@ -1608,9 +1275,6 @@ export default function ChatScreen() {
                   backgroundColor: c.isDark
                     ? Glass.opacity.dark.elevated
                     : Glass.opacity.light.surface,
-                  borderColor: c.isDark
-                    ? Glass.opacity.dark.border
-                    : Glass.opacity.light.border,
                 },
               ]}
               onPress={() => {}}
@@ -1632,9 +1296,6 @@ export default function ChatScreen() {
                     backgroundColor: c.isDark
                       ? Glass.opacity.dark.subtle
                       : Glass.opacity.light.subtle,
-                    borderColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
                   },
                 ]}
                 placeholder={promptModal.placeholder}
@@ -1682,10 +1343,8 @@ export default function ChatScreen() {
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: Colors.danger[400] + '22',
+                backgroundColor: Colors.danger[400] + '26',
                 borderRadius: CornerRadius.medium,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: Colors.danger[400] + '55',
               },
             ]}
             pointerEvents="none"
@@ -1717,73 +1376,79 @@ export default function ChatScreen() {
           wsService.send({ type: 'git_status_request', sessionId });
         }}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 function ToolBurstRenderer({
   burst,
   colors: c,
+  isStreaming,
   isExpanded,
   onToggle,
+  onReview,
 }: {
   burst: { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
   colors: ThemeColors;
+  isStreaming: boolean;
   isExpanded: boolean;
   onToggle: () => void;
+  onReview: () => void;
 }) {
-  const visible = isExpanded ? burst.messages : burst.messages.slice(0, 5);
-  const hiddenCount = burst.messages.length - visible.length;
-
   return (
     <View style={burstStyles.container}>
       <ToolBurstGroup
         colors={c}
-        hiddenCount={hiddenCount}
+        count={burst.messages.length}
+        done={!isStreaming}
+        durationMs={
+          burst.messages.length > 1
+            ? burst.messages[burst.messages.length - 1].timestamp - burst.messages[0].timestamp
+            : 0
+        }
         isExpanded={isExpanded}
         onToggle={onToggle}
       >
-        {visible.map((msg) => (
+        {burst.messages.map((msg) => (
           <MessageBubble key={msg.id} msg={msg} colors={c} />
         ))}
       </ToolBurstGroup>
-      <TurnEndActions messages={burst.messages} colors={c} />
+      {!isStreaming && (
+        <TurnEndActions messages={burst.messages} colors={c} onReview={onReview} />
+      )}
     </View>
   );
 }
 
-function TurnEndActions({ messages, colors: c }: { messages: ChatMessage[]; colors: ThemeColors }) {
+function TurnEndActions({
+  messages,
+  colors: c,
+  onReview,
+}: {
+  messages: ChatMessage[];
+  colors: ThemeColors;
+  onReview: () => void;
+}) {
   const fileChanges = messages.filter((m) => m.kind === 'fileChange');
   if (fileChanges.length === 0) return null;
 
   return (
-    <View style={turnEndStyles.container}>
-      <Pressable
-        style={[turnEndStyles.pill, { backgroundColor: c.subtle }]}
-        onPress={() => {
-          const summary = fileChanges.map((m) => m.content).join('\n');
-          Clipboard.setString(summary);
-        }}
-        hitSlop={4}
-      >
-        <Ionicons name="document-text-outline" size={12} color={c.textTertiary} />
-        <Text style={[turnEndStyles.label, { color: c.textTertiary }]}>
-          {fileChanges.length} file{fileChanges.length !== 1 ? 's' : ''}
-        </Text>
-      </Pressable>
-      <Pressable
-        style={[turnEndStyles.pill, { backgroundColor: c.subtle }]}
-        onPress={() => {
-          if (fileChanges[0]?.meta?.diff) {
-            Clipboard.setString(fileChanges[0].meta.diff as string);
-          }
-        }}
-        hitSlop={4}
-      >
-        <Ionicons name="swap-horizontal-outline" size={12} color={c.textTertiary} />
-        <Text style={[turnEndStyles.label, { color: c.textTertiary }]}>Diff</Text>
-      </Pressable>
-    </View>
+    <Pressable
+      style={turnEndStyles.container}
+      onPress={onReview}
+      onLongPress={() => {
+        const summary = fileChanges.map((m) => m.content).join('\n');
+        Clipboard.setString(summary);
+      }}
+      hitSlop={4}
+    >
+      <Ionicons name="create-outline" size={12} color={c.textTertiary} />
+      <Text style={[turnEndStyles.label, { color: c.textTertiary }]}>
+        {fileChanges.length} file{fileChanges.length !== 1 ? 's' : ''} changed
+      </Text>
+      <Text style={[turnEndStyles.sep, { color: c.textTertiary }]}>{'\u00B7'}</Text>
+      <Text style={[turnEndStyles.link, { color: Colors.primary[400] }]}>Review diff</Text>
+    </Pressable>
   );
 }
 
@@ -1839,7 +1504,7 @@ function MessageBubble({
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.userRow}>
-          <View style={[styles.userBubble, { backgroundColor: c.accentBg }]}>
+          <View style={[styles.userBubble, { backgroundColor: c.subtle }]}>
             <Text
               style={[styles.userText, { color: c.textPrimary }]}
               numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
@@ -1995,21 +1660,22 @@ const burstStyles = StyleSheet.create({
 const turnEndStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 4,
-  },
-  pill: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    gap: 4,
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
   },
   label: {
-    fontSize: 11,
+    ...Typography.caption1,
     fontWeight: '500',
+  },
+  sep: {
+    ...Typography.caption1,
+  },
+  link: {
+    ...Typography.caption1,
+    fontWeight: '600',
   },
 });
 
@@ -2040,15 +1706,25 @@ const styles = StyleSheet.create({
   headerTitles: {
     flexShrink: 1,
   },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
   headerTitle: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: '600',
-    fontFamily: FontFamily.monoSemiBold,
+    flexShrink: 1,
   },
   headerSubtitle: {
     ...Typography.caption2,
     marginTop: 1,
+    marginLeft: 25,
+  },
+  headerMono: {
+    fontFamily: FontFamily.mono,
+    fontSize: 10.5,
   },
   headerAction: {
     width: 32,
@@ -2064,8 +1740,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: CornerRadius.small,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderCurve: 'continuous',
   },
   headerDiffPillText: {
     ...Typography.caption2,
@@ -2080,8 +1754,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: CornerRadius.small,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderCurve: 'continuous',
   },
   headerControlText: {
     ...Typography.caption2,
@@ -2102,7 +1774,6 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    opacity: 0.3,
   },
   statusDot: {
     width: 7,
@@ -2117,19 +1788,49 @@ const styles = StyleSheet.create({
     padding: Spacing['3xl'],
     gap: Spacing.sm,
   },
-  emptyIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+  emptyOrb: {
+    width: 56,
+    height: 56,
+    borderRadius: 17,
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xs,
   },
-  emptyTitle: { ...Typography.subhead, fontWeight: '600' },
-  emptySub: { ...Typography.footnote, textAlign: 'center', lineHeight: 18 },
+  emptyOrbGlyph: {
+    fontFamily: FontFamily.monoSemiBold,
+    fontSize: 22,
+    lineHeight: 26,
+  },
+  emptyTitle: { ...Typography.headline },
+  emptySub: { ...Typography.footnote, textAlign: 'center', lineHeight: 18, maxWidth: 260 },
+  suggestionList: {
+    marginTop: Spacing.xl - 4,
+    gap: Spacing.sm - 2,
+    width: '100%',
+    maxWidth: 300,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md - 2,
+    paddingHorizontal: Spacing.lg - 2,
+    paddingVertical: Spacing.sm + 3,
+    borderRadius: CornerRadius.medium,
+    borderCurve: 'continuous',
+  },
+  suggestionText: {
+    ...Typography.subhead,
+    fontSize: 13.5,
+    fontWeight: '500',
+    flex: 1,
+  },
 
   listContainer: {
+    flex: 1,
+  },
+  /** Wraps transcript + empty state; its animated bottom inset tracks the keyboard. */
+  contentArea: {
     flex: 1,
   },
   scrollToBottomBtn: {
@@ -2164,9 +1865,8 @@ const styles = StyleSheet.create({
   userBubble: {
     maxWidth: '80%',
     paddingHorizontal: Spacing.lg - 2,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 18,
-    borderBottomRightRadius: 4,
     borderCurve: 'continuous',
   },
   userText: { ...Typography.subhead, fontSize: 14, lineHeight: 19 },
@@ -2190,118 +1890,57 @@ const styles = StyleSheet.create({
   },
   systemText: { ...Typography.caption2, fontWeight: '500' },
 
-  composerWrapper: {
-    paddingHorizontal: Spacing.md + 2,
-    paddingTop: Spacing.sm - 2,
-  },
-
-  composerCard: {
-    borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-  },
-
-  planBadge: {
+  /** iMessage-style filled capsule: [≡ tune][input][send/stop]. */
+  composerField: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginLeft: Spacing.lg,
-    marginTop: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: CornerRadius.small,
-    gap: 4,
-  },
-  planBadgeText: {
-    ...Typography.caption2,
-    fontWeight: '600',
+    gap: Spacing.sm + 2,
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    paddingHorizontal: Spacing.xs + 2,
+    paddingVertical: Spacing.xs + 2,
+    minHeight: 44,
   },
 
-  composerInputRow: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm + 1,
-    paddingBottom: 2,
+  tuneButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  tuneBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 15,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tuneBadgeText: {
+    fontSize: 8.5,
+    lineHeight: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+    fontFamily: FontFamily.mono,
+  },
+
   composerInput: {
     ...Typography.subhead,
-    minHeight: 34,
+    flex: 1,
+    minHeight: 24,
     maxHeight: 120,
     padding: 0,
   },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg - 2,
-    paddingTop: 2,
-    paddingBottom: Spacing.sm - 2,
-    gap: Spacing.sm,
-  },
-
-  metaButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modelButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 28,
-    paddingRight: 2,
-  },
-  modelLabel: {
-    ...Typography.caption1,
-    fontFamily: FontFamily.mono,
-  },
-  reasoningButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  reasoningBadge: {
-    ...Typography.caption2,
-    fontSize: 9,
-    fontWeight: '600',
-    fontFamily: FontFamily.mono,
-  },
-  stopButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  secondaryBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm + 2,
-    paddingTop: Spacing.sm - 2,
-    paddingBottom: 2,
-    gap: Spacing.sm - 2,
-  },
-  secondaryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md - 2,
-    paddingVertical: Spacing.sm - 2,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderCurve: 'continuous',
-    gap: 4,
-  },
-  secondaryLabel: {
-    ...Typography.caption1,
-    fontWeight: '500',
   },
 
   spacer: { flex: 1 },
@@ -2317,9 +1956,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.sm - 2,
     borderRadius: CornerRadius.large,
-    borderWidth: StyleSheet.hairlineWidth,
     borderCurve: 'continuous',
-    overflow: 'hidden',
     paddingVertical: Spacing.sm - 2,
     paddingHorizontal: Spacing.md - 2,
     gap: 4,
@@ -2335,8 +1972,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   queueCountText: {
-    ...Typography.caption1,
-    fontWeight: '600',
+    ...Typography.caption2,
+    fontWeight: '700',
+    fontFamily: FontFamily.mono,
+    fontVariant: ['tabular-nums'],
+  },
+  queueTag: {
+    ...Typography.caption2,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   queueChipsContainer: {
     flexDirection: 'row',
@@ -2349,7 +1994,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: CornerRadius.small,
-    borderWidth: StyleSheet.hairlineWidth,
     gap: 4,
     maxWidth: 200,
   },
@@ -2363,18 +2007,6 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     maxWidth: 140,
   },
-  steerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 9,
-    height: 32,
-    borderRadius: 16,
-  },
-  steerLabel: {
-    ...Typography.caption2,
-    fontWeight: '600',
-  },
 
   modalOverlay: {
     flex: 1,
@@ -2385,8 +2017,7 @@ const styles = StyleSheet.create({
   promptSheet: {
     width: '85%',
     maxWidth: 340,
-    borderRadius: CornerRadius.large,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: CornerRadius.xl,
     borderCurve: 'continuous',
     overflow: 'hidden',
     padding: Spacing.xl,
@@ -2396,7 +2027,6 @@ const styles = StyleSheet.create({
   promptTitle: { ...Typography.headline, textAlign: 'center' },
   promptInput: {
     ...Typography.subhead,
-    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: CornerRadius.medium,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md - 2,
@@ -2420,7 +2050,6 @@ const styles = StyleSheet.create({
     left: Spacing.lg,
     right: Spacing.lg,
     borderRadius: CornerRadius.medium,
-    borderWidth: StyleSheet.hairlineWidth,
     borderCurve: 'continuous',
     overflow: 'hidden',
     flexDirection: 'row',

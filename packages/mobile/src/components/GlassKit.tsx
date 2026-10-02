@@ -186,7 +186,7 @@ export function GlassButton({
       style={({ pressed }) => [
         styles.btnBase,
         style,
-        { opacity: isDisabled ? 0.4 : pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+        { opacity: isDisabled ? 0.4 : pressed ? 0.55 : 1 },
       ]}
     >
       <BlurView
@@ -207,15 +207,6 @@ export function GlassButton({
                     ? Glass.opacity.dark.subtle
                     : Glass.opacity.light.subtle,
             borderRadius: 12,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor:
-              variant === 'primary'
-                ? 'transparent'
-                : variant === 'danger'
-                  ? Colors.danger[400] + '55'
-                  : c.isDark
-                    ? Glass.opacity.dark.border
-                    : Glass.opacity.light.border,
           },
         ]}
         pointerEvents="none"
@@ -303,8 +294,7 @@ export function GlassPill({
         styles.pill,
         {
           backgroundColor: active ? accent + '20' : c.subtle,
-          opacity: pressed ? 0.7 : 1,
-          transform: [{ scale: pressed ? 0.97 : 1 }],
+          opacity: pressed ? 0.55 : 1,
         },
       ]}
     >

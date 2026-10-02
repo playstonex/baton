@@ -105,16 +105,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[
-            styles.card,
-            {
-              borderColor: colors.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-            },
-            containerStyle,
-          ]}
-          onPress={() => {}}
-        >
+        <Pressable style={[styles.card, containerStyle]} onPress={() => {}}>
           <BlurView
             tint={colors.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
             intensity={Glass.blur.sheet}
@@ -198,7 +189,6 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: CornerRadius.large,
-    borderWidth: StyleSheet.hairlineWidth,
     borderCurve: 'continuous',
     overflow: 'hidden',
     paddingVertical: 6,

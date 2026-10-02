@@ -59,7 +59,7 @@ export function AgentQuestionCard({
   // If this is a permission request card
   if (permission) {
     return (
-      <GlassCard c={c} style={[styles.card, styles.permissionCard, style]}>
+      <GlassCard c={c} style={[styles.card, style]}>
         <View style={styles.headerRow}>
           <View style={styles.iconBadgePermission}>
             <Ionicons name="shield-checkmark" size={16} color={Colors.warning[400]} />
@@ -153,7 +153,7 @@ export function AgentQuestionCard({
     };
 
     return (
-      <GlassCard c={c} style={[styles.card, styles.questionCard, style]}>
+      <GlassCard c={c} style={[styles.card, style]}>
         <View style={styles.headerRow}>
           <View style={styles.iconBadgeQuestion}>
             <Ionicons name="chatbubbles" size={16} color={Colors.primary[500]} />
@@ -189,15 +189,8 @@ export function AgentQuestionCard({
                     {
                       backgroundColor: isSelected
                         ? Colors.primary[500] + (c.isDark ? '40' : '1F')
-                        : c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                      borderColor: isSelected
-                        ? Colors.primary[500]
-                        : c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                      opacity: submitted && !isSelected ? 0.4 : pressed ? 0.8 : 1,
+                        : c.subtle,
+                      opacity: submitted && !isSelected ? 0.4 : pressed ? 0.55 : 1,
                     },
                   ]}
                 >
@@ -241,12 +234,7 @@ export function AgentQuestionCard({
                 styles.customInput,
                 {
                   color: c.textPrimary,
-                  backgroundColor: c.isDark
-                    ? Glass.opacity.dark.subtle
-                    : Glass.opacity.light.subtle,
-                  borderColor: c.isDark
-                    ? Glass.opacity.dark.border
-                    : Glass.opacity.light.border,
+                  backgroundColor: c.subtle,
                 },
               ]}
               placeholder="Or type a custom reply..."
@@ -294,14 +282,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: 16,
     marginVertical: Spacing.xs,
-  },
-  permissionCard: {
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.warning[400],
-  },
-  questionCard: {
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.primary[500],
   },
   headerRow: {
     flexDirection: 'row',
@@ -361,7 +341,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
     borderRadius: 12,
-    borderWidth: 1,
   },
   optionContent: {
     flex: 1,
@@ -374,7 +353,6 @@ const styles = StyleSheet.create({
   },
   customInput: {
     flex: 1,
-    borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 8,

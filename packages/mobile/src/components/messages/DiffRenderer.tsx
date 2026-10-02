@@ -42,7 +42,7 @@ export const DiffRenderer = React.memo(function DiffRenderer({ diff, colors, max
   const hiddenCount = maxLines ? lines.filter((l) => l.kind !== 'meta').length - maxLines : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+    <View style={[styles.container, { backgroundColor: colors.card }]}>
       {visibleLines.map((line, i) => {
         const lc = LINE_COLORS[line.kind];
         if (line.kind === 'meta') return null;
@@ -80,7 +80,6 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 8,
     overflow: 'hidden',
-    borderWidth: 1,
   },
   lineRow: {
     flexDirection: 'row',

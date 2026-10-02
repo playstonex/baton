@@ -86,6 +86,33 @@
       </div>
     </header>
 
+    <h2>Chat v3 · Codex 式重设计 <span class="tag dark" style="margin-left:8px">open design</span></h2>
+    <p style="color: var(--muted); font-size: 13px; line-height: 1.7; max-width: 780px; margin: -8px 0 20px;">
+      参考 Codex iOS 的会话范式：精简头部（⌄ 收起 + 状态点标题 + 分支/状态/上下% 副标题 + 变更药丸 + ⋯ 归并菜单）、
+      中性用户气泡（accent 只留给交互）、工具调用聚合为可折叠 "Ran N tools" 卡片、安静的 "Thought process" 行、
+      "N files changed · Review diff" 回合脚注、单行 composer（≡ 设置按钮带思考档徽章 + 输入 + 发送/停止，
+      模型/思考/权限/快捷动作全部收进底部分组设置板）、键盘跟随（useAnimatedKeyboard 贴键）、空态建议 chips。
+      交互源码见 <code>app/chat/[sessionId].tsx</code>，设计稿 <code>chat-v3.html</code>。
+    </p>
+    <div class="row">
+      <figure>
+        <div class="phone"><img src="chat-v3-light.png" alt="Chat v3 Light" /></div>
+        <figcaption><b>Chat v3 Light</b><span class="tag light">THREAD</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="chat-v3-dark.png" alt="Chat v3 Dark" /></div>
+        <figcaption><b>Chat v3 Dark</b><span class="tag dark">THREAD</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="chat-v3-empty.png" alt="Chat v3 Empty" /></div>
+        <figcaption><b>Chat v3 Empty</b><span class="tag dark">建议 chips</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="chat-v3-sheet.png" alt="Chat v3 Settings Sheet" /></div>
+        <figcaption><b>Chat v3 Sheet</b><span class="tag dark">≡ 设置板</span></figcaption>
+      </figure>
+    </div>
+
     <h2>Light 模式</h2>
     <div class="row">
       <figure>

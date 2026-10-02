@@ -57,7 +57,7 @@ export const SubagentActionCard = React.memo(function SubagentActionCard({
   const iconName = ACTION_ICON[action as keyof typeof ACTION_ICON] ?? 'play-circle-outline';
 
   return (
-    <View style={[styles.card, { backgroundColor: c.card, borderColor: c.cardBorder }]}>
+    <View style={[styles.card, { backgroundColor: c.subtle }]}>
       <Pressable style={styles.header} onPress={content ? toggle : undefined}>
         <View style={[styles.indicator, { backgroundColor: accent }]} />
         <Ionicons name={iconName} size={14} color={accent} />
@@ -95,7 +95,6 @@ export const SubagentActionCard = React.memo(function SubagentActionCard({
 const styles = StyleSheet.create({
   card: {
     borderRadius: 12,
-    borderWidth: 1,
     overflow: 'hidden',
   },
   header: {

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Chat v3 — Codex-style redesign preview</title>
+<style>
+  /* ── linear-app tokens (packages/mobile/src/constants/theme.ts) ── */
+  :root {
+    --accent: #5e6ad2;
+    --accent-bright: #7170ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #08090a;
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    padding: 48px 24px 80px;
+    color: #f7f8f8;
+    display: flex; gap: 40px; justify-content: center; flex-wrap: wrap;
+  }
+  body.single { padding: 0; }
+  .frame-wrap { display: none; }
+  body.show-light .frame-light, body.show-dark .frame-dark { display: block; }
+
+  .phone {
+    width: 393px; height: 852px;
+    border-radius: 47px;
+    padding: 8px;
+    background: linear-gradient(160deg, #1d2230, #0e1117);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    flex-shrink: 0;
+  }
+  .screen {
+    position: relative; width: 100%; height: 100%;
+    border-radius: 39px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* ═══ DARK ═══ */
+  .dark {
+    --bg: #08090a; --card: #131416; --elevated: #191a1d; --subtle: #232428;
+    --icard: rgba(25,26,29,0.85);
+    --border: rgba(255,255,255,0.08); --separator: rgba(255,255,255,0.06);
+    --text: #f7f8f8; --text2: rgba(208,214,224,0.85); --text3: #8a8f98;
+    --glass: rgba(15,16,17,0.85);
+    --success: #3fb950; --danger: #eb4d55; --warning: #d9a62e;
+    background: var(--bg); color: var(--text);
+  }
+  /* ═══ LIGHT ═══ */
+  .light {
+    --bg: #f7f8f8; --card: #ffffff; --elevated: #f3f4f5; --subtle: #ebedef;
+    --icard: rgba(255,255,255,0.92);
+    --border: rgba(11,13,15,0.08); --separator: rgba(11,13,15,0.06);
+    --text: #1b1d22; --text2: rgba(27,29,34,0.66); --text3: rgba(27,29,34,0.46);
+    --glass: rgba(252,252,252,0.85);
+    --success: #1a7f37; --danger: #cf222e; --warning: #9a6700;
+    background: var(--bg); color: var(--text);
+  }
+
+  .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  .disp { font-family: "Inter", -apple-system, sans-serif; }
+
+  /* ── status bar ── */
+  .statusbar {
+    height: 54px; flex-shrink: 0;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 32px 8px; font-size: 15px; font-weight: 600;
+    color: var(--text); position: relative; z-index: 30;
+  }
+  .notch {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 34px; border-radius: 20px; background: #000;
+  }
+  .light .notch { background: #000; }
+  .sb-icons { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+
+  /* ── header ── */
+  .header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    padding-top: 54px;
+    background: var(--glass);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid var(--separator);
+  }
+  .header-row {
+    height: 48px; display: flex; align-items: center;
+    padding: 0 12px; gap: 10px;
+  }
+  .hbtn {
+    width: 32px; height: 32px; border-radius: 16px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text3); font-size: 18px; cursor: pointer;
+  }
+  .hbtn:active { background: var(--subtle); }
+  .h-title { flex: 1; min-width: 0; }
+  .h-title .name {
+    font-family: "Inter", -apple-system, sans-serif;
+    font-size: 14px; font-weight: 600; letter-spacing: -0.1px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .h-title .sub {
+    font-size: 11px; color: var(--text3); margin-top: 1px;
+    display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 4px; background: var(--text3); position: relative; flex-shrink: 0; }
+  .dot.run { background: var(--accent-bright); }
+  /* breathing halo — mirrors the reanimated PulsingDot in the app */
+  .dot.run::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 11px;
+    border: 1.5px solid var(--accent-bright);
+    animation: halo 1.8s ease-in-out infinite;
+  }
+  @keyframes halo { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.09; } }
+  .sep2 { color: var(--text3); opacity: 0.6; }
+  .branch-inline { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; }
+  .pill {
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+    height: 26px; padding: 0 8px; border-radius: 8px;
+    background: var(--subtle);
+    font-size: 11px; font-weight: 600; color: var(--text2); cursor: pointer;
+  }
+  .pill.accent { color: var(--accent-bright); background: rgba(94,106,210,0.14); }
+  .light .pill.accent { background: rgba(94,106,210,0.12); }
+  .pill .cnt { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-weight: 700; font-size: 11px; }
+  .pill.own { color: var(--success); border-color: transparent; background: rgba(63,185,80,0.13); }
+  .light .pill.own { background: rgba(26,127,55,0.1); }
+
+  /* ── transcript ── */
+  .scroll {
+    flex: 1; overflow-y: auto; padding: 62px 14px 8px;
+    display: flex; flex-direction: column; gap: 10px;
+    scrollbar-width: none;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+  .msg-user { display: flex; justify-content: flex-end; }
+  .bubble-user {
+    max-width: 82%; background: var(--subtle);
+    padding: 9px 13px; border-radius: 18px;
+    font-size: 14.5px; line-height: 20px; color: var(--text);
+  }
+  .msg-ai { font-size: 14.5px; line-height: 21px; color: var(--text); }
+  .msg-ai p + p { margin-top: 8px; }
+  .msg-ai code, .icard code {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: 12px; background: var(--subtle); padding: 1.5px 5px; border-radius: 5px; color: var(--text);
+  }
+  .msg-ai strong { font-weight: 600; }
+
+  /* activity card — Codex-style collapsible run group (filled, no border) */
+  .icard {
+    border-radius: 13px;
+    background: var(--icard);
+    overflow: hidden;
+  }
+  .icard-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; cursor: pointer;
+  }
+  .icard-icon { color: var(--success); font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
+  .icard-title { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+  .icard-meta { font-size: 11px; color: var(--text3); font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  .icard-chev { margin-left: auto; color: var(--text3); font-size: 11px; }
+  .icard-body { border-top: 1px solid var(--separator); padding: 4px 12px 11px; display: flex; flex-direction: column; gap: 7px; }
+  .trow { display: flex; align-items: baseline; gap: 7px; font-size: 12px; }
+  .trow .tic { width: 14px; text-align: center; color: var(--text3); font-size: 11px; flex-shrink: 0; transform: translateY(1px); }
+  .trow .tn { color: var(--text2); font-weight: 500; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; }
+  .trow .arr { color: var(--text3); }
+  .trow .tp { color: var(--accent-bright); font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .light .trow .tp { color: var(--accent); }
+  .cmd { display: flex; align-items: baseline; gap: 7px; }
+  .cmd .tic { color: var(--text3); font-size: 11px; }
+  .cmd .cline { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text2); }
+  .cmd .cline .ps { color: var(--text3); }
+  .cmd .ok { color: var(--success); font-size: 11px; margin-left: auto; }
+
+  /* thinking — quiet inline row */
+  .think {
+    display: flex; align-items: center; gap: 7px; padding: 2px 2px; cursor: pointer;
+    color: var(--text3); font-size: 12.5px; font-weight: 500;
+  }
+  .think .chev { font-size: 10px; }
+  .think .dur { font-size: 11px; color: var(--text3); opacity: 0.75; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+
+  /* turn footer — files changed */
+  .turnfoot {
+    display: flex; align-items: center; gap: 8px; padding: 2px 2px;
+    font-size: 12px; color: var(--text3);
+  }
+  .turnfoot .link { color: var(--accent-bright); font-weight: 600; cursor: pointer; }
+  .light .turnfoot .link { color: var(--accent); }
+  .turnfoot .fl { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; }
+
+  /* streaming shimmer */
+  .shimmer-bar {
+    width: 26px; height: 6px; border-radius: 3px; margin-top: 8px;
+    background: linear-gradient(90deg, var(--subtle) 0%, var(--text3) 50%, var(--subtle) 100%);
+    background-size: 200% 100%;
+    animation: shim 1.1s linear infinite;
+  }
+  @keyframes shim { from { background-position: 120% 0; } to { background-position: -80% 0; } }
+  .caret { display: inline-block; width: 2px; height: 14px; background: var(--accent-bright); vertical-align: -2px; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── queue strip ── */
+  .queue {
+    margin: 0 14px 6px; display: flex; align-items: center; gap: 8px;
+    background: var(--elevated);
+    border-radius: 11px; padding: 6px 10px;
+    animation: fadeDown 0.2s ease-out;
+  }
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .queue .q-tag { font-size: 10.5px; font-weight: 700; color: var(--accent-bright); letter-spacing: 0.4px; text-transform: uppercase; flex-shrink: 0; }
+  .light .queue .q-tag { color: var(--accent); }
+  .queue .q-text { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .queue .q-x { margin-left: auto; color: var(--text3); flex-shrink: 0; }
+
+  /* ── composer: iMessage-style filled capsule + flat action row ── */
+  .composer { flex-shrink: 0; padding: 6px 14px 0; }
+  .comp-field {
+    border-radius: 20px;
+    background: var(--subtle);
+    padding: 6px 6px 6px 8px; min-height: 44px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .comp-field .txt { flex: 1; font-size: 15px; line-height: 20px; color: var(--text); padding: 0 2px; }
+  /* single condensed control for model / thinking / access / tools */
+  .tune {
+    width: 32px; height: 32px; border-radius: 16px; flex-shrink: 0;
+    background: var(--icard); display: flex; align-items: center; justify-content: center;
+    color: var(--text2); font-size: 15px; font-weight: 700; cursor: pointer;
+    position: relative;
+  }
+  .tune .badge {
+    position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 8px;
+    background: var(--accent-bright); color: #fff; font-size: 8.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; padding: 0 3px;
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  .light .tune .badge { background: var(--accent); }
+  .comp-field .ph { color: var(--text3); }
+  .comp-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px 2px; }
+  .cbtn {
+    width: 30px; height: 30px; border-radius: 15px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text3); font-size: 17px; cursor: pointer;
+  }
+  .cbtn:active { background: var(--subtle); }
+  .chip {
+    display: flex; align-items: center; gap: 4px; height: 28px;
+    padding: 0 8px; border-radius: 14px; color: var(--text3);
+    font-size: 12px; font-weight: 500; cursor: pointer; flex-shrink: 0;
+  }
+  .chip:active { background: var(--subtle); }
+  .chip .mono { font-size: 11.5px; }
+  .chip .chev { font-size: 9px; opacity: 0.8; }
+  .chip .bulb { font-size: 13px; }
+  .chip.lit { color: var(--warning); }
+  .send {
+    width: 30px; height: 30px; border-radius: 15px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent); color: #fff; font-size: 14px; cursor: pointer;
+  }
+  .send.stop { background: var(--subtle); color: var(--danger); font-size: 11px; }
+
+  /* secondary context bar — while composing */
+  .ctxbar { display: flex; align-items: center; gap: 6px; padding: 8px 6px 2px; }
+  .cpill {
+    display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px;
+    border-radius: 14px; background: var(--subtle);
+    color: var(--text3); font-size: 12px; font-weight: 500; cursor: pointer;
+  }
+  .cpill .mono { font-size: 11px; }
+  .cpill .chev { font-size: 9px; }
+  .ring {
+    width: 20px; height: 20px; border-radius: 10px; margin-left: auto; flex-shrink: 0;
+    background: conic-gradient(var(--accent-bright) 0 34%, var(--border) 34% 100%);
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .light .ring { background: conic-gradient(var(--accent) 0 34%, var(--border) 34% 100%); }
+  .ring::before { content: ""; position: absolute; inset: 2.5px; border-radius: 8px; background: var(--bg); }
+  .ring span { position: relative; font-size: 6.5px; font-weight: 700; color: var(--text2); font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  /* ── condensed settings sheet (opened from the ≡ tune button) ── */
+  .sheetmask { position: absolute; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; }
+  .sheet {
+    position: absolute; left: 12px; right: 12px; bottom: 96px; z-index: 41;
+    background: var(--elevated);
+    border-radius: 18px; padding: 14px 4px 8px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    max-height: 62%; overflow-y: auto; scrollbar-width: none;
+  }
+  .sheet::-webkit-scrollbar { display: none; }
+  .sh {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--text3); padding: 10px 16px 5px;
+  }
+  .srow {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 16px; font-size: 14px; color: var(--text); cursor: pointer;
+  }
+  .srow .sub { font-size: 11.5px; color: var(--text3); }
+  .srow .chk { margin-left: auto; color: var(--accent-bright); font-weight: 700; font-size: 13px; }
+  .light .srow .chk { color: var(--accent); }
+  .srow .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  .sdiv { height: 1px; background: var(--separator); margin: 6px 16px; }
+  .homebar { height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .homebar i { width: 134px; height: 5px; border-radius: 3px; background: var(--text); opacity: 0.9; display: block; }
+  .light .homebar i { background: #000; opacity: 0.85; }
+
+  /* ── empty state ── */
+  .empty {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0 32px; gap: 8px; text-align: center;
+  }
+  .orb {
+    width: 56px; height: 56px; border-radius: 17px; margin-bottom: 6px;
+    background: linear-gradient(150deg, rgba(94,106,210,0.32), rgba(94,106,210,0.08));
+    border: 1px solid rgba(94,106,210,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: var(--accent-bright);
+  }
+  .light .orb { color: var(--accent); }
+  .empty .t1 { font-family: "Inter", -apple-system, sans-serif; font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+  .empty .t2 { font-size: 13px; color: var(--text3); line-height: 18px; max-width: 260px; }
+  .sugg { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; width: 100%; max-width: 300px; }
+  .sugg-item {
+    display: flex; align-items: center; gap: 10px; text-align: left;
+    background: var(--subtle);
+    border-radius: 12px; padding: 11px 14px; cursor: pointer;
+    font-size: 13.5px; color: var(--text2); font-weight: 500;
+  }
+  .sugg-item .si { color: var(--text3); font-size: 14px; }
+  .sugg-item .go { margin-left: auto; color: var(--text3); font-size: 11px; }
+</style>
+</head>
+<body class="show-light show-dark">
+<script>
+  // #light | #dark | #empty → single-frame render for clean screenshots
+  const h = location.hash.replace('#', '');
+  if (h === 'light') document.body.className = 'single show-light';
+  else if (h === 'dark') document.body.className = 'single show-dark';
+  else if (h === 'empty') {
+    document.body.className = 'single show-dark';
+    addEventListener('DOMContentLoaded', () => {
+      const frames = document.querySelectorAll('.frame-wrap.frame-dark');
+      frames[0].style.display = 'none';
+    });
+  } else if (h === 'sheet') {
+    document.body.className = 'single show-dark';
+    addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.frame-wrap.frame-dark:not(.frame-sheet)').forEach((f) => {
+        f.style.display = 'none';
+      });
+    });
+  }
+</script>
+
+  <!-- ═══════════ LIGHT · thread ═══════════ -->
+  <div class="frame-wrap frame-light">
+  <div class="phone">
+    <div class="screen light">
+      <div class="statusbar">
+        <span>09:41</span>
+        <div class="notch"></div>
+        <span class="sb-icons">▮▮▮ ⌁ ▉</span>
+      </div>
+      <div class="header">
+        <div class="header-row">
+          <div class="hbtn">⌄</div>
+          <div class="h-title">
+            <div class="name"><span class="dot run"></span>flowwhips</div>
+            <div class="sub"><span class="branch-inline mono">main</span><span class="sep2">·</span>executing<span class="sep2">·</span><span class="mono">34%</span></div>
+          </div>
+          <div class="pill accent"><span>◐</span><span class="cnt">4</span></div>
+          <div class="pill own"> phone</div>
+          <div class="hbtn">⋯</div>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <div class="msg-user"><div class="bubble-user">修复 chat 页面键盘挡住输入框的问题，iOS 上留白也不对</div></div>
+
+        <div class="icard">
+          <div class="icard-head">
+            <span class="icard-icon">✓</span>
+            <span class="icard-title">Ran 6 tools</span>
+            <span class="icard-meta">4.2s</span>
+            <span class="icard-chev">›</span>
+          </div>
+          <div class="icard-body">
+            <div class="trow"><span class="tic">⌕</span><span class="tn">Grep</span><span class="arr">→</span><span class="tp">KeyboardAvoidingView</span></div>
+            <div class="trow"><span class="tic">▤</span><span class="tn">Read</span><span class="arr">→</span><span class="tp">app/chat/[sessionId].tsx</span></div>
+            <div class="cmd"><span class="tic">$</span><span class="cline">pnpm --filter @baton/mobile typecheck</span><span class="ok">✓</span></div>
+            <div class="trow"><span class="tic">✎</span><span class="tn">Edit</span><span class="arr">→</span><span class="tp">composer-card.tsx</span></div>
+          </div>
+        </div>
+
+        <div class="think"><span class="chev">›</span> Thought process <span class="dur">6s</span></div>
+
+        <div class="msg-ai">
+          <p>问题出在 <code>KeyboardAvoidingView</code> 的 <code>keyboardVerticalOffset</code>：头部是 absolute 悬浮的 glass 导航，但 offset 传了 0，键盘弹出后 composer 的高度计算就少了 48px。</p>
+          <p><strong>修复</strong>：把 <code>composerWrapper</code> 的 <code>paddingBottom</code> 改为跟随 <code>insets.bottom</code> 与键盘 endCoordinates 动态取 max，iOS 留白同步修正。<span class="caret"></span></p>
+          <div class="shimmer-bar"></div>
+        </div>
+
+        <div class="turnfoot">
+          <span>✎</span><span class="fl">2 files</span><span>·</span><span class="link">Review diff</span>
+        </div>
+
+        <div class="msg-user"><div class="bubble-user">顺便把发送按钮在运行中也改成 queue 语义</div></div>
+        <div class="think"><span class="chev">›</span> Thinking</div>
+      </div>
+
+      <div class="queue">
+        <span class="q-tag">Queued</span>
+        <span class="q-text">把发送按钮在运行中也改成 queue 语义</span>
+        <span class="q-x">✕</span>
+      </div>
+
+      <div class="composer">
+        <div class="comp-field">
+          <div class="tune"><span>≡</span><span class="badge">Med</span></div>
+          <div class="txt"><span class="ph">Type to queue next prompt…</span></div>
+          <div class="send stop">■</div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- ═══════════ DARK · thread ═══════════ -->
+  <div class="frame-wrap frame-dark">
+  <div class="phone">
+    <div class="screen dark">
+      <div class="statusbar">
+        <span>09:41</span>
+        <div class="notch"></div>
+        <span class="sb-icons">▮▮▮ ⌁ ▉</span>
+      </div>
+      <div class="header">
+        <div class="header-row">
+          <div class="hbtn">⌄</div>
+          <div class="h-title">
+            <div class="name"><span class="dot run"></span>flowwhips</div>
+            <div class="sub"><span class="branch-inline mono">main</span><span class="sep2">·</span>executing<span class="sep2">·</span><span class="mono">34%</span></div>
+          </div>
+          <div class="pill accent"><span>◐</span><span class="cnt">4</span></div>
+          <div class="pill own"> phone</div>
+          <div class="hbtn">⋯</div>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <div class="msg-user"><div class="bubble-user">修复 chat 页面键盘挡住输入框的问题，iOS 上留白也不对</div></div>
+
+        <div class="icard">
+          <div class="icard-head">
+            <span class="icard-icon">✓</span>
+            <span class="icard-title">Ran 6 tools</span>
+            <span class="icard-meta">4.2s</span>
+            <span class="icard-chev">›</span>
+          </div>
+          <div class="icard-body">
+            <div class="trow"><span class="tic">⌕</span><span class="tn">Grep</span><span class="arr">→</span><span class="tp">KeyboardAvoidingView</span></div>
+            <div class="trow"><span class="tic">▤</span><span class="tn">Read</span><span class="arr">→</span><span class="tp">app/chat/[sessionId].tsx</span></div>
+            <div class="cmd"><span class="tic">$</span><span class="cline">pnpm --filter @baton/mobile typecheck</span><span class="ok">✓</span></div>
+            <div class="trow"><span class="tic">✎</span><span class="tn">Edit</span><span class="arr">→</span><span class="tp">composer-card.tsx</span></div>
+          </div>
+        </div>
+
+        <div class="think"><span class="chev">›</span> Thought process <span class="dur">6s</span></div>
+
+        <div class="msg-ai">
+          <p>问题出在 <code>KeyboardAvoidingView</code> 的 <code>keyboardVerticalOffset</code>：头部是 absolute 悬浮的 glass 导航，但 offset 传了 0，键盘弹出后 composer 的高度计算就少了 48px。</p>
+          <p><strong>修复</strong>：把 <code>composerWrapper</code> 的 <code>paddingBottom</code> 改为跟随 <code>insets.bottom</code> 与键盘 endCoordinates 动态取 max，iOS 留白同步修正。<span class="caret"></span></p>
+          <div class="shimmer-bar"></div>
+        </div>
+
+        <div class="turnfoot">
+          <span>✎</span><span class="fl">2 files</span><span>·</span><span class="link">Review diff</span>
+        </div>
+
+        <div class="msg-user"><div class="bubble-user">顺便把发送按钮在运行中也改成 queue 语义</div></div>
+        <div class="think"><span class="chev">›</span> Thinking</div>
+      </div>
+
+      <div class="queue">
+        <span class="q-tag">Queued</span>
+        <span class="q-text">把发送按钮在运行中也改成 queue 语义</span>
+        <span class="q-x">✕</span>
+      </div>
+
+      <div class="composer">
+        <div class="comp-field">
+          <div class="tune"><span>≡</span><span class="badge">Med</span></div>
+          <div class="txt"><span class="ph">Type to queue next prompt…</span></div>
+          <div class="send stop">■</div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- ═══════════ DARK · empty state ═══════════ -->
+  <div class="frame-wrap frame-dark">
+  <div class="phone">
+    <div class="screen dark">
+      <div class="statusbar">
+        <span>09:41</span>
+        <div class="notch"></div>
+        <span class="sb-icons">▮▮▮ ⌁ ▉</span>
+      </div>
+      <div class="header">
+        <div class="header-row">
+          <div class="hbtn">⌄</div>
+          <div class="h-title">
+            <div class="name"><span class="dot"></span>flowwhips</div>
+            <div class="sub"><span class="branch-inline mono">main</span><span class="sep2">·</span>idle</div>
+          </div>
+          <div class="pill"><span>🖥</span> Take Control</div>
+          <div class="hbtn">⋯</div>
+        </div>
+      </div>
+
+      <div class="empty">
+        <div class="orb">❯</div>
+        <div class="t1">Start a conversation</div>
+        <div class="t2">Remote-control your coding agent — ask, review, steer.</div>
+        <div class="sugg">
+          <div class="sugg-item"><span class="si">◐</span>Summarize my uncommitted changes<span class="go">→</span></div>
+          <div class="sugg-item"><span class="si">✓</span>Run tests and fix the failures<span class="go">→</span></div>
+          <div class="sugg-item"><span class="si">⌕</span>Explain this project's architecture<span class="go">→</span></div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="comp-field">
+          <div class="tune"><span>≡</span><span class="badge">Med</span></div>
+          <div class="txt"><span class="ph">Ask anything…</span></div>
+          <div class="send" style="background:var(--subtle);color:var(--text3)">↑</div>
+        </div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- ═══════════ DARK · condensed settings sheet ═══════════ -->
+  <div class="frame-wrap frame-dark frame-sheet">
+  <div class="phone">
+    <div class="screen dark">
+      <div class="statusbar">
+        <span>09:41</span>
+        <div class="notch"></div>
+        <span class="sb-icons">▮▮▮ ⌁ ▉</span>
+      </div>
+      <div class="header">
+        <div class="header-row">
+          <div class="hbtn">⌄</div>
+          <div class="h-title">
+            <div class="name"><span class="dot"></span>flowwhips</div>
+            <div class="sub"><span class="branch-inline mono">main</span><span class="sep2">·</span>idle</div>
+          </div>
+          <div class="pill"><span>🖥</span> Take Control</div>
+          <div class="hbtn">⋯</div>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <div class="msg-user"><div class="bubble-user">帮我把 chat 页的输入框重构成键盘附属视图</div></div>
+        <div class="think"><span class="chev">›</span> Thought process <span class="dur">4s</span></div>
+      </div>
+
+      <div class="sheetmask"></div>
+      <div class="sheet">
+        <div class="sh">Model</div>
+        <div class="srow"><span class="mono">glm-5.3-flash</span><span class="chk">✓</span></div>
+        <div class="srow"><span class="mono">glm-5.3</span></div>
+        <div class="srow"><span class="mono">glm-4.7-air</span></div>
+        <div class="sdiv"></div>
+        <div class="sh">Thinking &amp; Speed</div>
+        <div class="srow">Minimal</div>
+        <div class="srow">Medium <span class="sub">(thinking level)</span><span class="chk">✓</span></div>
+        <div class="srow">High</div>
+        <div class="srow">Fast <span class="sub">(service tier)</span></div>
+        <div class="sdiv"></div>
+        <div class="sh">Access</div>
+        <div class="srow">Ask before acting <span class="chk">✓</span></div>
+        <div class="srow">Full access</div>
+        <div class="sdiv"></div>
+        <div class="sh">Quick actions</div>
+        <div class="srow">Reference a file <span class="sub mono">@</span></div>
+        <div class="srow">Review all changes <span class="sub mono">/review</span></div>
+        <div class="srow">Plan this task <span class="sub mono">/plan</span></div>
+        <div class="srow">Compact context <span class="sub mono">/compact</span></div>
+      </div>
+
+      <div class="composer">
+        <div class="comp-field">
+          <div class="tune"><span>≡</span><span class="badge">Med</span></div>
+          <div class="txt"><span class="ph">Ask anything…</span></div>
+          <div class="send" style="background:var(--subtle);color:var(--text3)">↑</div>
+        </div>
+      </div>
+      <div class="homebar"><i></i></div>
+    </div>
+  </div>
+  </div>
+
+</body>
+</html>
