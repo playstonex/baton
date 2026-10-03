@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Tabs v3 — iOS 26/27 Liquid Glass TabBar</title>
+<style>
+  :root { --accent: #5e6ad2; --accent-bright: #7170ff; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #08090a; display: flex; gap: 40px; justify-content: center;
+    flex-wrap: wrap; padding: 48px 24px 80px;
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+  }
+  .phone {
+    width: 393px; height: 852px; border-radius: 47px; padding: 8px; flex-shrink: 0;
+    background: linear-gradient(160deg, #1d2230, #0e1117);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 39px; overflow: hidden; display: flex; flex-direction: column; }
+
+  .dark {
+    --bg: #08090a; --card: #131416; --elevated: #191a1d; --subtle: #232428;
+    --sep: rgba(255,255,255,0.06); --text: #f7f8f8; --text2: rgba(208,214,214,0.85); --text3: #8a8f98;
+    --glass: rgba(28,29,32,0.72);
+    background: var(--bg); color: var(--text);
+  }
+  .light {
+    --bg: #f7f8f8; --card: #ffffff; --elevated: #f3f4f5; --subtle: #ebedef;
+    --sep: rgba(11,13,15,0.06); --text: #1b1d22; --text2: rgba(27,29,34,0.66); --text3: rgba(27,29,34,0.46);
+    --glass: rgba(252,252,252,0.80);
+    background: var(--bg); color: var(--text);
+  }
+  .dark .tab.on { --lens-icon: #a5a8ff; }
+  .light .tab.on { --lens-icon: #4752c4; }
+
+  .statusbar { height: 54px; flex-shrink: 0; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 32px 8px; font-size: 15px; font-weight: 600; position: relative; z-index: 30; }
+  .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 120px; height: 34px; border-radius: 20px; background: #000; }
+
+  .nav {
+    position: absolute; top: 0; left: 0; right: 0; padding-top: 54px; z-index: 20;
+    background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid var(--sep);
+  }
+  .nav-row { height: 44px; display: flex; align-items: center; justify-content: center; }
+  .nav-title { font-size: 17px; font-weight: '600'; font-weight: 600; }
+
+  .content { flex: 1; padding: 74px 16px 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+  .rowcard { background: var(--card); border-radius: 12px; padding: 13px 14px; display: flex; align-items: center; gap: 10px; }
+  .rc-ic { width: 34px; height: 34px; border-radius: 9px; background: var(--subtle); display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--text3); }
+  .rc-line { flex: 1; }
+  .rc-t { font-size: 14px; font-weight: 600; }
+  .rc-s { font-size: 11.5px; color: var(--text3); margin-top: 2px; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  .rc-dot { width: 8px; height: 8px; border-radius: 5px; background: #3fb950; }
+
+  /* ── iOS 26/27 Liquid Glass floating tab bar ── */
+  .tabbar {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: 26px; z-index: 40;
+    display: flex; padding: 4px; border-radius: 999px;
+    background: var(--barfill);
+    backdrop-filter: blur(30px) saturate(1.4);
+    -webkit-backdrop-filter: blur(30px) saturate(1.4);
+    box-shadow:
+      var(--edge),
+      inset 0 1px 0 var(--bar-spec),
+      0 1px 2px var(--shadow-tight),
+      0 6px 24px var(--shadow-ambient);
+    --edge: 0 0 0 0.5px rgba(0,0,0,0.10);
+  }
+  .dark {
+    --barfill: rgba(25,26,29,0.96);
+    --bar-spec: rgba(255,255,255,0.10);
+    --shadow-tight: rgba(0,0,0,0.08); --shadow-ambient: rgba(0,0,0,0.22);
+  }
+  .light {
+    --barfill: rgba(252,253,254,0.94);
+    --bar-spec: rgba(255,255,255,0.6);
+    --shadow-tight: rgba(0,0,0,0.04); --shadow-ambient: rgba(0,0,0,0.08);
+  }
+  .tab { position: relative; display: flex; flex-direction: column; align-items: center; width: 88px; padding: 3px 0; }
+  /* lens: neutral secondary glass capsule behind ICON + LABEL together */
+  .lens {
+    position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: calc(100% - 2px); border-radius: 999px;
+    background: var(--lens-fill);
+    transition: background 0.2s ease;
+  }
+  .dark { --lens-fill: rgba(255,255,255,0.14); }
+  .light { --lens-fill: #eaebed; }
+  .tab-ic-wrap { position: relative; height: 24px; display: flex; align-items: center; justify-content: center; }
+  .tab-ic { display: flex; color: var(--text); }
+  .tab.on .tab-ic { color: var(--lens-icon); transform: scale(1.06); }
+  .tab-ic, .lens { transition: all 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+  .tab-ic svg { display: block; }
+  .tab-lb { position: relative; margin-top: 2px; font-size: 11px; font-weight: 400; line-height: 13px; color: var(--text); letter-spacing: 0; }
+  .tab.on .tab-lb { color: var(--lens-icon); font-weight: 400; }
+
+  .homebar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; border-radius: 3px; background: #fff; opacity: 0.9; z-index: 41; }
+  .light .homebar { background: #b4b4b8; opacity: 1; }
+  .caption { position: absolute; bottom: -34px; left: 0; right: 0; text-align: center; color: #8a8f98; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Agents · dark -->
+<div class="phone"><div class="screen dark">
+  <div class="statusbar"><span>09:41</span><div class="notch"></div><span>▮▮▮ ⌁ ▉</span></div>
+  <div class="nav"><div class="nav-row"><span class="nav-title">Dashboard</span></div></div>
+  <div class="content">
+    <div class="rowcard"><div class="rc-ic">❯</div><div class="rc-line"><div class="rc-t">claude-code · flowwhips</div><div class="rc-s">main · executing · 34%</div></div><div class="rc-dot"></div></div>
+    <div class="rowcard"><div class="rc-ic">❯</div><div class="rc-line"><div class="rc-t">codex · baton-site</div><div class="rc-s">feat/nav · idle</div></div></div>
+    <div class="rowcard"><div class="rc-ic">❯</div><div class="rc-line"><div class="rc-t">opencode · infra</div><div class="rc-s">main · stopped</div></div></div>
+  </div>
+  <div class="tabbar">
+    <div class="tab on"><div class="lens"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></span></div><div class="tab-lb">Agents</div></div>
+    <div class="tab"><div class="lens" style="opacity:0"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.4"/><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 7.4v9.2"/><path d="M18 11.4c0 3.2-2.6 4.4-5.6 4.9"/></svg></span></div><div class="tab-lb">Pipelines</div></div>
+    <div class="tab"><div class="lens" style="opacity:0"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M20.0 12.0L22.2 12.0 M17.66 17.66L19.21 19.21 M12.0 20.0L12.0 22.2 M6.34 17.66L4.79 19.21 M4.0 12.0L1.8 12.0 M6.34 6.34L4.79 4.79 M12.0 4.0L12.0 1.8 M17.66 6.34L19.21 4.79"/></svg></span></div><div class="tab-lb">Settings</div></div>
+  </div>
+  <div class="homebar"></div>
+  <div class="caption">Agents · dark · lens behind icon only</div>
+</div></div>
+
+<!-- Pipelines · dark -->
+<div class="phone"><div class="screen dark">
+  <div class="statusbar"><span>09:41</span><div class="notch"></div><span>▮▮▮ ⌁ ▉</span></div>
+  <div class="nav"><div class="nav-row"><span class="nav-title">Pipelines</span></div></div>
+  <div class="content">
+    <div class="rowcard"><div class="rc-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.4"/><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 7.4v9.2"/><path d="M18 11.4c0 3.2-2.6 4.4-5.6 4.9"/></svg></div><div class="rc-line"><div class="rc-t">release-train</div><div class="rc-s">3 steps · running 2/3</div></div><div class="rc-dot"></div></div>
+    <div class="rowcard"><div class="rc-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.4"/><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 7.4v9.2"/><path d="M18 11.4c0 3.2-2.6 4.4-5.6 4.9"/></svg></div><div class="rc-line"><div class="rc-t">nightly-audit</div><div class="rc-s">cron 0 3 * * * · idle</div></div></div>
+  </div>
+  <div class="tabbar">
+    <div class="tab"><div class="lens" style="opacity:0"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></span></div><div class="tab-lb">Agents</div></div>
+    <div class="tab on"><div class="lens"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.4"/><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 7.4v9.2"/><path d="M18 11.4c0 3.2-2.6 4.4-5.6 4.9"/></svg></span></div><div class="tab-lb">Pipelines</div></div>
+    <div class="tab"><div class="lens" style="opacity:0"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M20.0 12.0L22.2 12.0 M17.66 17.66L19.21 19.21 M12.0 20.0L12.0 22.2 M6.34 17.66L4.79 19.21 M4.0 12.0L1.8 12.0 M6.34 6.34L4.79 4.79 M12.0 4.0L12.0 1.8 M17.66 6.34L19.21 4.79"/></svg></span></div><div class="tab-lb">Settings</div></div>
+  </div>
+  <div class="homebar"></div>
+  <div class="caption">Pipelines · dark</div>
+</div></div>
+
+<!-- Settings · light -->
+<div class="phone"><div class="screen light">
+  <div class="statusbar" style="color:#1b1d22"><span>09:41</span><div class="notch"></div><span>▮▮▮ ⌁ ▉</span></div>
+  <div class="nav"><div class="nav-row"><span class="nav-title">Settings</span></div></div>
+  <div class="content">
+    <div class="rowcard"><div class="rc-ic">⌁</div><div class="rc-line"><div class="rc-t">playstone-mbp</div><div class="rc-s">192.168.1.12:3210 · online</div></div><div class="rc-dot"></div></div>
+    <div class="rowcard"><div class="rc-ic">◐</div><div class="rc-line"><div class="rc-t">Appearance</div><div class="rc-s">Dark</div></div></div>
+  </div>
+  <div class="tabbar">
+    <div class="tab"><div class="lens" style="opacity:0"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></span></div><div class="tab-lb">Agents</div></div>
+    <div class="tab"><div class="lens" style="opacity:0"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.4"/><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 7.4v9.2"/><path d="M18 11.4c0 3.2-2.6 4.4-5.6 4.9"/></svg></span></div><div class="tab-lb">Pipelines</div></div>
+    <div class="tab on"><div class="lens"></div><div class="tab-ic-wrap"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M20.0 12.0L22.2 12.0 M17.66 17.66L19.21 19.21 M12.0 20.0L12.0 22.2 M6.34 17.66L4.79 19.21 M4.0 12.0L1.8 12.0 M6.34 6.34L4.79 4.79 M12.0 4.0L12.0 1.8 M17.66 6.34L19.21 4.79"/></svg></span></div><div class="tab-lb">Settings</div></div>
+  </div>
+  <div class="homebar"></div>
+  <div class="caption">Settings · light</div>
+</div></div>
+
+</body>
+</html>

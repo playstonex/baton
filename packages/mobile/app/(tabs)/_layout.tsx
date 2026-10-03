@@ -4,8 +4,14 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { Typography, Spacing, Colors, Glass, Shadows } from '../../src/constants/theme';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { Typography, Spacing, Colors, Glass } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { useLayoutStore } from '../../src/stores/layout';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
@@ -16,12 +22,48 @@ const TAB_ITEMS = [
   { name: 'settings', label: 'Settings', icon: 'settings' as const, title: 'Settings' },
 ] as const;
 
+/** Lens flush to the item; the capsule's own padding is the visual inset. */
+const LENS_INSET = 0;
+const LENS_ITEM_GAP = 1;
+const TAB_WIDTH = 84;
+const ICON_SIZE = 24;
+/** Snappier than the tab-bar-wide morph spring — small mass, quick settle. */
+const LENS_SPRING = { damping: 24, stiffness: 320, mass: 1 } as const;
+
+/** Native icon bounce on selection: 1 → 1.12 → 1. */
+function BouncingIcon({
+  name,
+  focused,
+  color,
+}: {
+  name: string;
+  focused: boolean;
+  color: string;
+}) {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    if (focused) {
+      scale.value = withSequence(
+        withSpring(1.06, { damping: 14, stiffness: 320 }),
+        withTiming(1, { duration: 120 }),
+      );
+    }
+  }, [focused, scale]);
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Animated.View style={[{ height: 24, justifyContent: 'center' }, iconStyle]}>
+      <Ionicons name={name as any} size={ICON_SIZE} color={color} />
+    </Animated.View>
+  );
+}
+
 /**
- * Floating glass tab bar (v1 layout): a rounded island detached from the
- * bottom edge, every tab always showing icon + label. The active tab is
- * highlighted by a glass lens that springs across to cover the whole item —
- * icon and text together. Slot sizes are static, so one measurement pass
- * positions the lens for good.
+ * iOS 26/27 native floating TabBar (matched to a system screenshot):
+ * near-opaque chrome-glass capsule with a 1px specular top edge, hovering
+ * above the home indicator. Active tab = a NEUTRAL secondary-glass lens
+ * capsule behind icon + label together; the tint lives on the icon and
+ * label, not the lens. Inactive items are primary monochrome. Selection
+ * bounces the icon, the lens springs across.
  */
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const c = useThemeColors();
@@ -38,8 +80,8 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   useEffect(() => {
     const frame = frames.get(activeIndex);
     if (frame) {
-      lensX.value = withSpring(frame.x, Glass.morph.spring);
-      lensW.value = withSpring(frame.width, Glass.morph.spring);
+      lensX.value = withSpring(frame.x + LENS_ITEM_GAP, LENS_SPRING);
+      lensW.value = withSpring(frame.width - LENS_ITEM_GAP * 2, LENS_SPRING);
     }
   }, [activeIndex, frameVersion, frames, lensX, lensW]);
 
@@ -49,13 +91,21 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     opacity: lensW.value > 1 ? 1 : 0,
   }));
 
+  const activeTint = c.isDark ? Colors.primary[300] : Colors.primary[600];
+
   return (
     <View
       onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
       style={{
         position: 'absolute',
-        bottom: insets.bottom + Spacing.sm + 2,
+        bottom: insets.bottom + Spacing.md,
         alignSelf: 'center',
+        /* ambient layer of the float shadow — the tight contact shadow
+         * lives on the capsule itself, layered like the native material */
+        shadowColor: '#08090a',
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: c.isDark ? 0.12 : 0.07,
+        shadowRadius: 28,
       }}
       pointerEvents="box-none"
     >
@@ -65,27 +115,31 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         style={{
           flexDirection: 'row',
           borderRadius: 999,
-          padding: Spacing.sm,
+          padding: Spacing.xs,
           overflow: 'hidden',
-          backgroundColor: c.glassTabBar,
+          backgroundColor: c.isDark ? 'rgba(25,26,29,0.96)' : 'rgba(252,253,254,0.94)',
+          /* specular rim — brightest at top; RN border is uniform, so the
+           * alpha is tuned low to stay inside native restraint */
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-          ...Shadows.elevated,
+          borderColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.6)',
+          shadowColor: '#08090a',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: c.isDark ? 0.1 : 0.05,
+          shadowRadius: 5,
+          elevation: 6,
         }}
       >
-        {/* Sliding glass lens — covers the whole active tab, label included. */}
+        {/* Neutral secondary-glass lens — icon + label together, springs across.
+         * Full item width, flush to the capsule padding, no outer shadow. */}
         <Animated.View
           pointerEvents="none"
           style={[
             {
               position: 'absolute',
-              top: Spacing.sm,
-              bottom: Spacing.sm,
+              top: LENS_INSET,
+              bottom: LENS_INSET,
               borderRadius: 999,
-              backgroundColor: c.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(120,120,128,0.16)',
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: c.isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.05)',
-              ...Shadows.card,
+              backgroundColor: c.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(60,60,67,0.09)',
             },
             lensStyle,
           ]}
@@ -122,26 +176,26 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
                 }
               }}
               style={({ pressed }) => ({
-                paddingHorizontal: Spacing.lg,
-                paddingVertical: Spacing.sm,
+                width: TAB_WIDTH,
+                paddingVertical: Spacing.xs - 2,
                 borderRadius: 999,
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 3,
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <Ionicons
-                name={(isFocused ? iconName : `${iconName}-outline`) as any}
-                size={25}
-                color={isFocused ? Colors.primary[500] : c.textPrimary}
+              <BouncingIcon
+                name={isFocused ? iconName : `${iconName}-outline`}
+                focused={isFocused}
+                color={isFocused ? activeTint : c.textPrimary}
               />
               <Text
                 style={{
-                  fontSize: 13,
-                  lineHeight: 16,
-                  fontWeight: isFocused ? '600' : '500',
-                  color: isFocused ? Colors.primary[500] : c.textPrimary,
+                  fontSize: 11,
+                  lineHeight: 13,
+                  marginTop: 2,
+                  fontWeight: '400',
+                  color: isFocused ? activeTint : c.textPrimary,
                 }}
                 allowFontScaling={false}
               >
