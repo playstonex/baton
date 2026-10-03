@@ -1,0 +1,29 @@
+<!-- BRIEF: "Kite" — you stay on the ground, the agent flies far away, the string stays in your hand.
+     Faceted coral/amber kite on a dusk sky, white tail string with two bows leaving the frame bottom-left. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="k-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101a4a"/>
+      <stop offset="0.6" stop-color="#3a3aa8"/>
+      <stop offset="1" stop-color="#ff9a7a"/>
+    </linearGradient>
+    <radialGradient id="k-halo" cx="0.55" cy="0.4" r="0.35">
+      <stop offset="0" stop-color="#ffd7a8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ffd7a8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect id="background" width="1024" height="1024" fill="url(#k-sky)"/>
+  <rect id="halo" width="1024" height="1024" fill="url(#k-halo)"/>
+  <path id="tail" d="M565 700 C 530 800, 400 790, 345 880 S 250 1000, 190 1070" fill="none"
+        stroke="#ffffff" stroke-opacity="0.9" stroke-width="14" stroke-linecap="round"/>
+  <g id="bows" fill="#ffe7c2">
+    <path d="M430 790 L470 760 L466 812 Z M430 790 L392 818 L396 766 Z"/>
+    <path d="M300 950 L340 920 L336 972 Z M300 950 L262 978 L266 926 Z"/>
+  </g>
+  <g id="kite">
+    <path d="M565 170 L365 400 L565 400 Z" fill="#fff1d9"/>
+    <path d="M565 170 L765 400 L565 400 Z" fill="#ffb86b"/>
+    <path d="M365 400 L565 700 L565 400 Z" fill="#ff8a5c"/>
+    <path d="M765 400 L565 700 L565 400 Z" fill="#e2503a"/>
+  </g>
+</svg>

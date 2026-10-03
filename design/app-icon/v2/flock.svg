@@ -1,0 +1,20 @@
+<!-- BRIEF: "Flock" — a team of agents flying in formation, you lead. Three birds in a V that reads as a
+     terminal ">" prompt; lead bird amber, followers white. Deep teal-to-ink background. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="f-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f5f5a"/>
+      <stop offset="1" stop-color="#07121c"/>
+    </linearGradient>
+    <radialGradient id="f-light" cx="0.3" cy="0.2" r="0.6">
+      <stop offset="0" stop-color="#5eead4" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#5eead4" stop-opacity="0"/>
+    </radialGradient>
+    <path id="f-bird" d="M-120 12 C -78 -44 -32 -44 0 6 C 32 -44 78 -44 120 12 C 76 -8 32 -2 0 34 C -32 -2 -76 -8 -120 12 Z"/>
+  </defs>
+  <rect id="background" width="1024" height="1024" fill="url(#f-bg)"/>
+  <rect id="light" width="1024" height="1024" fill="url(#f-light)"/>
+  <use id="follower-top" href="#f-bird" transform="translate(320 320) scale(1.5)" fill="#ffffff" fill-opacity="0.92"/>
+  <use id="follower-bottom" href="#f-bird" transform="translate(320 700) scale(1.5)" fill="#ffffff" fill-opacity="0.92"/>
+  <use id="lead" href="#f-bird" transform="translate(650 510) scale(1.9)" fill="#fbbf24"/>
+</svg>

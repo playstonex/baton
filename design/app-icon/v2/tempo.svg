@@ -1,0 +1,24 @@
+<!-- BRIEF: "Tempo" — the conductor's gesture: one sweeping baton stroke that sets the rhythm for every agent.
+     Tapered crescent motion trail (violet -> pink -> white) ending in a four-point spark. Deep indigo. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="t-bg" cx="0.5" cy="0.45" r="0.75">
+      <stop offset="0" stop-color="#2a1f5c"/>
+      <stop offset="1" stop-color="#0a0818"/>
+    </radialGradient>
+    <linearGradient id="t-trail" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c3aed" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#a855f7"/>
+      <stop offset="0.8" stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#fff4f8"/>
+    </linearGradient>
+    <radialGradient id="t-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd6ec" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffd6ec" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect id="background" width="1024" height="1024" fill="url(#t-bg)"/>
+  <path id="trail" d="M210 800 C 270 470, 500 280, 790 255 C 560 350, 370 520, 210 800 Z" fill="url(#t-trail)"/>
+  <circle id="tip-glow" cx="790" cy="255" r="150" fill="url(#t-glow)"/>
+  <path id="spark" d="M790 150 C 800 225, 820 245, 895 255 C 820 265, 800 285, 790 360 C 780 285, 760 265, 685 255 C 760 245, 780 225, 790 150 Z" fill="#ffffff"/>
+</svg>

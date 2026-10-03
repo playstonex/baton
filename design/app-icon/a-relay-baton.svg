@@ -1,0 +1,28 @@
+<!-- BRIEF: Baton app icon, concept A "Relay Baton". Terminal prompt ">" (the agent CLI) handing off to a
+     tilted relay baton (remote orchestration / pass control between desktop & phone). Dark Geist-style
+     background, teal->lime accent, full-bleed 1024 square (iOS masks corners). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="a-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1f2c"/>
+      <stop offset="1" stop-color="#07080b"/>
+    </linearGradient>
+    <radialGradient id="a-glow" cx="0.7" cy="0.6" r="0.45">
+      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="a-baton" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a3e635"/>
+    </linearGradient>
+  </defs>
+  <rect id="background" width="1024" height="1024" fill="url(#a-bg)"/>
+  <rect id="glow" width="1024" height="1024" fill="url(#a-glow)"/>
+  <path id="prompt" d="M236 320 L432 512 L236 704" fill="none" stroke="#f5f7fa"
+        stroke-width="100" stroke-linecap="round" stroke-linejoin="round"/>
+  <g id="baton" transform="rotate(-35 700 560)">
+    <rect x="520" y="510" width="360" height="100" rx="50" fill="url(#a-baton)"/>
+    <rect x="606" y="510" width="24" height="100" fill="#07080b" opacity="0.32"/>
+    <rect x="770" y="510" width="24" height="100" fill="#07080b" opacity="0.32"/>
+  </g>
+</svg>
