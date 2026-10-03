@@ -1,3 +1,4 @@
+import type { AgentType } from '@baton/shared';
 import type { AgentManager } from '../agent/manager.js';
 import { createAdapter } from '../agent/index.js';
 import { createWorktree, listWorktrees, archiveWorktree } from './core.js';
@@ -9,11 +10,11 @@ export async function startWorktreeSession(
   agentType: string = 'claude-code',
 ): Promise<{ sessionId: string; worktreePath: string }> {
   const wt = await createWorktree(basePath, branch);
-  const adapter = createAdapter(agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
+  const adapter = createAdapter(agentType as AgentType);
 
   const sessionId = await agentManager.start(
     {
-      type: agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
+      type: agentType as AgentType,
       projectPath: wt.path,
     },
     adapter,

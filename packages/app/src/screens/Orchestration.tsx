@@ -23,7 +23,9 @@ const AGENT_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
-  'kiro-cli': 'Kiro',
+  kiro: 'Kiro',
+  antigravity: 'Antigravity',
+  pi: 'Pi',
 };
 
 const STEP_STATUS_STYLES: Record<string, string> = {

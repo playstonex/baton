@@ -1,14 +1,22 @@
 import type { AgentConfig, SpawnConfig } from './agent.js';
 
 // Agent types
+// 'kiro' is the canonical type (spawns `kiro-cli chat`); 'kiro-cli' and
+// 'kiro-cli-acp' are legacy aliases kept for the stable protocol contract —
+// the CLI's `acp` subcommand no longer exists and both route to 'kiro'.
 export type AgentType =
   | 'claude-code'
   | 'claude-code-sdk'
   | 'codex'
   | 'codex-sdk'
   | 'opencode'
+  | 'kiro'
   | 'kiro-cli'
   | 'kiro-cli-acp'
+  // Google Antigravity terminal agent (`agy`)
+  | 'antigravity'
+  // Pi coding agent (`pi`, @mariozechner/pi-coding-agent)
+  | 'pi'
   | 'acp'
   | 'custom';
 
@@ -32,6 +40,12 @@ export interface AgentProcess {
   stoppedAt?: string;
   /** Adapter mode this session was started with */
   mode?: 'pty' | 'sdk';
+  /** Human-readable title derived from the first user prompt (paseo pattern). */
+  title?: string;
+  /** ISO timestamp of the last observed activity (event or output). */
+  lastActivityAt?: string;
+  /** Soft-delete marker — archived sessions are hidden from default lists. */
+  archivedAt?: string;
 }
 
 export type { AgentConfig, SpawnConfig } from './agent.js';

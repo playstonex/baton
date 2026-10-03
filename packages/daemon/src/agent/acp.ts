@@ -11,8 +11,8 @@
  *   { "providers": { "gemini": { "command": "gemini",
  *       "args": ["--experimental-acp"], "label": "Gemini CLI" } } }
  *
- * The protocol state machine mirrors the proven KiroAcpSdkAdapter; only the
- * spawn target differs (profile-driven instead of hardcoded `kiro-cli acp`).
+ * The protocol state machine mirrors the pattern the old kiro-acp adapter
+ * used; only the spawn target differs (profile-driven instead of hardcoded).
  */
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -31,8 +31,7 @@ import type {
 } from '@baton/shared';
 import { BaseAgentAdapter } from './adapter.js';
 
-// Capabilities advertised in `initialize`. See kiro-acp.ts for why fs and
-// terminal stay false: we don't service those server-side requests, and
+// Capabilities advertised in `initialize`. fs and terminal stay false: we don't service those server-side requests, and
 // claiming them would hang the agent's first file/shell tool call.
 const ACP_CLIENT_CAPABILITIES = {
   fs: { readTextFile: false, writeTextFile: false },

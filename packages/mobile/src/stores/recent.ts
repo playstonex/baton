@@ -20,6 +20,8 @@ export interface RecentSession {
   /** How this session should open: structured chat view or raw terminal.
    * Only meaningful for codex (the only agent with a chat mode). */
   chatMode?: 'chat' | 'terminal';
+  /** Server-derived title (first user prompt) when the daemon provides one. */
+  title?: string;
 }
 
 interface RecentState {
@@ -29,6 +31,10 @@ interface RecentState {
   removeConnection: (index: number) => void;
   loadRecent: () => Promise<void>;
   addSession: (session: RecentSession) => void;
+  /** Merge server-backed sessions (from GET /api/sessions) into the local
+   * history — the daemon's store is the source of truth; local entries act
+   * as the offline fallback for ids the server no longer lists. */
+  addSessions: (sessions: RecentSession[]) => void;
   removeSession: (id: string) => void;
 }
 
@@ -85,6 +91,22 @@ export const useRecentStore = create<RecentState>()((set, get) => ({
   addSession: (session) => {
     const filtered = get().sessions.filter((s) => s.id !== session.id);
     const sessions = [session, ...filtered].slice(0, 20);
+    set({ sessions });
+    SecureStore.setItemAsync(RECENT_SESSIONS_KEY, JSON.stringify(sessions)).catch(() => {});
+  },
+
+  addSessions: (incoming) => {
+    if (incoming.length === 0) return;
+    const byId = new Map(get().sessions.map((s) => [s.id, s]));
+    for (const session of incoming) {
+      const existing = byId.get(session.id);
+      // Server data wins on merge, but keep a locally-set chatMode when the
+      // server row doesn't carry one.
+      byId.set(session.id, { ...existing, ...session, chatMode: session.chatMode ?? existing?.chatMode });
+    }
+    const sessions = [...byId.values()]
+      .sort((a, b) => b.lastActivity - a.lastActivity)
+      .slice(0, 50);
     set({ sessions });
     SecureStore.setItemAsync(RECENT_SESSIONS_KEY, JSON.stringify(sessions)).catch(() => {});
   },

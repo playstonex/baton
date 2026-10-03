@@ -44,6 +44,12 @@ pnpm --filter @baton/app dev              # Vite, proxies /api → 3210, /ws →
 pnpm --filter @baton/gateway dev
 pnpm --filter @baton/relay dev
 
+# The daemon never auto-starts — no LaunchAgent/login item is installed
+# and none must be created during development. It runs only when started
+# manually (pnpm --filter @baton/daemon dev, or `baton daemon start`).
+# `packages/cli/src/commands/service.sh` remains the opt-in macOS
+# LaunchAgent installer for production machines.
+
 # Build the Rust PTY binary (required before running daemon)
 pnpm --filter @baton/daemon build:pty
 # → packages/daemon/pty/target/release/baton-pty
@@ -67,11 +73,12 @@ Browser/Mobile ──WS──► Relay (3230) ──WS──► Daemon (3210/321
 
 ### Daemon internals (`packages/daemon/src`)
 
-- `agent/` — `BaseAgentAdapter` (`adapter.ts`) subclasses per provider, each with a PTY variant and an SDK/ACP variant: `claude-code.ts`/`claude-sdk.ts`, `codex.ts`/`codex-sdk.ts`, `opencode.ts`/`opencode-sdk.ts`, `kiro-cli.ts`/`kiro-acp.ts`. `createAdapter(type, mode = 'pty')` in `agent/index.ts` picks the PTY vs SDK/ACP implementation for an `AgentType` (`claude-code | codex | opencode | kiro-cli`); SDK mode uses the provider's official SDK when available. `router.ts` and `registry.ts` map providers to adapters. `acp.ts` is the **generic ACP adapter**: any ACP-speaking binary declared in `$BATON_HOME/acp.json` (e.g. `gemini --experimental-acp`) is spawnable as agentType `'acp'` + `acpProvider` — no bespoke adapter needed. `adapter-registry.ts` is the open registry (plugin system stage 1); third-party providers load from `$BATON_HOME/plugins/`.
-- `agent/manager.ts` — `AgentManager` owns lifecycle. **State machine**: every transition goes through `transition()` which checks `VALID_TRANSITIONS` from shared. States: `starting → initializing → running → {idle, thinking, executing, waiting_input, error} → stopped`. Emits `status_change` events and persists snapshots to `$BATON_HOME/agents/<hash>/<id>.json` (default `~/.baton`). On startup, `restore()` loads snapshots and forces any non-stopped agent to `stopped` (crash recovery).
+- `agent/` — `BaseAgentAdapter` (`adapter.ts`) subclasses per provider, each with a PTY variant and an SDK/ACP variant: `claude-code.ts`/`claude-sdk.ts`, `codex.ts`/`codex-sdk.ts`, `opencode.ts`/`opencode-sdk.ts`, `kiro.ts`, `antigravity.ts`, `pi.ts`. `createAdapter(type, mode = 'pty')` in `agent/index.ts` picks the PTY vs SDK implementation for an `AgentType` (`claude-code | codex | opencode | kiro | antigravity | pi`); SDK mode uses the provider's official SDK when available. **Kiro is one entry** (`kiro-cli chat --trust-all-tools`); `'kiro-cli'`/`'kiro-cli-acp'` remain as legacy aliases because kiro-cli 2.x dropped its `acp` subcommand. Antigravity spawns `agy`; Pi spawns `pi`. `router.ts` and `registry.ts` map providers to adapters. `acp.ts` is the **generic ACP adapter**: any ACP-speaking binary declared in `$BATON_HOME/acp.json` (e.g. `gemini --experimental-acp`) is spawnable as agentType `'acp'` + `acpProvider` — no bespoke adapter needed. `adapter-registry.ts` is the open registry (plugin system stage 1); third-party providers load from `$BATON_HOME/plugins/`.
+- `agent/manager.ts` — `AgentManager` owns lifecycle. **State machine**: every transition goes through `transition()` which checks `VALID_TRANSITIONS` from shared. States: `starting → initializing → running → {idle, thinking, executing, waiting_input, error} → stopped`. Every event/display chunk is written through to the session store; sessions get ULID ids (time-sortable) and a title derived from the first user prompt. Stopped agents keep their in-memory buffers for `KEEP_STOPPED_BUFFERED` re-attaches, then are offloaded to the store; `get()`/history getters lazily fall back to the store for dead sessions. `onAgentsChanged` fires (microtask-coalesced) on any session change — the daemon wires it to an `agent_list` broadcast so all connected dashboards see sessions started via HTTP/MCP/scheduler.
+- `session/store.ts` — `SessionStore`: durable session metadata + transcripts in `$BATON_HOME/sessions.db` (`bun:sqlite`, WAL). Tables: `sessions` (status/title/archived_at/updated_at), `events` + `output` (per-session monotonic `seq`, 64 KiB per-payload cap). Attach replays bounded tails; deep history is queryable via `GET /api/sessions` (paged) — never shipped in one frame. Retention: 90 days / 1000 sessions, then hard prune. On first boot after the migration, legacy `$BATON_HOME/agents/<hash>/<id>.json` snapshots are imported (newest 100) and the files removed.
 - `pty/bridge.ts` — spawns the Rust PTY binary (`baton-pty`) and talks to it over newline-delimited JSON on stdin/stdout. The bridge exposes an `IPty` interface (`write/resize/kill/onData/onExit`) that the manager treats opaquely. Expects the release binary at `pty/target/release/baton-pty`.
 - `parser/index.ts` — `ClaudeCodeParser.parse(raw)` strips ANSI then pattern-matches interactive agent output (tool-use markers `⏺/●/▸/→`, `Thinking…`, bash blocks, permission prompts, diffs, errors) into `ParsedEvent[]`. Raw PTY bytes are always preserved in `outputHistory` for terminal replay — parsing is additive, not destructive. `compressor.ts` and `ansi.ts` are helpers.
-- `transport/index.ts` — `Bun.serve` WebSocket on port+1. Clients subscribe per-session via `control/attach_session`. On attach, the server replays full `outputHistory` + `eventHistory` so reconnections don't lose context.
+- `transport/index.ts` — `Bun.serve` WebSocket on port+1. Clients subscribe per-session via `control/attach_session`. On attach, the server replays a **bounded tail** of `outputHistory` + `eventHistory` (deep history stays in the session store, reachable via `GET /api/sessions`); `resume_session {lastSeq}` heals reconnects from the per-session `SeqBuffer`. Client `ping` frames are schema-valid and answered with `pong`.
 - `transport/relay.ts` — outbound connection from daemon to a remote relay; forwards `ClientMessage` back to the local `AgentManager`.
 - `orchestrator/index.ts` — sequential pipelines. Each step spawns an agent and polls until `status === 'stopped' | 'error'` before advancing.
 - `scheduler/` — `cron.ts` / `schedule.ts` / `loop.ts`: scheduled and looping agent runs.
@@ -104,7 +111,7 @@ Import from subpaths when you only need one area: `import { generateKeyPair } fr
 
 ### CLI (`packages/cli/src`)
 
-- `commands/` — `daemon.ts` (start/stop/status/service install), `provider.ts` (provider profiles — the model/credential config agents run under), `agent.ts` (spawn/list/control agents), `pipeline.ts`, `worktree.ts`, `doctor.ts` (environment diagnostics). `client/` talks to the daemon HTTP API.
+- `commands/` — `daemon.ts` (start/stop/restart/status/watch/pair), `provider.ts` (provider profiles — the model/credential config agents run under), `agent.ts` (spawn/list/control agents), `pipeline.ts`, `worktree.ts`, `doctor.ts` (environment diagnostics), `service.sh` (opt-in macOS LaunchAgent installer — NOT wired into the CLI, run manually; the daemon is manual-run during development). `client/` talks to the daemon HTTP API.
 
 ## Conventions
 
@@ -131,7 +138,7 @@ Freeing them during debugging: `lsof -ti:3210,3211,3220,3230,5173 | xargs kill`.
 
 - Vitest root config at `vitest.config.ts` picks up `packages/*/src/__tests__/**/*.test.ts`.
 - **`packages/daemon/**` is excluded** because daemon tests exercise Bun APIs (`Bun.serve`, `bun:sqlite`) — running them under Node via `pnpm test` will fail. To run them locally: `bun test` inside `packages/daemon`.
-- Shared tests cover the state machine (`agent-state.test.ts`), WS channels, NaCl crypto, handshake, delta encoding. Daemon-local tests cover the parser, orchestrator, adapters, crypto, cron, and integration.
+- Shared tests cover the state machine (`agent-state.test.ts`), WS channels, NaCl crypto, handshake, delta encoding, ULID session ids + ping/pong schemas (`session-id.test.ts`). Daemon-local tests cover the parser, orchestrator, adapters, crypto, cron, integration, restore/import (`restore.test.ts`), and the SQLite session store + manager fallbacks (`session-store.test.ts`).
 
 ## Release artifacts
 

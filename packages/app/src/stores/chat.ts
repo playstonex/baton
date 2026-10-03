@@ -24,6 +24,15 @@ interface ChatState {
 
 let msgCounter = 0;
 
+/** Cap on rendered chat messages — the store used to grow without bound for
+ * the lifetime of a long agent session. */
+const MAX_MESSAGES = 800;
+
+function push(messages: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
+  const combined = [...messages, ...next];
+  return combined.length > MAX_MESSAGES ? combined.slice(-MAX_MESSAGES) : combined;
+}
+
 export const useChatStore = create<ChatState>()((set) => ({
   messages: [],
   agentStatus: 'unknown',
@@ -52,7 +61,9 @@ export const useChatStore = create<ChatState>()((set) => ({
           }
         }
         return {
-          messages: [...state.messages, { id, role: event.role, content: event.content, timestamp: ts, eventType: 'chat_message' }],
+          messages: push(state.messages, [
+            { id, role: event.role, content: event.content, timestamp: ts, eventType: 'chat_message' },
+          ]),
         };
       }
 
@@ -74,7 +85,9 @@ export const useChatStore = create<ChatState>()((set) => ({
             eventType: 'raw_output',
           });
         }
-        return { messages };
+        return {
+          messages: messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages,
+        };
       }
 
       if (event.type === 'waiting_approval') {
@@ -84,13 +97,13 @@ export const useChatStore = create<ChatState>()((set) => ({
         return {
           pendingApproval: true,
           approvalDetail: { toolName, detail },
-          messages: [...state.messages, {
+          messages: push(state.messages, [{
             id,
             role: 'system' as const,
             content: `Approval required: ${toolName}${detail ? ` — ${detail}` : ''}`,
             timestamp: ts,
             eventType: 'waiting_approval',
-          }],
+          }]),
         };
       }
 
@@ -100,33 +113,33 @@ export const useChatStore = create<ChatState>()((set) => ({
           return state;
         }
         return {
-          messages: [...state.messages, { id, role: 'system', content: 'Thinking...', timestamp: ts, eventType: 'thinking' }],
+          messages: push(state.messages, [{ id, role: 'system', content: 'Thinking...', timestamp: ts, eventType: 'thinking' }]),
         };
       }
 
       if (event.type === 'tool_use') {
         const fileHint = event.args?.filePath ? ` → ${event.args.filePath}` : '';
         return {
-          messages: [...state.messages, { id, role: 'system', content: `${event.tool}${fileHint}`, timestamp: ts, eventType: 'tool_use', meta: event.args as Record<string, unknown> }],
+          messages: push(state.messages, [{ id, role: 'system', content: `${event.tool}${fileHint}`, timestamp: ts, eventType: 'tool_use', meta: event.args as Record<string, unknown> }]),
         };
       }
 
       if (event.type === 'file_change') {
         const icons: Record<string, string> = { create: '+', modify: '~', delete: '-' };
         return {
-          messages: [...state.messages, { id, role: 'system', content: `${icons[event.changeType] ?? '~'} ${event.changeType} ${event.path}`, timestamp: ts, eventType: 'file_change' }],
+          messages: push(state.messages, [{ id, role: 'system', content: `${icons[event.changeType] ?? '~'} ${event.changeType} ${event.path}`, timestamp: ts, eventType: 'file_change' }]),
         };
       }
 
       if (event.type === 'command_exec') {
         return {
-          messages: [...state.messages, { id, role: 'system', content: `$ ${event.command}`, timestamp: ts, eventType: 'command_exec' }],
+          messages: push(state.messages, [{ id, role: 'system', content: `$ ${event.command}`, timestamp: ts, eventType: 'command_exec' }]),
         };
       }
 
       if (event.type === 'error') {
         return {
-          messages: [...state.messages, { id, role: 'system', content: `${event.message}`, timestamp: ts, eventType: 'error' }],
+          messages: push(state.messages, [{ id, role: 'system', content: `${event.message}`, timestamp: ts, eventType: 'error' }]),
         };
       }
 
@@ -135,7 +148,9 @@ export const useChatStore = create<ChatState>()((set) => ({
 
   addUserMessage: (content) =>
     set((state) => ({
-      messages: [...state.messages, { id: `msg-${++msgCounter}`, role: 'user', content, timestamp: Date.now(), eventType: 'chat_message' }],
+      messages: push(state.messages, [
+        { id: `msg-${++msgCounter}`, role: 'user', content, timestamp: Date.now(), eventType: 'chat_message' },
+      ]),
     })),
 
   setStatus: (status) => set((state) => ({

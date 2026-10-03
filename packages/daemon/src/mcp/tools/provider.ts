@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { buildTool, toolResult, toolError, type BuiltTool } from '@baton/shared';
+import { buildTool, toolResult, toolError, type BuiltTool, type ProviderProfile } from '@baton/shared';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -81,7 +81,7 @@ const providerAdd = buildTool({
   description: 'Add or update a provider configuration',
   inputSchema: {
     name: z.string().describe('Provider name (e.g. "claude-opus", "qwen")'),
-    type: z.enum(['claude-code', 'codex', 'opencode', 'kiro-cli', 'custom']),
+    type: z.enum(['claude-code', 'codex', 'opencode', 'kiro', 'kiro-cli', 'antigravity', 'pi', 'custom']),
     binary: z.string().optional().describe('Path to custom binary (for custom type)'),
     models: z.array(z.string()).optional().describe('Available models'),
   },
@@ -90,7 +90,7 @@ const providerAdd = buildTool({
   execute: async (params) => {
     const config = await loadProviderConfig();
     config.providers[params.name as string] = {
-      type: params.type as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli' | 'custom',
+      type: params.type as ProviderProfile['type'],
       ...(params.binary ? { binary: params.binary as string } : {}),
       ...(params.models ? { models: params.models as string[] } : {}),
       args: [],

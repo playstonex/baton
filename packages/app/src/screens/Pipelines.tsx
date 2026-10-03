@@ -29,13 +29,15 @@ interface Pipeline {
   results: PipelineStepResult[];
 }
 
-const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode', 'kiro-cli'];
+const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'opencode', 'kiro', 'antigravity', 'pi'];
 
 const AGENT_LABELS: Record<string, string> = {
   'claude-code': 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
-  'kiro-cli': 'Kiro',
+  kiro: 'Kiro',
+  antigravity: 'Antigravity',
+  pi: 'Pi',
 };
 
 export function PipelinesScreen() {

@@ -81,7 +81,7 @@ describe('createSdkAdapter factory semantics', () => {
   // concurrent same-type sessions would clobber each other.
   it('returns a fresh instance per call for every SDK-capable type', async () => {
     const { createSdkAdapter } = await import('../agent/index.js');
-    const types = ['claude-code', 'codex', 'opencode', 'kiro-cli', 'kiro-cli-acp'] as const;
+    const types = ['claude-code', 'codex', 'opencode'] as const;
     for (const t of types) {
       const a = createSdkAdapter(t);
       const b = createSdkAdapter(t);
@@ -93,5 +93,93 @@ describe('createSdkAdapter factory semantics', () => {
   it('returns null for PTY-only types', async () => {
     const { createSdkAdapter } = await import('../agent/index.js');
     expect(createSdkAdapter('acp')).toBeNull(); // acp resolves via its own per-provider factory
+    // Kiro/Antigravity/Pi are PTY-only — the kiro ACP path died with the
+    // CLI's `acp` subcommand removal.
+    expect(createSdkAdapter('kiro')).toBeNull();
+    expect(createSdkAdapter('kiro-cli')).toBeNull();
+    expect(createSdkAdapter('kiro-cli-acp')).toBeNull();
+    expect(createSdkAdapter('antigravity')).toBeNull();
+    expect(createSdkAdapter('pi')).toBeNull();
+  });
+});
+
+describe('KiroAdapter (unified entry)', () => {
+  it('spawns kiro-cli chat with tools pre-approved for remote use', async () => {
+    const { KiroAdapter } = await import('../agent/kiro.js');
+    const adapter = new KiroAdapter();
+    expect(adapter.agentType).toBe('kiro');
+    const config = adapter.buildSpawnConfig({
+      type: 'kiro',
+      projectPath: '/tmp/proj',
+      args: ['--model', 'sonnet'],
+    });
+    expect(config.command).toBe('kiro-cli');
+    expect(config.args).toEqual(['chat', '--trust-all-tools', '--model', 'sonnet']);
+    expect(config.cwd).toBe('/tmp/proj');
+  });
+
+  it('legacy kiro types route to the unified adapter', async () => {
+    const { createAdapter, KiroAdapter } = await import('../agent/index.js');
+    expect(createAdapter('kiro')).toBeInstanceOf(KiroAdapter);
+    expect(createAdapter('kiro-cli')).toBeInstanceOf(KiroAdapter);
+    expect(createAdapter('kiro-cli-acp')).toBeInstanceOf(KiroAdapter);
+  });
+
+  it('parses kiro chat markers', async () => {
+    const { KiroAdapter } = await import('../agent/kiro.js');
+    const adapter = new KiroAdapter();
+    expect(
+      adapter.parseOutput('Allow this action? [y/n/t]').some((e) => e.type === 'status_change'),
+    ).toBe(true);
+    expect(adapter.parseOutput('▸ Credits: 0.24 • Time: 3s').some((e) => e.type === 'status_change')).toBe(true);
+    expect(adapter.parseOutput('read src/main.ts').some((e) => e.type === 'file_change')).toBe(true);
+  });
+});
+
+describe('AntigravityAdapter', () => {
+  it('spawns the agy binary with passthrough args', async () => {
+    const { AntigravityAdapter } = await import('../agent/antigravity.js');
+    const adapter = new AntigravityAdapter();
+    expect(adapter.agentType).toBe('antigravity');
+    const config = adapter.buildSpawnConfig({
+      type: 'antigravity',
+      projectPath: '/tmp/proj',
+      args: ['--effort', 'high'],
+    });
+    expect(config.command).toBe('agy');
+    expect(config.args).toEqual(['--effort', 'high']);
+    expect(config.cwd).toBe('/tmp/proj');
+  });
+
+  it('parses thinking and shell output', async () => {
+    const { AntigravityAdapter } = await import('../agent/antigravity.js');
+    const adapter = new AntigravityAdapter();
+    expect(adapter.parseOutput('Reasoning about the task').some((e) => e.type === 'thinking')).toBe(true);
+    expect(adapter.parseOutput('Running command: npm test').some((e) => e.type === 'command_exec')).toBe(true);
+    expect(adapter.parseOutput('something happened').some((e) => e.type === 'raw_output')).toBe(true);
+  });
+});
+
+describe('PiAdapter', () => {
+  it('spawns the pi binary with passthrough args', async () => {
+    const { PiAdapter } = await import('../agent/pi.js');
+    const adapter = new PiAdapter();
+    expect(adapter.agentType).toBe('pi');
+    const config = adapter.buildSpawnConfig({
+      type: 'pi',
+      projectPath: '/tmp/proj',
+      args: ['--provider', 'anthropic'],
+    });
+    expect(config.command).toBe('pi');
+    expect(config.args).toEqual(['--provider', 'anthropic']);
+    expect(config.cwd).toBe('/tmp/proj');
+  });
+
+  it('parses tool-call blocks', async () => {
+    const { PiAdapter } = await import('../agent/pi.js');
+    const adapter = new PiAdapter();
+    const events = adapter.parseOutput('› bash(npm install)');
+    expect(events.some((e) => e.type === 'tool_use')).toBe(true);
+    expect(adapter.parseOutput('edited src/app.ts').some((e) => e.type === 'file_change')).toBe(true);
   });
 });

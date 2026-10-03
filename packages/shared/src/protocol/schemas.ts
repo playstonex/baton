@@ -48,6 +48,14 @@ const helloSchema = z.object({
   capabilities: z.record(z.string(), z.boolean()).optional(),
 });
 
+const pingSchema = z.object({
+  type: z.literal('ping'),
+});
+
+const pongSchema = z.object({
+  type: z.literal('pong'),
+});
+
 const welcomeSchema = z.object({
   type: z.literal('welcome'),
   version: z.number(),
@@ -189,6 +197,7 @@ const controlSchema = z.object({
 
 export const clientMessageSchema: z.ZodType<ClientMessage> = z.union([
   helloSchema,
+  pingSchema,
   terminalInputSchema,
   chatInputSchema,
   steerInputSchema,
@@ -265,6 +274,12 @@ const agentListSchema = z.object({
       status: z.string(),
       projectPath: z.string(),
       mode: z.enum(['pty', 'sdk']).optional(),
+      // COMPAT(sessionMeta): optional since v2.2 — older clients ignore them.
+      title: z.string().optional(),
+      startedAt: z.string().optional(),
+      lastActivityAt: z.string().optional(),
+      stoppedAt: z.string().optional(),
+      archivedAt: z.string().optional(),
     }),
   ),
 });
@@ -358,6 +373,7 @@ const errorSchema = z.object({
 
 export const daemonMessageSchema: z.ZodType<DaemonMessage> = z.union([
   welcomeSchema,
+  pongSchema,
   terminalOutputSchema,
   historyReplaySchema,
   parsedEventMessageSchema,

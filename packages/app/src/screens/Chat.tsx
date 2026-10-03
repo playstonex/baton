@@ -41,6 +41,27 @@ export function ChatScreen() {
       }
     });
 
+    // Full event replay (first attach to an existing session, or gap
+    // recovery): reset before applying so a reconnect never appends the
+    // conversation on top of itself. Without this handler the web chat
+    // rendered NOTHING for a session opened mid-conversation.
+    const unsubEventHistory = wsService.on('event_history', (msg) => {
+      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        clear();
+        for (const event of msg.events) {
+          addEvent(event);
+        }
+      }
+    });
+
+    // history_replay precedes event_history on a full re-attach; its terminal
+    // text isn't chat content — use it as the "full replay started" signal.
+    const unsubHistory = wsService.on('history_replay', (msg) => {
+      if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        clear();
+      }
+    });
+
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
         setStatus(msg.status as string);
@@ -59,6 +80,8 @@ export function ChatScreen() {
 
     return () => {
       unsubEvent();
+      unsubEventHistory();
+      unsubHistory();
       unsubStatus();
       unsubState();
     };

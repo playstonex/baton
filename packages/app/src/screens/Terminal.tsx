@@ -160,6 +160,9 @@ export function TerminalScreen() {
 
     const unsubHistory = wsService.on('history_replay', (msg) => {
       if (msg.type === 'history_replay' && msg.sessionId === sessionId) {
+        // Full re-attach (first attach or gap recovery): the buffer we already
+        // rendered is included in the replay — reset or the scrollback doubles.
+        term.reset();
         term.write(msg.output);
       }
     });

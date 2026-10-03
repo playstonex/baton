@@ -15,6 +15,7 @@ import type { HelloMessage, WelcomeMessage } from './handshake.js';
 // WebSocket message types: Client → Daemon
 export type ClientMessage =
   | HelloMessage
+  | PingMessage
   | TerminalInputMessage
   | ChatInputMessage
   | SteerInputMessage
@@ -40,6 +41,18 @@ export interface TerminalInputMessage {
   type: 'terminal_input';
   sessionId: string;
   data: string;
+}
+
+/** Application-level keepalive. Clients have sent this for ages; the daemon
+ * used to reject it (not in the schema) and answer with an error frame every
+ * heartbeat interval. Replying `pong` keeps connections quietly alive. */
+export interface PingMessage {
+  type: 'ping';
+}
+
+/** Reply to `ping`. Older clients already treat unknown types as no-ops. */
+export interface PongMessage {
+  type: 'pong';
 }
 
 // ── Chat / SDK input messages (Client → Daemon) ────────────────────
@@ -188,6 +201,7 @@ export interface ControlMessage {
 // WebSocket message types: Daemon → Client
 export type DaemonMessage =
   | WelcomeMessage
+  | PongMessage
   | TerminalOutputMessage
   | HistoryReplayMessage
   | ParsedEventMessage
@@ -252,6 +266,12 @@ export interface AgentListMessage {
     status: AgentStatus;
     projectPath: string;
     mode?: 'pty' | 'sdk';
+    /** COMPAT(sessionMeta): added in v2.2 — optional, older clients ignore. */
+    title?: string;
+    startedAt?: string;
+    lastActivityAt?: string;
+    stoppedAt?: string;
+    archivedAt?: string;
   }[];
 }
 
@@ -405,6 +425,30 @@ export interface StartAgentResponse {
   sessionId: string;
   agentType: AgentType;
   status: AgentStatus;
+}
+
+/** A session row from the daemon's persistent history (`GET /api/sessions`).
+ * Live sessions and past sessions share this shape so clients can render
+ * one list; `eventCount`/`byteCount` come from the transcript store. */
+export interface SessionSummary {
+  id: string;
+  type: AgentType;
+  projectPath: string;
+  status: AgentStatus;
+  mode?: 'pty' | 'sdk';
+  title?: string;
+  createdAt: string;
+  /** Last activity (event/output seen), ISO string. */
+  updatedAt: string;
+  stoppedAt?: string;
+  archivedAt?: string;
+  eventCount: number;
+}
+
+export interface SessionListResponse {
+  sessions: SessionSummary[];
+  total: number;
+  hasMore: boolean;
 }
 
 export interface HostInfoResponse {

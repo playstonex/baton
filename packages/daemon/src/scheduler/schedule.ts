@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { AgentType } from '@baton/shared';
 import type { AgentManager } from '../agent/manager.js';
 import { createAdapter } from '../agent/index.js';
 import { nextFireDelayMs } from './cron.js';
@@ -132,11 +133,11 @@ export class ScheduleService {
   private async runSchedule(schedule: ScheduleConfig): Promise<void> {
     try {
       const adapter = createAdapter(
-        schedule.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
+        schedule.agentType as AgentType,
       );
       const sessionId = await this.agentManager.start(
         {
-          type: schedule.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
+          type: schedule.agentType as AgentType,
           projectPath: schedule.projectPath,
         },
         adapter,

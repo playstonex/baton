@@ -22,7 +22,7 @@ async function providerList(): Promise<void> {
       );
     const types = [...new Set(agents.map((a) => a.type))];
     console.log('Available providers:');
-    for (const t of types.length ? types : ['claude-code', 'codex', 'opencode', 'kiro-cli']) {
+    for (const t of types.length ? types : ['claude-code', 'codex', 'opencode', 'kiro', 'antigravity', 'pi']) {
       console.log(`  ${t}`);
     }
   } catch {
@@ -30,7 +30,9 @@ async function providerList(): Promise<void> {
     console.log('  claude-code');
     console.log('  codex');
     console.log('  opencode');
-    console.log('  kiro-cli');
+    console.log('  kiro');
+  console.log('  antigravity');
+  console.log('  pi');
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { AgentProcess, AgentType } from '@baton/shared';
+import type { AgentProcess, AgentType, SessionSummary } from '@baton/shared';
 import { SystemStats } from '../components/SystemStats.js';
 import { wsService } from '../services/websocket.js';
 import { useAgentStore } from '../stores/connection.js';
@@ -30,9 +30,19 @@ const AGENT_OPTIONS: {
     desc: 'Flexible open-source runtime for portable workflows.',
   },
   {
-    type: 'kiro-cli',
-    label: 'Kiro CLI',
+    type: 'kiro',
+    label: 'Kiro',
     desc: 'Amazon Kiro agent for spec-driven development.',
+  },
+  {
+    type: 'antigravity',
+    label: 'Antigravity',
+    desc: "Google's terminal agent from the Antigravity IDE (agy).",
+  },
+  {
+    type: 'pi',
+    label: 'Pi',
+    desc: 'Minimalist, extensible coding agent (pi).',
   },
 ];
 
@@ -50,6 +60,8 @@ export function DashboardScreen() {
   const [mode, setMode] = useState<'chat' | 'terminal'>('chat');
   const [loading, setLoading] = useState(false);
   const [daemonOnline, setDaemonOnline] = useState(false);
+  const [pastSessions, setPastSessions] = useState<SessionSummary[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Generic ACP providers become selectable agent options when configured.
   useEffect(() => {
@@ -101,8 +113,11 @@ export function DashboardScreen() {
             type: agent.type as AgentProcess['type'],
             projectPath: agent.projectPath,
             status: agent.status as AgentProcess['status'],
-            startedAt: '',
+            startedAt: agent.startedAt ?? '',
             mode: agent.mode,
+            title: agent.title,
+            lastActivityAt: agent.lastActivityAt,
+            stoppedAt: agent.stoppedAt,
           })),
         );
       }
@@ -127,6 +142,32 @@ export function DashboardScreen() {
       unsubState();
     };
   }, [setAgents, updateAgentStatus]);
+
+  // Past sessions come from the daemon's persistent store — they survive
+  // daemon restarts, unlike the in-memory live list.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/sessions?limit=50${showArchived ? '&includeArchived=1' : ''}`, {
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: { sessions: SessionSummary[] }) => setPastSessions(data.sessions))
+      .catch(() => {
+        // daemon offline — keep whatever we had
+      });
+    return () => controller.abort();
+  }, [showArchived, daemonOnline, agents]);
+
+  async function archiveSession(id: string) {
+    setPastSessions((prev) => prev.filter((s) => s.id !== id));
+    await fetch(`/api/agents/${id}/archive`, { method: 'POST' }).catch(() => {});
+  }
+
+  async function deleteSession(id: string) {
+    setPastSessions((prev) => prev.filter((s) => s.id !== id));
+    removeAgent(id);
+    await fetch(`/api/agents/${id}`, { method: 'DELETE' }).catch(() => {});
+  }
 
   async function startAgent() {
     if (!projectPath.trim()) return;
@@ -171,11 +212,16 @@ export function DashboardScreen() {
   async function stopAgent(id: string) {
     try {
       await fetch(`/api/agents/${id}/stop`, { method: 'POST' });
-      removeAgent(id);
+      // Keep the row — the daemon broadcasts a fresh agent_list marking it
+      // stopped, and it moves to the history section below.
     } catch {
       // ignore
     }
   }
+
+  const activeAgents = agents.filter((a) => a.status !== 'stopped');
+  const liveIds = new Set(activeAgents.map((a) => a.id));
+  const pastList = pastSessions.filter((s) => !liveIds.has(s.id) && (!s.archivedAt || showArchived));
 
   return (
     <div className="max-w-4xl space-y-8">
@@ -250,10 +296,10 @@ export function DashboardScreen() {
       <div>
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-[13px] font-semibold text-fg">Active sessions</h2>
-          <span className="text-xs tabular-nums text-meta">{agents.length} total</span>
+          <span className="text-xs tabular-nums text-meta">{activeAgents.length} total</span>
         </div>
 
-        {agents.length === 0 ? (
+        {activeAgents.length === 0 ? (
           <EmptyState
             icon={<IconServer className="h-5 w-5" />}
             title="No active sessions"
@@ -261,7 +307,7 @@ export function DashboardScreen() {
           />
         ) : (
           <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
-            {agents.map((agent) => (
+            {activeAgents.map((agent) => (
               <AgentCard
                 key={agent.id}
                 agent={agent}
@@ -273,6 +319,41 @@ export function DashboardScreen() {
                   )
                 }
                 onStop={() => stopAgent(agent.id)}
+              />
+            ))}
+          </Card>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-4 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-fg">Recent sessions</h2>
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="text-xs text-muted transition-colors duration-150 hover:text-fg"
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </button>
+        </div>
+
+        {pastList.length === 0 ? (
+          <EmptyState
+            icon={<IconServer className="h-5 w-5" />}
+            title="No past sessions"
+            description="Finished sessions are kept here with their transcripts."
+          />
+        ) : (
+          <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
+            {pastList.map((session) => (
+              <PastSessionRow
+                key={session.id}
+                session={session}
+                onOpen={() =>
+                  navigate(session.mode === 'sdk' ? `/chat/${session.id}` : `/terminal/${session.id}`)
+                }
+                onArchive={() => archiveSession(session.id)}
+                onDelete={() => deleteSession(session.id)}
               />
             ))}
           </Card>
@@ -322,7 +403,6 @@ function AgentCard({
   onOpen: () => void;
   onStop: () => void;
 }) {
-  const isStopped = agent.status === 'stopped';
   const label = AGENT_OPTIONS.find((option) => option.type === agent.type)?.label ?? agent.type;
 
   return (
@@ -331,22 +411,83 @@ function AgentCard({
         <StatusDot status={agent.status} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-medium text-fg">{label}</span>
+            <span className="truncate text-[13px] font-medium text-fg">
+              {agent.title ?? label}
+            </span>
             <StatusBadge status={agent.status} />
           </div>
           <div className="mt-0.5 truncate font-mono text-xs text-muted">
+            {label !== (agent.title ?? label) ? `${label} · ` : ''}
             {agent.projectPath}
           </div>
         </div>
       </button>
 
-      {!isStopped && (
         <div className="pr-5">
           <Button size="sm" variant="error" onClick={onStop}>
             Stop
           </Button>
         </div>
-      )}
+      </div>
+  );
+}
+
+function relativeTime(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return '';
+  const diff = Date.now() - then;
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(then).toLocaleDateString();
+}
+
+function PastSessionRow({
+  session,
+  onOpen,
+  onArchive,
+  onDelete,
+}: {
+  session: SessionSummary;
+  onOpen: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const label =
+    AGENT_OPTIONS.find((option) => option.type === session.type)?.label ?? session.type;
+
+  return (
+    <div className="flex items-center justify-between transition-colors duration-150 hover:bg-raised/50">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 px-5 py-3 text-left">
+        <StatusDot status={session.status} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`truncate text-[13px] font-medium ${session.archivedAt ? 'text-muted line-through' : 'text-fg'}`}>
+              {session.title ?? `${label} session`}
+            </span>
+            <span className="shrink-0 text-[11px] text-meta">
+              {relativeTime(session.updatedAt)}
+              {session.eventCount > 0 ? ` · ${session.eventCount} events` : ''}
+            </span>
+          </div>
+          <div className="mt-0.5 truncate font-mono text-xs text-muted">
+            {label} · {session.projectPath}
+          </div>
+        </div>
+      </button>
+
+      <div className="flex shrink-0 items-center gap-2 pr-5">
+        <Button size="sm" variant="tertiary" onClick={onArchive}>
+          Archive
+        </Button>
+        <Button size="sm" variant="error" onClick={onDelete}>
+          Delete
+        </Button>
+      </div>
     </div>
   );
 }

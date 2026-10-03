@@ -1,3 +1,4 @@
+import type { AgentType } from '@baton/shared';
 import type { AgentManager } from '../agent/manager.js';
 import { createAdapter } from '../agent/index.js';
 
@@ -55,10 +56,10 @@ export class LoopService {
       loop.currentIteration++;
 
       try {
-        const adapter = createAdapter(loop.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli');
+        const adapter = createAdapter(loop.agentType as AgentType);
         const sessionId = await this.agentManager.start(
           {
-            type: loop.agentType as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli',
+            type: loop.agentType as AgentType,
             projectPath: loop.projectPath,
           },
           adapter,

@@ -38,6 +38,7 @@ import type { ResponsesApiRequest } from './api-converter/types.js';
 import { acquirePid, releasePid, DaemonAlreadyRunningError, BATON_VERSION } from '@baton/shared';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
+  ProviderProfile,
   StartAgentRequest,
   HostInfoResponse,
   ParsedEvent,
@@ -126,6 +127,14 @@ export function createDaemon(port = DEFAULT_PORT) {
     onAccessModeChange: (mode) => {
       pushService.setAccessMode(mode);
     },
+  });
+  // Any session change (started/stopped/archived/renamed — from ANY path:
+  // HTTP, WS, MCP, scheduler, orchestrator) pushes a fresh agent_list to all
+  // connected clients. Previously only WS-open did, so dashboards never saw
+  // sessions spawned by other clients.
+  agentManager.onAgentsChanged(() => {
+    transport.broadcastAgentList();
+    syncActiveAgents();
   });
   const watchers = new Map<string, FileWatcher>();
   let relayConnection: RelayConnection | null = null;
@@ -377,11 +386,74 @@ export function createDaemon(port = DEFAULT_PORT) {
     await agentManager.stop(id);
     compressor.clear(id);
     syncActiveAgents();
+    transport.handleSessionStopped(id);
     return c.json({ ok: true });
   });
 
   app.get('/api/agents', (c) => {
     return c.json(agentManager.list());
+  });
+
+  // Persistent session directory — live + past sessions from the store,
+  // newest activity first. This is the source of truth for "session history"
+  // views; /api/agents above remains the live-only list (stable contract).
+  app.get('/api/sessions', (c) => {
+    const limit = parseInt(c.req.query('limit') ?? '50', 10);
+    const offset = parseInt(c.req.query('offset') ?? '0', 10);
+    const includeArchived = c.req.query('includeArchived') === '1';
+    const archivedOnly = c.req.query('archivedOnly') === '1';
+    const projectPath = c.req.query('projectPath') ?? undefined;
+    return c.json(agentManager.listSessions({ limit, offset, includeArchived, archivedOnly, projectPath }));
+  });
+
+  app.delete('/api/agents/:id', async (c) => {
+    try {
+      await agentManager.delete(c.req.param('id'));
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Failed to delete session' },
+        404,
+      );
+    }
+  });
+
+  app.post('/api/agents/:id/archive', async (c) => {
+    try {
+      await agentManager.archive(c.req.param('id'));
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Failed to archive session' },
+        404,
+      );
+    }
+  });
+
+  app.post('/api/agents/:id/unarchive', async (c) => {
+    try {
+      await agentManager.unarchive(c.req.param('id'));
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Failed to unarchive session' },
+        404,
+      );
+    }
+  });
+
+  app.patch('/api/agents/:id', async (c) => {
+    const body = await c.req.json<{ title?: string }>().catch(() => ({}) as { title?: string });
+    if (!body.title?.trim()) return c.json({ error: 'title is required' }, 400);
+    try {
+      agentManager.setTitle(c.req.param('id'), body.title);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Failed to rename session' },
+        404,
+      );
+    }
   });
 
   app.get('/api/agents/:id', (c) => {
@@ -877,7 +949,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       models?: string[];
     }>();
     await providerRegistry.set(body.name, {
-      type: body.type as 'claude-code' | 'codex' | 'opencode' | 'kiro-cli' | 'custom',
+      type: body.type as ProviderProfile['type'],
       binary: body.binary,
       args: [],
       env: {},
@@ -1333,15 +1405,12 @@ export async function main() {
   }
 
   const port = parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
-  const { app, transport } = createDaemon(port);
-
-  transport.start();
-
-  const hostname = process.env.HOST || '::';
-  const displayHost = formatHostForUrl(hostname);
 
   // Write our PID so `baton daemon stop/status` and companions can find us.
-  // Refuses to start if a live daemon is already running on this host.
+  // Refuses to start if a live daemon is already running on this host —
+  // before any port is bound, so a refused duplicate never prints
+  // "listening" banners (and a dying `--watch` predecessor is reclaimed
+  // inside acquirePid's grace window).
   try {
     await acquirePid();
   } catch (err) {
@@ -1352,6 +1421,13 @@ export async function main() {
     }
     throw err;
   }
+
+  const { app, transport } = createDaemon(port);
+
+  transport.start();
+
+  const hostname = process.env.HOST || '::';
+  const displayHost = formatHostForUrl(hostname);
 
   Bun.serve({
     // Expose the socket peer address to handlers (c.env.requestIP) — used by

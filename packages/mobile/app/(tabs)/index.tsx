@@ -47,18 +47,25 @@ const AGENT_OPTIONS: {
   { type: 'codex', label: 'Codex', desc: 'Fast execution', icon: 'terminal', color: '#10A37F' },
   { type: 'opencode', label: 'OpenCode', desc: 'Open stack', icon: 'code-slash', color: '#6366F1' },
   {
-    type: 'kiro-cli',
-    label: 'Kiro CLI',
+    type: 'kiro',
+    label: 'Kiro',
     desc: 'Amazon Kiro agent',
     icon: 'rocket',
     color: '#FF9900',
   },
   {
-    type: 'kiro-cli-acp',
-    label: 'Kiro ACP',
-    desc: 'Structured ACP mode',
-    icon: 'rocket',
-    color: '#FF9900',
+    type: 'antigravity',
+    label: 'Antigravity',
+    desc: "Google's terminal agent",
+    icon: 'planet-outline',
+    color: '#4285F4',
+  },
+  {
+    type: 'pi',
+    label: 'Pi',
+    desc: 'Minimal coding agent',
+    icon: 'flask-outline',
+    color: '#8B5CF6',
   },
 ];
 
@@ -116,7 +123,7 @@ export default function DashboardScreen() {
   const removeAgent = useAgentStore((s) => s.removeAgent);
   const connected = useConnectionStore((s) => s.connected);
   const hasSavedServers = useConnectionStore((s) => s.hosts.length > 0);
-  const { sessions, addSession, removeSession } = useRecentStore();
+  const { sessions, addSession, addSessions, removeSession } = useRecentStore();
   const [projectPath, setProjectPath] = useState('');
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   /** Which ~/.baton/acp.json provider when agentType === 'acp'. */
@@ -147,12 +154,33 @@ export default function DashboardScreen() {
           type: agent.type,
           projectPath: agent.projectPath,
           lastActivity: Date.now(),
+          title: agent.title,
         });
       }
     } catch {
       // offline
     }
-  }, [setAgents, addSession]);
+    // Server-backed session history: the daemon's persistent store knows
+    // about sessions started from other clients and before daemon restarts —
+    // the purely local recent list never did.
+    try {
+      const data = await apiFetch<{ sessions: import('@baton/shared').SessionSummary[] }>(
+        '/api/sessions?limit=50',
+      );
+      addSessions(
+        data.sessions.map((s) => ({
+          id: s.id,
+          type: s.type,
+          projectPath: s.projectPath,
+          lastActivity: Date.parse(s.updatedAt) || Date.now(),
+          title: s.title,
+          chatMode: s.mode === 'sdk' ? 'chat' : 'terminal',
+        })),
+      );
+    } catch {
+      // offline — local history stays as the fallback
+    }
+  }, [setAgents, addSession, addSessions]);
 
   // Generic ACP providers become selectable agent options when configured.
   useEffect(() => {
@@ -173,7 +201,8 @@ export default function DashboardScreen() {
             type: agent.type as AgentProcess['type'],
             projectPath: agent.projectPath,
             status: agent.status as AgentProcess['status'],
-            startedAt: '',
+            startedAt: agent.startedAt ?? '',
+            title: agent.title,
           })),
         );
       }
@@ -252,7 +281,8 @@ export default function DashboardScreen() {
   }
 
   function deleteSession(session: RecentSession) {
-    const label = AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type;
+    const label =
+      session.title ?? (AGENT_OPTIONS.find((o) => o.type === session.type)?.label ?? session.type);
     Alert.alert(
       'Remove Session',
       `Remove "${label}" from history?${session.projectPath ? `\n\n${session.projectPath}` : ''}`,
@@ -264,6 +294,9 @@ export default function DashboardScreen() {
           onPress: () => {
             removeSession(session.id);
             setPinnedIds((prev) => prev.filter((x) => x !== session.id));
+            // The daemon keeps the full transcript — delete there too so the
+            // session doesn't reappear on the next server-history merge.
+            apiFetch(`/api/agents/${session.id}`, { method: 'DELETE' }).catch(() => {});
           },
         },
       ],
@@ -412,7 +445,7 @@ export default function DashboardScreen() {
                   style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600', flex: 1 }]}
                   numberOfLines={1}
                 >
-                  {agentOption?.label ?? session.type}
+                  {session.title ?? agentOption?.label ?? session.type}
                 </Text>
                 <Pressable
                   onPress={() => togglePin(session.id)}

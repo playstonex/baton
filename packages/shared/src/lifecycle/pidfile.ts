@@ -60,12 +60,22 @@ export async function readPid(path: string = defaultPidfile()): Promise<number |
  * running (pidfile present AND that PID is alive), throws so the caller can
  * refuse the duplicate start. A stale pidfile (process dead) is reclaimed.
  *
+ * A pid that dies within `DYING_GRACE_MS` is also treated as stale: under
+ * `bun run --watch` the successor starts while the predecessor is still in
+ * its async shutdown (pid alive for a few hundred ms), which would
+ * otherwise deadlock the restart on a pidfile owned by a dying process.
+ *
  * @returns the PID that was written.
  */
+const DYING_GRACE_MS = 1000;
+
 export async function acquirePid(path: string = defaultPidfile()): Promise<number> {
   const existing = await readPid(path);
   if (existing !== null && isProcessAlive(existing)) {
-    throw new DaemonAlreadyRunningError(existing, path);
+    if (!(await waitForExit(existing, DYING_GRACE_MS))) {
+      throw new DaemonAlreadyRunningError(existing, path);
+    }
+    // predecessor finished dying within the grace window — reclaim
   }
 
   const dir = path.slice(0, Math.max(0, path.lastIndexOf('/')));
@@ -75,6 +85,16 @@ export async function acquirePid(path: string = defaultPidfile()): Promise<numbe
   const pid = process.pid;
   await writeFile(path, String(pid), { mode: 0o644 });
   return pid;
+}
+
+/** Poll a pid until it exits or the timeout elapses. */
+async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 50));
+    if (!isProcessAlive(pid)) return true;
+  }
+  return !isProcessAlive(pid);
 }
 
 /** Remove the pidfile if it belongs to the current process. */

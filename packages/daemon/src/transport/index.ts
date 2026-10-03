@@ -144,6 +144,13 @@ export class Transport {
         break;
       }
 
+      case 'ping': {
+        // Clients heartbeat every 30s; before this was schema'd the daemon
+        // answered each one with an INVALID_MESSAGE error frame.
+        this.send(clientId, { type: 'pong' });
+        break;
+      }
+
       case 'terminal_input': {
         try {
           this.agentManager.write(msg.sessionId, msg.data);
@@ -476,13 +483,7 @@ export class Transport {
         if (!msg.sessionId) return;
         try {
           await this.agentManager.stop(msg.sessionId);
-          this.seqBuffers.get(msg.sessionId)?.clear();
-          this.seqBuffers.delete(msg.sessionId);
-          this.broadcast({
-            type: 'status_update',
-            sessionId: msg.sessionId,
-            status: 'stopped',
-          });
+          this.handleSessionStopped(msg.sessionId);
         } catch (err) {
           this.send(clientId, {
             type: 'error',
@@ -515,7 +516,10 @@ export class Transport {
         this.ensureSessionRegistered(msg.sessionId);
 
         try {
-          const history = this.agentManager.getDisplayHistory(msg.sessionId);
+          // Bounded tail replay: deep history lives in the session store and
+          // is reachable via GET /api/sessions — attach must not ship an
+          // unbounded frame for a long-running session.
+          const history = this.agentManager.getDisplayHistoryTail(msg.sessionId);
           if (history.length > 0) {
             this.send(clientId, {
               type: 'history_replay',
@@ -524,7 +528,7 @@ export class Transport {
             });
           }
 
-          const events = this.agentManager.getEventHistory(msg.sessionId);
+          const events = this.agentManager.getEventHistoryTail(msg.sessionId);
           if (events.length > 0) {
             this.send(clientId, {
               type: 'event_history',
@@ -784,8 +788,53 @@ export class Transport {
         status: a.status,
         projectPath: a.projectPath,
         mode: a.mode,
+        title: a.title,
+        startedAt: a.startedAt,
+        lastActivityAt: a.lastActivityAt,
+        stoppedAt: a.stoppedAt,
       })),
     });
+  }
+
+  /**
+   * Push a fresh agent_list to every connected client. Called whenever the
+   * manager reports a session set/status change, so dashboards opened before
+   * a session was started (via HTTP, MCP, scheduler, orchestrator…) still
+   * see it appear.
+   */
+  broadcastAgentList(): void {
+    const agents = this.agentManager.list();
+    this.broadcast({
+      type: 'agent_list',
+      agents: agents.map((a) => ({
+        id: a.id,
+        type: a.type,
+        status: a.status,
+        projectPath: a.projectPath,
+        mode: a.mode,
+        title: a.title,
+        startedAt: a.startedAt,
+        lastActivityAt: a.lastActivityAt,
+        stoppedAt: a.stoppedAt,
+      })),
+    });
+  }
+
+  /**
+   * Post-stop cleanup shared by every stop path (WS stop_agent, HTTP
+   * POST /api/agents/:id/stop, archive, delete): drop the resume buffer and
+   * tell every client the session ended. Without this, sessions stopped via
+   * HTTP kept their seq buffers subscribed until daemon restart.
+   */
+  handleSessionStopped(sessionId: string): void {
+    this.seqBuffers.get(sessionId)?.clear();
+    this.seqBuffers.delete(sessionId);
+    this.broadcast({
+      type: 'status_update',
+      sessionId,
+      status: 'stopped',
+    });
+    this.broadcastAgentList();
   }
 
   send(clientId: string, msg: DaemonMessage): void {

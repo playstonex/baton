@@ -2,7 +2,16 @@ import { z } from 'zod';
 
 // Single provider profile (e.g., "claude-opus", "qwen")
 export const ProviderProfileSchema = z.object({
-  type: z.enum(['claude-code', 'codex', 'opencode', 'kiro-cli', 'custom']),
+  type: z.enum([
+    'claude-code',
+    'codex',
+    'opencode',
+    'kiro',
+    'kiro-cli', // legacy alias
+    'antigravity',
+    'pi',
+    'custom',
+  ]),
   binary: z.string().optional(),
   args: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()).default({}),

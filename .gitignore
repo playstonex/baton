@@ -46,3 +46,6 @@ bun.lock
 
 # Local agent-tool state (hook snapshots, finding ledgers) — never commit
 .mimosa/
+
+# Kiro IDE local settings (auto-created when kiro-cli runs)
+.kiro/
