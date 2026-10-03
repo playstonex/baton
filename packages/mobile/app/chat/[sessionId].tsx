@@ -14,6 +14,8 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   ScrollView,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -29,13 +31,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
 import { apiFetch } from '../../src/services/api';
 import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Glass, Shadows } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
-import { GlassButton } from '../../src/components/GlassKit';
 import {
   ComposerSettingsSheet,
   type ThinkingMode,
@@ -96,7 +98,78 @@ const EMPTY_SUGGESTIONS: Array<{
 
 const isRunning = (s: string) => s === 'running' || s === 'thinking' || s === 'executing';
 
-const HEADER_HEIGHT = 48;
+/** Fire-and-forget tactile ticks — iOS-style, never block the interaction. */
+const tapLight = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+const tapMedium = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+const HEADER_HEIGHT = 44;
+
+/**
+ * System chrome material — the same recipe as the floating tab bar, so the
+ * nav-bar button group, composer, scroll pill and banners all read as one
+ * continuous layer of iOS 26 glass over the transcript.
+ */
+function GlassCapsule({
+  c,
+  radius = 999,
+  intensity,
+  style,
+  contentStyle,
+  children,
+}: {
+  c: ThemeColors;
+  radius?: number;
+  intensity?: number;
+  style?: StyleProp<ViewStyle>;
+  contentStyle?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          borderRadius: radius,
+          shadowColor: '#08090a',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: c.isDark ? 0.12 : 0.06,
+          shadowRadius: 6,
+          elevation: 4,
+        },
+        style,
+      ]}
+    >
+      <BlurView
+        tint={c.isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
+        intensity={intensity ?? Glass.blur.tabBar}
+        style={{ borderRadius: radius, overflow: 'hidden' }}
+      >
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: c.isDark ? 'rgba(25,26,29,0.96)' : 'rgba(252,253,254,0.94)',
+              borderRadius: radius,
+            },
+          ]}
+          pointerEvents="none"
+        />
+        {/* Specular rim — brightest at top, uniform hairline in RN. */}
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: radius,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.62)',
+            },
+          ]}
+          pointerEvents="none"
+        />
+        <View style={contentStyle}>{children}</View>
+      </BlurView>
+    </View>
+  );
+}
 
 /** Breathing halo behind the running status dot — iOS-style live indicator. */
 function PulsingDot({ color }: { color: string }) {
@@ -549,6 +622,7 @@ export default function ChatScreen() {
 
   function sendChat() {
     if (!input.trim() || !sessionId) return;
+    tapLight();
     if (input.trim() === '/review') {
       setInput('');
       setShowDiffReview(true);
@@ -576,6 +650,7 @@ export default function ChatScreen() {
 
   function sendSteer() {
     if (!input.trim() || !sessionId) return;
+    tapLight();
     addUserMessage(input.trim());
     wsService.send({ type: 'steer_input', sessionId, content: input.trim() });
     setInput('');
@@ -583,11 +658,13 @@ export default function ChatScreen() {
 
   function cancelTurn() {
     if (!sessionId) return;
+    tapMedium();
     wsService.send({ type: 'cancel_turn', sessionId });
   }
 
   function approveAction(requestId?: string) {
     if (!sessionId) return;
+    tapLight();
     const reqId = requestId ?? activePermission?.requestId;
     if (reqId) {
       wsService.send({
@@ -605,6 +682,7 @@ export default function ChatScreen() {
 
   function rejectAction(requestId?: string) {
     if (!sessionId) return;
+    tapMedium();
     const reqId = requestId ?? activePermission?.requestId;
     if (reqId) {
       wsService.send({
@@ -844,15 +922,26 @@ export default function ChatScreen() {
           <View style={styles.headerContent}>
             <Pressable
               onPress={() => router.back()}
-              style={({ pressed }) => [styles.headerAction, { opacity: pressed ? 0.4 : 1 }]}
+              style={({ pressed }) => [
+                styles.headerAction,
+                styles.headerBack,
+                {
+                  opacity: pressed ? 0.55 : 1,
+                  transform: [{ scale: pressed ? 0.9 : 1 }],
+                },
+              ]}
               hitSlop={4}
-              accessibilityLabel="Collapse"
+              accessibilityLabel="Back"
             >
-              <Ionicons name="chevron-down" size={20} color={c.textSecondary} />
+              <Ionicons
+                name="chevron-back"
+                size={22}
+                color={c.isDark ? Colors.primary[300] : Colors.primary[500]}
+              />
             </Pressable>
             <Pressable
               onPress={() => setShowDiffReview(true)}
-              style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
             >
               <View style={styles.headerNameRow}>
                 <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
@@ -873,66 +962,90 @@ export default function ChatScreen() {
                   : ''}
               </Text>
             </Pressable>
-            <View style={styles.spacer} />
 
-            {gitStatus.trim().length > 0 && (
+            {/* iOS 26 merged button group — one chrome capsule, hairline lenses. */}
+            <GlassCapsule c={c} style={styles.headerGroup} contentStyle={styles.headerGroupContent}>
+              {gitStatus.trim().length > 0 && (
+                <>
+                  <Pressable
+                    onPress={() => setShowDiffReview(true)}
+                    style={({ pressed }) => [
+                      styles.headerGroupBtn,
+                      {
+                        opacity: pressed ? 0.55 : 1,
+                        transform: [{ scale: pressed ? 0.9 : 1 }],
+                      },
+                    ]}
+                    hitSlop={4}
+                    accessibilityLabel="Review changes"
+                  >
+                    <Ionicons name="git-compare-outline" size={15} color={c.textSecondary} />
+                    <Text style={[styles.headerGroupCount, { color: c.textSecondary }]}>
+                      {gitStatus.split('\n').filter(Boolean).length}
+                    </Text>
+                  </Pressable>
+                  <View
+                    style={[
+                      styles.groupDivider,
+                      {
+                        backgroundColor: c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                      },
+                    ]}
+                  />
+                </>
+              )}
               <Pressable
-                onPress={() => setShowDiffReview(true)}
+                onPress={toggleSessionControl}
                 style={({ pressed }) => [
-                  styles.headerDiffPill,
+                  styles.headerGroupBtn,
                   {
-                    backgroundColor: Colors.primary[500] + (c.isDark ? '24' : '14'),
                     opacity: pressed ? 0.55 : 1,
+                    transform: [{ scale: pressed ? 0.9 : 1 }],
                   },
                 ]}
                 hitSlop={4}
+                accessibilityLabel={
+                  sessionOwner === 'remote' ? 'Yield control to desktop' : 'Take control'
+                }
               >
-                <Ionicons name="git-compare-outline" size={12} color={Colors.primary[400]} />
-                <Text style={[styles.headerDiffPillText, { color: Colors.primary[400] }]}>
-                  {gitStatus.split('\n').filter(Boolean).length}
-                </Text>
-              </Pressable>
-            )}
-
-            <Pressable
-              onPress={toggleSessionControl}
-              style={({ pressed }) => [
-                styles.headerControlPill,
-                {
-                  backgroundColor:
+                <Ionicons
+                  name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
+                  size={15}
+                  color={
                     sessionOwner === 'remote'
-                      ? c.successBg
-                      : c.isDark
-                        ? Glass.opacity.dark.subtle
-                        : Glass.opacity.light.subtle,
-                  opacity: pressed ? 0.55 : 1,
-                },
-              ]}
-              hitSlop={4}
-            >
-              <Ionicons
-                name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
-                size={12}
-                color={sessionOwner === 'remote' ? Colors.success[400] : c.textTertiary}
-              />
-              <Text
+                      ? Colors.success[400]
+                      : c.textSecondary
+                  }
+                />
+              </Pressable>
+              <View
                 style={[
-                  styles.headerControlText,
-                  { color: sessionOwner === 'remote' ? Colors.success[400] : c.textTertiary },
+                  styles.groupDivider,
+                  {
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                  },
                 ]}
+              />
+              <Pressable
+                ref={moreBtnRef}
+                onPress={openMoreMenu}
+                style={({ pressed }) => [
+                  styles.headerGroupBtn,
+                  {
+                    opacity: pressed ? 0.55 : 1,
+                    transform: [{ scale: pressed ? 0.9 : 1 }],
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="More actions"
               >
-                {sessionOwner === 'remote' ? 'Mobile' : 'Take Control'}
-              </Text>
-            </Pressable>
-            <Pressable
-              ref={moreBtnRef}
-              onPress={openMoreMenu}
-              style={({ pressed }) => [styles.headerAction, { opacity: pressed ? 0.4 : 1 }]}
-              hitSlop={4}
-              accessibilityLabel="More actions"
-            >
-              <Ionicons name="ellipsis-horizontal" size={18} color={c.textSecondary} />
-            </Pressable>
+                <Ionicons name="ellipsis-horizontal" size={15} color={c.textSecondary} />
+              </Pressable>
+            </GlassCapsule>
           </View>
           {/* Hairline under the glass nav — separates it from scrolling content. */}
           <View
@@ -952,21 +1065,9 @@ export default function ChatScreen() {
         <View style={styles.contentArea}>
           {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <View
-            style={[
-              styles.emptyOrb,
-              {
-                backgroundColor: Colors.primary[500] + (c.isDark ? '30' : '12'),
-                borderWidth: 1,
-                borderColor: Colors.primary[500] + (c.isDark ? '59' : '2E'),
-              },
-            ]}
-          >
-            <Text style={[styles.emptyOrbGlyph, { color: Colors.primary[400] }]}>{'\u276F'}</Text>
-          </View>
-          <Text style={styles.emptyTitle}>Start a conversation</Text>
-          <Text style={styles.emptySub}>
-            Remote-control your coding agent — ask, review, steer.
+          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>What should we work on?</Text>
+          <Text style={[styles.emptySub, { color: c.textTertiary }]}>
+            Steer your coding agent from anywhere.
           </Text>
           <View style={styles.suggestionList}>
             {EMPTY_SUGGESTIONS.map((s) => (
@@ -982,14 +1083,18 @@ export default function ChatScreen() {
                 }}
                 style={({ pressed }) => [
                   styles.suggestionItem,
-                  { backgroundColor: c.subtle, opacity: pressed ? 0.55 : 1 },
+                  {
+                    opacity: pressed ? 0.7 : 1,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
+                  },
                 ]}
               >
-                <Ionicons name={s.icon} size={16} color={c.textTertiary} />
-                <Text style={[styles.suggestionText, { color: c.textSecondary }]} numberOfLines={1}>
+                <View style={[styles.suggestionIconWrap, { backgroundColor: c.accentBg }]}>
+                  <Ionicons name={s.icon} size={13} color={Colors.primary[400]} />
+                </View>
+                <Text style={[styles.suggestionText, { color: c.textPrimary }]} numberOfLines={1}>
                   {s.text}
                 </Text>
-                <Ionicons name="chevron-forward" size={13} color={c.textTertiary} />
               </Pressable>
             ))}
           </View>
@@ -1029,26 +1134,19 @@ export default function ChatScreen() {
             }
           />
           <Animated.View
-            style={[
-              styles.scrollToBottomBtn,
-              scrollBtnStyle,
-              {
-                bottom: insets.bottom + 140,
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.elevated
-                  : Glass.opacity.light.elevated,
-              },
-            ]}
+            style={[styles.scrollToBottomBtn, scrollBtnStyle, { bottom: insets.bottom + 140 }]}
             pointerEvents={isNearBottom ? 'none' : 'auto'}
           >
-            <Pressable
-              onPress={scrollToBottom}
-              hitSlop={4}
-              style={StyleSheet.absoluteFill}
-              accessibilityLabel="Scroll to latest"
-            >
-              <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
-            </Pressable>
+            <GlassCapsule c={c} style={styles.scrollToBottomGlass} contentStyle={styles.scrollPillContent}>
+              <Pressable
+                onPress={scrollToBottom}
+                hitSlop={4}
+                style={StyleSheet.absoluteFill}
+                accessibilityLabel="Scroll to latest"
+              >
+                <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
+              </Pressable>
+            </GlassCapsule>
           </Animated.View>
         </View>
         )}
@@ -1084,44 +1182,61 @@ export default function ChatScreen() {
       )}
 
       {promptQueue.length > 0 && (
-        <Animated.View
-          entering={FadeInDown.duration(Glass.morph.fast)}
-          style={[styles.queueStrip, { backgroundColor: c.subtle }]}
-        >
-          <View style={styles.queueHeaderRow}>
-            <View style={styles.queueTitleGroup}>
-              <Ionicons name="time-outline" size={13} color={Colors.primary[400]} />
-              <Text style={[styles.queueTag, { color: Colors.primary[400] }]}>Queued</Text>
-              <Text style={[styles.queueCountText, { color: c.textTertiary }]}>
-                {promptQueue.length}
-              </Text>
-            </View>
-            <Pressable onPress={clearQueue} hitSlop={6}>
-              <Text style={[Typography.caption2, { color: c.textTertiary, fontWeight: '600' }]}>
-                Clear
-              </Text>
-            </Pressable>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.queueChipsContainer}
+        <Animated.View entering={FadeInDown.duration(Glass.morph.fast)}>
+          <GlassCapsule
+            c={c}
+            intensity={Glass.blur.card}
+            style={styles.queueStrip}
+            contentStyle={styles.queueStripContent}
           >
-            {promptQueue.map((item, idx) => (
-              <View
-                key={idx}
-                style={[styles.queueChip, { backgroundColor: c.elevated }]}
-              >
-                <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
-                <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
-                  {item}
+            <View style={styles.queueHeaderRow}>
+              <View style={styles.queueTitleGroup}>
+                <Ionicons name="time-outline" size={13} color={Colors.primary[400]} />
+                <Text style={[styles.queueTag, { color: Colors.primary[400] }]}>Queued</Text>
+                <Text style={[styles.queueCountText, { color: c.textTertiary }]}>
+                  {promptQueue.length}
                 </Text>
-                <Pressable onPress={() => removeQueuedPrompt(idx)} hitSlop={6}>
-                  <Ionicons name="close-circle" size={14} color={c.textTertiary} />
-                </Pressable>
               </View>
-            ))}
-          </ScrollView>
+              <Pressable
+                onPress={clearQueue}
+                hitSlop={6}
+                style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+              >
+                <Text
+                  style={[
+                    Typography.caption2,
+                    { color: c.isDark ? Colors.primary[300] : Colors.primary[500], fontWeight: '600' },
+                  ]}
+                >
+                  Clear
+                </Text>
+              </Pressable>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.queueChipsContainer}
+            >
+              {promptQueue.map((item, idx) => (
+                <View
+                  key={idx}
+                  style={[styles.queueChip, { backgroundColor: c.subtle }]}
+                >
+                  <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
+                  <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
+                    {item}
+                  </Text>
+                  <Pressable
+                    onPress={() => removeQueuedPrompt(idx)}
+                    hitSlop={6}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+                  >
+                    <Ionicons name="close-circle" size={14} color={c.textTertiary} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          </GlassCapsule>
         </Animated.View>
       )}
 
@@ -1137,7 +1252,8 @@ export default function ChatScreen() {
           />
         )}
 
-        <View style={[styles.composerField, { backgroundColor: c.subtle }]}>
+        {/* Messages-grade glass capsule: tune · input · send/stop/steer. */}
+        <GlassCapsule c={c} style={styles.composerCapsule} contentStyle={styles.composerContent}>
           <Pressable
             onPress={() => {
               wsService.send({ type: 'model_list_request', sessionId });
@@ -1147,16 +1263,17 @@ export default function ChatScreen() {
               styles.tuneButton,
               {
                 backgroundColor: c.isDark
-                  ? 'rgba(25,26,29,0.85)'
-                  : 'rgba(255,255,255,0.92)',
-                opacity: pressed ? 0.55 : 1,
+                  ? 'rgba(255,255,255,0.08)'
+                  : 'rgba(60,60,67,0.07)',
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.9 : 1 }],
               },
             ]}
             hitSlop={4}
             accessibilityLabel="Composer settings"
           >
-            <Ionicons name="reorder-three-outline" size={16} color={c.textSecondary} />
-            <View style={[styles.tuneBadge, { backgroundColor: Colors.primary[500] }]}>
+            <Ionicons name="options-outline" size={18} color={c.textSecondary} />
+            <View style={styles.tuneBadge}>
               <Text style={styles.tuneBadgeText}>{thinkingBadge}</Text>
             </View>
           </Pressable>
@@ -1179,7 +1296,7 @@ export default function ChatScreen() {
               }
             }}
             returnKeyType="send"
-            placeholder={running ? 'Type to queue next prompt...' : 'Ask anything...'}
+            placeholder={running ? 'Queue a message…' : 'Message'}
             placeholderTextColor={c.textTertiary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -1191,12 +1308,16 @@ export default function ChatScreen() {
               onPress={cancelTurn}
               style={({ pressed }) => [
                 styles.sendButton,
-                { backgroundColor: c.subtle, opacity: pressed ? 0.55 : 1 },
+                {
+                  backgroundColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(60,60,67,0.09)',
+                  opacity: pressed ? 0.7 : 1,
+                  transform: [{ scale: pressed ? 0.88 : 1 }],
+                },
               ]}
               hitSlop={4}
               accessibilityLabel="Stop"
             >
-              <Ionicons name="stop" size={13} color={Colors.danger[400]} />
+              <Ionicons name="stop" size={15} color={Colors.danger[400]} />
             </Pressable>
           ) : (
             <Pressable
@@ -1212,8 +1333,14 @@ export default function ChatScreen() {
               style={({ pressed }) => [
                 styles.sendButton,
                 {
-                  backgroundColor: running || !sendDisabled ? Colors.primary[500] : c.subtle,
-                  opacity: pressed ? 0.7 : 1,
+                  backgroundColor:
+                    running || !sendDisabled
+                      ? Colors.primary[500]
+                      : c.isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(60,60,67,0.07)',
+                  opacity: pressed ? 0.75 : 1,
+                  transform: [{ scale: pressed ? 0.88 : 1 }],
                 },
               ]}
               disabled={!running && sendDisabled}
@@ -1222,12 +1349,14 @@ export default function ChatScreen() {
             >
               <Ionicons
                 name={running ? 'flash' : 'arrow-up'}
-                size={15}
-                color={running || !sendDisabled ? '#ffffff' : c.textTertiary}
+                size={16}
+                color={
+                  running || !sendDisabled ? '#ffffff' : c.textTertiary
+                }
               />
             </Pressable>
           )}
-        </View>
+        </GlassCapsule>
       </Animated.View>
 
       <ComposerSettingsSheet
@@ -1269,14 +1398,7 @@ export default function ChatScreen() {
         <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
           <Pressable style={styles.modalOverlay} onPress={() => setPromptModal(null)}>
             <Pressable
-              style={[
-                styles.promptSheet,
-                {
-                  backgroundColor: c.isDark
-                    ? Glass.opacity.dark.elevated
-                    : Glass.opacity.light.surface,
-                },
-              ]}
+              style={[styles.promptSheet, { backgroundColor: c.isDark ? '#2c2e33' : '#f2f2f6' }]}
               onPress={() => {}}
             >
               <BlurView
@@ -1293,9 +1415,7 @@ export default function ChatScreen() {
                   styles.promptInput,
                   {
                     color: c.textPrimary,
-                    backgroundColor: c.isDark
-                      ? Glass.opacity.dark.subtle
-                      : Glass.opacity.light.subtle,
+                    backgroundColor: c.isDark ? 'rgba(255,255,255,0.10)' : '#ffffff',
                   },
                 ]}
                 placeholder={promptModal.placeholder}
@@ -1309,23 +1429,47 @@ export default function ChatScreen() {
                 }}
                 returnKeyType="done"
               />
-              <View style={styles.promptActions}>
+              {/* UIAlertController-style stacked actions — hairline separated. */}
+              <View style={[styles.promptActions, { borderTopColor: c.separator }]}>
                 <Pressable
                   onPress={() => setPromptModal(null)}
                   style={({ pressed }) => [
-                    styles.promptCancelBtn,
-                    { opacity: pressed ? 0.6 : 1 },
+                    styles.promptActionBtn,
+                    { opacity: pressed ? 0.5 : 1 },
                   ]}
                 >
-                  <Text style={[styles.promptCancelText, { color: c.textSecondary }]}>Cancel</Text>
+                  <Text
+                    style={[
+                      styles.promptActionText,
+                      {
+                        color: c.isDark ? Colors.primary[300] : Colors.primary[500],
+                        fontWeight: '400',
+                      },
+                    ]}
+                  >
+                    Cancel
+                  </Text>
                 </Pressable>
-                <GlassButton
-                  c={c}
-                  label="Done"
+                <View style={[styles.promptActionDivider, { backgroundColor: c.separator }]} />
+                <Pressable
                   onPress={() => setPromptModal(null)}
-                  variant="primary"
-                  style={styles.promptDoneBtn}
-                />
+                  style={({ pressed }) => [
+                    styles.promptActionBtn,
+                    { opacity: pressed ? 0.5 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.promptActionText,
+                      {
+                        color: c.isDark ? Colors.primary[300] : Colors.primary[500],
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    Done
+                  </Text>
+                </Pressable>
               </View>
             </Pressable>
           </Pressable>
@@ -1333,24 +1477,11 @@ export default function ChatScreen() {
       )}
 
       {errorToast && (
-        <View style={styles.errorToast}>
-          <BlurView
-            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-            intensity={Glass.blur.modal}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: Colors.danger[400] + '26',
-                borderRadius: CornerRadius.medium,
-              },
-            ]}
-            pointerEvents="none"
-          />
-          <Ionicons name="warning-outline" size={14} color={Colors.danger[400]} />
-          <Text style={[styles.errorToastText, { color: Colors.danger[400] }]}>{errorToast}</Text>
+        <View style={styles.errorToast} pointerEvents="box-none">
+          <GlassCapsule c={c} style={styles.errorToastCapsule} contentStyle={styles.errorToastContent}>
+            <Ionicons name="warning-outline" size={14} color={Colors.danger[400]} />
+            <Text style={[styles.errorToastText, { color: Colors.danger[400] }]}>{errorToast}</Text>
+          </GlassCapsule>
         </View>
       )}
 
@@ -1502,19 +1633,18 @@ function MessageBubble({
   if (msg.role === 'user') {
     const isLong = msg.content.length > 360 || (msg.content.match(/\n/g) ?? []).length > 8;
     return (
-      <Pressable onLongPress={onLongPress} delayLongPress={300}>
+      <Pressable
+        onLongPress={onLongPress}
+        delayLongPress={300}
+        style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}
+      >
         <View style={styles.userRow}>
-          <View style={[styles.userBubble, { backgroundColor: c.subtle }]}>
-            <Text
-              style={[styles.userText, { color: c.textPrimary }]}
-              numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
-            >
+          <View style={[styles.userBubble, { backgroundColor: c.isDark ? Colors.primary[600] : Colors.primary[500] }]}>
+            <Text style={styles.userText} numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}>
               {msg.content}
             </Text>
-            {isLong && (
-              <Text style={[styles.userCollapseHint, { color: c.textTertiary }]}>
-                {msg.isCollapsed ? 'Show more' : ''}
-              </Text>
+            {isLong && msg.isCollapsed && (
+              <Text style={styles.userCollapseHint}>Show more</Text>
             )}
           </View>
         </View>
@@ -1697,88 +1827,97 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    paddingLeft: Spacing.xs + 2,
+    paddingRight: Spacing.md,
+    gap: Spacing.xs + 2,
   },
   headerHairline: {
     height: StyleSheet.hairlineWidth,
   },
   headerTitles: {
-    flexShrink: 1,
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: Spacing.xs,
   },
   headerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
   },
   headerTitle: {
-    fontSize: 14,
-    lineHeight: 17,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '600',
     flexShrink: 1,
   },
   headerSubtitle: {
     ...Typography.caption2,
     marginTop: 1,
-    marginLeft: 25,
+    marginLeft: 22,
   },
   headerMono: {
     fontFamily: FontFamily.mono,
     fontSize: 10.5,
   },
   headerAction: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerDiffPill: {
+  headerBack: {
+    marginRight: 2,
+  },
+  headerGroup: {
+    marginLeft: 'auto',
+  },
+  headerGroupContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: CornerRadius.small,
+    paddingHorizontal: 3,
+    paddingVertical: 3,
   },
-  headerDiffPillText: {
+  headerGroupBtn: {
+    minWidth: 32,
+    height: 28,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  headerGroupCount: {
     ...Typography.caption2,
     fontWeight: '700',
     fontFamily: FontFamily.mono,
     fontVariant: ['tabular-nums'],
   },
-  headerControlPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: CornerRadius.small,
-  },
-  headerControlText: {
-    ...Typography.caption2,
-    fontWeight: '600',
+  groupDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 16,
   },
 
   statusDotOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.25,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   statusDotPulse: {
     position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   emptyContainer: {
@@ -1788,40 +1927,35 @@ const styles = StyleSheet.create({
     padding: Spacing['3xl'],
     gap: Spacing.sm,
   },
-  emptyOrb: {
-    width: 56,
-    height: 56,
-    borderRadius: 17,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xs,
-  },
-  emptyOrbGlyph: {
-    fontFamily: FontFamily.monoSemiBold,
-    fontSize: 22,
-    lineHeight: 26,
-  },
-  emptyTitle: { ...Typography.headline },
+  emptyTitle: { ...Typography.title3 },
   emptySub: { ...Typography.footnote, textAlign: 'center', lineHeight: 18, maxWidth: 260 },
   suggestionList: {
     marginTop: Spacing.xl - 4,
     gap: Spacing.sm - 2,
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 320,
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md - 2,
-    paddingHorizontal: Spacing.lg - 2,
-    paddingVertical: Spacing.sm + 3,
-    borderRadius: CornerRadius.medium,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: 999,
     borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  suggestionIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   suggestionText: {
     ...Typography.subhead,
     fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: '500',
     flex: 1,
   },
@@ -1836,13 +1970,18 @@ const styles = StyleSheet.create({
   scrollToBottomBtn: {
     position: 'absolute',
     right: Spacing.lg,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
+    bottom: 140,
+    width: 34,
+    height: 34,
+    zIndex: 5,
+  },
+  scrollToBottomGlass: {
+    flex: 1,
+  },
+  scrollPillContent: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
   },
   loadEarlierBtn: {
     flexDirection: 'row',
@@ -1863,16 +2002,23 @@ const styles = StyleSheet.create({
   },
   userRow: { alignItems: 'flex-end' },
   userBubble: {
-    maxWidth: '80%',
+    maxWidth: '78%',
     paddingHorizontal: Spacing.lg - 2,
     paddingVertical: 9,
-    borderRadius: 18,
+    borderRadius: 19,
     borderCurve: 'continuous',
+    shadowColor: '#08090a',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.14,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  userText: { ...Typography.subhead, fontSize: 14, lineHeight: 19 },
+  userText: { ...Typography.subhead, fontSize: 14.5, lineHeight: 20, color: '#ffffff' },
   userCollapseHint: {
     ...Typography.caption2,
     marginTop: 4,
+    color: 'rgba(255,255,255,0.72)',
+    fontWeight: '600',
   },
   assistantRow: { alignItems: 'flex-start' },
   assistantBubble: {
@@ -1890,22 +2036,21 @@ const styles = StyleSheet.create({
   },
   systemText: { ...Typography.caption2, fontWeight: '500' },
 
-  /** iMessage-style filled capsule: [≡ tune][input][send/stop]. */
-  composerField: {
+  /** Messages-grade glass capsule: [tune][input][send/stop] — content row. */
+  composerCapsule: {},
+  composerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm + 2,
-    borderRadius: 20,
-    borderCurve: 'continuous',
-    paddingHorizontal: Spacing.xs + 2,
-    paddingVertical: Spacing.xs + 2,
-    minHeight: 44,
+    gap: Spacing.sm - 2,
+    paddingHorizontal: Spacing.sm - 2,
+    paddingVertical: Spacing.sm - 2,
+    minHeight: 48,
   },
 
   tuneButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1913,12 +2058,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -3,
     right: -3,
-    minWidth: 15,
+    minWidth: 16,
     height: 14,
     borderRadius: 7,
     paddingHorizontal: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.primary[500],
   },
   tuneBadgeText: {
     fontSize: 8.5,
@@ -1936,14 +2082,12 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   sendButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  spacer: { flex: 1 },
 
   errorBubble: { backgroundColor: Colors.danger[400] + '1A' },
   errorText: { color: Colors.danger[400], ...Typography.caption2, fontWeight: '500' },
@@ -1955,8 +2099,8 @@ const styles = StyleSheet.create({
   queueStrip: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.sm - 2,
-    borderRadius: CornerRadius.large,
-    borderCurve: 'continuous',
+  },
+  queueStripContent: {
     paddingVertical: Spacing.sm - 2,
     paddingHorizontal: Spacing.md - 2,
     gap: 4,
@@ -1991,9 +2135,9 @@ const styles = StyleSheet.create({
   queueChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: Spacing.sm + 2,
     paddingVertical: 4,
-    borderRadius: CornerRadius.small,
+    borderRadius: 999,
     gap: 4,
     maxWidth: 200,
   },
@@ -2012,53 +2156,54 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
+  /** UIAlertController geometry: 270pt card, 14pt continuous radius. */
   promptSheet: {
-    width: '85%',
-    maxWidth: 340,
-    borderRadius: CornerRadius.xl,
+    width: 270,
+    borderRadius: 14,
     borderCurve: 'continuous',
     overflow: 'hidden',
-    padding: Spacing.xl,
-    gap: Spacing.lg,
+    paddingTop: Spacing.xl,
+    paddingBottom: 0,
+    gap: Spacing.lg - 2,
     ...Shadows.elevated,
   },
-  promptTitle: { ...Typography.headline, textAlign: 'center' },
+  promptTitle: { ...Typography.headline, textAlign: 'center', marginHorizontal: Spacing.lg },
   promptInput: {
     ...Typography.subhead,
-    borderRadius: CornerRadius.medium,
+    borderRadius: 9,
+    marginHorizontal: Spacing.lg,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md - 2,
+    paddingVertical: Spacing.sm + 1,
   },
   promptActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    marginTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  promptActionBtn: {
+    height: 44,
     alignItems: 'center',
-    gap: Spacing.md - 2,
+    justifyContent: 'center',
   },
-  promptCancelBtn: {
-    paddingHorizontal: Spacing.lg - 2,
-    paddingVertical: Spacing.sm,
-    borderRadius: CornerRadius.small,
+  promptActionDivider: {
+    height: StyleSheet.hairlineWidth,
   },
-  promptCancelText: { ...Typography.subhead, fontSize: 14, fontWeight: '500' },
-  promptDoneBtn: { minWidth: 88 },
+  promptActionText: { ...Typography.subhead, fontSize: 17, lineHeight: 22 },
   errorToast: {
     position: 'absolute',
     bottom: 120,
     left: Spacing.lg,
     right: Spacing.lg,
-    borderRadius: CornerRadius.medium,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
+  },
+  errorToastCapsule: {},
+  errorToastContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm - 2,
     paddingHorizontal: Spacing.lg - 2,
     paddingVertical: Spacing.md - 2,
-    ...Shadows.elevated,
   },
-  errorToastText: { ...Typography.footnote, fontWeight: '500' },
+  errorToastText: { ...Typography.footnote, fontWeight: '500', flexShrink: 1 },
 });
