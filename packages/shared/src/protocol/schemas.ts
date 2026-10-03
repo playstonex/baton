@@ -60,6 +60,7 @@ const welcomeSchema = z.object({
   type: z.literal('welcome'),
   version: z.number(),
   sessionId: z.string(),
+  clientId: z.string().optional(), // COMPAT(clientId): v2.2 — accurate name for sessionId
   agents: z.array(
     z.object({
       id: z.string(),

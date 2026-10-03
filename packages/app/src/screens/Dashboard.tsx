@@ -169,6 +169,21 @@ export function DashboardScreen() {
     await fetch(`/api/agents/${id}`, { method: 'DELETE' }).catch(() => {});
   }
 
+  async function resumeSession(session: SessionSummary) {
+    try {
+      const res = await fetch(`/api/agents/${session.id}/resume`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Resume failed' }));
+        console.error(`Failed to resume: ${err.error ?? 'Unknown'}`);
+        return;
+      }
+      const data = await res.json();
+      navigate(session.mode === 'sdk' ? `/chat/${data.sessionId}` : `/terminal/${data.sessionId}`);
+    } catch (err) {
+      console.error(`Failed to resume: ${err}`);
+    }
+  }
+
   async function startAgent() {
     if (!projectPath.trim()) return;
     setLoading(true);
@@ -352,6 +367,7 @@ export function DashboardScreen() {
                 onOpen={() =>
                   navigate(session.mode === 'sdk' ? `/chat/${session.id}` : `/terminal/${session.id}`)
                 }
+                onResume={() => resumeSession(session)}
                 onArchive={() => archiveSession(session.id)}
                 onDelete={() => deleteSession(session.id)}
               />
@@ -449,11 +465,13 @@ function relativeTime(iso: string): string {
 function PastSessionRow({
   session,
   onOpen,
+  onResume,
   onArchive,
   onDelete,
 }: {
   session: SessionSummary;
   onOpen: () => void;
+  onResume: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
@@ -469,6 +487,11 @@ function PastSessionRow({
             <span className={`truncate text-[13px] font-medium ${session.archivedAt ? 'text-muted line-through' : 'text-fg'}`}>
               {session.title ?? `${label} session`}
             </span>
+            {session.resumedFrom && (
+              <span className="shrink-0 rounded-sm border border-line-soft px-1.5 py-0.5 text-[10px] text-muted">
+                resumed
+              </span>
+            )}
             <span className="shrink-0 text-[11px] text-meta">
               {relativeTime(session.updatedAt)}
               {session.eventCount > 0 ? ` · ${session.eventCount} events` : ''}
@@ -481,6 +504,11 @@ function PastSessionRow({
       </button>
 
       <div className="flex shrink-0 items-center gap-2 pr-5">
+        {!session.archivedAt && (
+          <Button size="sm" variant="secondary" onClick={onResume}>
+            Resume
+          </Button>
+        )}
         <Button size="sm" variant="tertiary" onClick={onArchive}>
           Archive
         </Button>

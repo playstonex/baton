@@ -355,8 +355,9 @@ export function createDaemon(port = DEFAULT_PORT) {
       const watcher = new FileWatcher({ projectPath: body.projectPath });
       watcher.onFileChange((event: ParsedEvent) => {
         const msg: DaemonMessage = { type: 'parsed_event', sessionId, event };
+        // transport.broadcast also forwards to the relay sink — no separate
+        // relayConnection.send needed anymore.
         transport.broadcast(msg);
-        relayConnection?.send(msg);
       });
       watchers.set(body.projectPath, watcher);
       // chokidar's initial traversal is CPU-bound and synchronous per entry; on
@@ -404,6 +405,35 @@ export function createDaemon(port = DEFAULT_PORT) {
     const archivedOnly = c.req.query('archivedOnly') === '1';
     const projectPath = c.req.query('projectPath') ?? undefined;
     return c.json(agentManager.listSessions({ limit, offset, includeArchived, archivedOnly, projectPath }));
+  });
+
+  // Resume a stopped session: spawns a new Baton session continuing the
+  // provider-side conversation (exact id when captured, else "latest").
+  app.post('/api/agents/:id/resume', async (c) => {
+    const id = c.req.param('id');
+    const agent = agentManager.get(id);
+    if (!agent) return c.json({ error: 'Not found' }, 404);
+    if (agent.type === 'acp') {
+      return c.json({ error: 'Resume is not supported for generic ACP providers' }, 400);
+    }
+    const adapter = createAdapter(agent.type, 'pty');
+    if (!adapter.detect(agent.projectPath)) {
+      return c.json(
+        { error: `${agent.type} CLI not found on this host — cannot resume` },
+        400,
+      );
+    }
+    try {
+      const sessionId = await agentManager.resumeAgent(id, adapter);
+      transport.registerSessionEvents(sessionId);
+      syncActiveAgents();
+      return c.json({ sessionId, resumedFrom: id });
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Failed to resume session' },
+        409,
+      );
+    }
   });
 
   app.delete('/api/agents/:id', async (c) => {
@@ -1305,22 +1335,20 @@ export function createDaemon(port = DEFAULT_PORT) {
       hostId,
       token: body.token,
       onMessage: (msg: DaemonMessage) => {
-        // Messages from remote clients — forward to agent manager
+        // Messages from remote clients — full ClientMessage surface, handled
+        // by the transport (input, attach/detach/resume, stop). Replies and
+        // session streams flow back via the relay sink wired below.
         if ('type' in msg) {
-          const clientMsg = msg as unknown as ClientMessage;
-          if (clientMsg.type === 'terminal_input' && clientMsg.sessionId) {
-            try {
-              agentManager.write(clientMsg.sessionId, clientMsg.data);
-            } catch {
-              /* session might not exist */
-            }
-          }
+          transport.handleRelayMessage(msg as unknown as ClientMessage);
         }
       },
       onStatusChange: (connected) => {
         console.log(`Relay: ${connected ? 'connected' : 'disconnected'}`);
+        if (!connected) transport.attachRelaySink(null);
       },
     });
+    // Session streams + broadcasts reach remote clients through this sink.
+    transport.attachRelaySink((m) => relayConnection?.send(m));
 
     relayConnection.connect();
     return c.json({ hostId, status: 'connecting' });
@@ -1329,6 +1357,7 @@ export function createDaemon(port = DEFAULT_PORT) {
   app.post('/api/relay/disconnect', (c) => {
     relayConnection?.disconnect();
     relayConnection = null;
+    transport.attachRelaySink(null);
     return c.json({ ok: true });
   });
 

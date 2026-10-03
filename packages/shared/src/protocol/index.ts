@@ -443,6 +443,10 @@ export interface SessionSummary {
   stoppedAt?: string;
   archivedAt?: string;
   eventCount: number;
+  /** Provider-side conversation id, when captured from agent output. */
+  providerSessionId?: string;
+  /** Baton session this one was resumed from (lineage). COMPAT: v2.2. */
+  resumedFrom?: string;
 }
 
 export interface SessionListResponse {

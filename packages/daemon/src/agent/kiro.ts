@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
-import { BaseAgentAdapter } from './adapter.js';
+import { BaseAgentAdapter, resumeArgs } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 
 /**
@@ -31,10 +31,21 @@ export class KiroAdapter extends BaseAgentAdapter {
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
     return {
       command: 'kiro-cli',
-      args: ['chat', '--trust-all-tools', ...(config.args ?? [])],
+      args: [
+        'chat',
+        // kiro-cli chat: `--resume-id <id>` continues an exact conversation,
+        // `-r` the most recent one in this directory.
+        ...resumeArgs({ idFlag: '--resume-id', latest: ['-r'] }, config.resume),
+        '--trust-all-tools',
+        ...(config.args ?? []),
+      ],
       env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
       cwd: config.projectPath,
     };
+  }
+
+  override extractSessionId(clean: string): string | null {
+    return clean.match(/session[ _-]?id[^0-9a-f]{0,8}([0-9a-zA-Z-]{12,})/i)?.[1] ?? null;
   }
 
   parseOutput(raw: string): ParsedEvent[] {

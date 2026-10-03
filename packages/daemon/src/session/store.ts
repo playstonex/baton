@@ -31,6 +31,8 @@ export interface SessionRecord {
   archived_at: string | null;
   exit_code: number | null;
   pid: number | null;
+  provider_session_id?: string | null;
+  resumed_from?: string | null;
 }
 
 export interface SessionUpsert {
@@ -51,6 +53,10 @@ export interface SessionPatch {
   pid?: number | null;
   /** Last-activity timestamp; callers throttle this. */
   updatedAt?: string;
+  /** Provider-side conversation id (captured from agent output). */
+  providerSessionId?: string;
+  /** Baton session this one was resumed from (lineage). */
+  resumedFrom?: string;
 }
 
 export interface SessionQuery {
@@ -123,6 +129,8 @@ export class SessionStore {
          archived_at = COALESCE(?, archived_at),
          exit_code = COALESCE(?, exit_code),
          pid = COALESCE(?, pid),
+         provider_session_id = COALESCE(?, provider_session_id),
+         resumed_from = COALESCE(?, resumed_from),
          updated_at = COALESCE(?, updated_at)
        WHERE id = ?`,
     );
@@ -165,12 +173,27 @@ export class SessionStore {
         stopped_at TEXT,
         archived_at TEXT,
         exit_code INTEGER,
-        pid INTEGER
+        pid INTEGER,
+        provider_session_id TEXT,
+        resumed_from TEXT
       )
     `);
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC)`,
     );
+    // CREATE TABLE IF NOT EXISTS does not extend an existing table — add
+    // columns introduced after the first release with guarded ALTERs.
+    const existing = new Set(
+      (this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map(
+        (c) => c.name,
+      ),
+    );
+    if (!existing.has('provider_session_id')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN provider_session_id TEXT');
+    }
+    if (!existing.has('resumed_from')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN resumed_from TEXT');
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS events (
         session_id TEXT NOT NULL,
@@ -213,6 +236,8 @@ export class SessionStore {
       patch.archivedAt ?? null,
       patch.exitCode ?? null,
       patch.pid ?? null,
+      patch.providerSessionId ?? null,
+      patch.resumedFrom ?? null,
       patch.updatedAt ?? null,
       id,
     );
@@ -398,6 +423,8 @@ function toSummary(row: SessionRecord & { event_count: number }): SessionSummary
     stoppedAt: row.stopped_at ?? undefined,
     archivedAt: row.archived_at ?? undefined,
     eventCount: row.event_count,
+    providerSessionId: row.provider_session_id ?? undefined,
+    resumedFrom: row.resumed_from ?? undefined,
   };
 }
 

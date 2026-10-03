@@ -23,6 +23,7 @@ export async function doctorCommand(): Promise<void> {
   checks.push(checkProviderPlugins());
   checks.push(await checkPtyBinary());
   checks.push(await checkBatonHome());
+  checks.push(...checkAgentClis());
 
   const maxName = Math.max(...checks.map((c) => c.name.length));
   for (const c of checks) {
@@ -187,4 +188,56 @@ async function checkBatonHome(): Promise<CheckResult> {
       return { name: 'Baton Home', pass: false, detail: `${home} (does not exist)` };
     }
   }
+}
+
+/**
+ * Probe every agent CLI Baton knows how to spawn. A missing CLI is NOT a
+ * failure (nobody installs all of them) — the check reports which agents
+ * are launchable on this host and passes as long as at least one is present.
+ */
+function checkAgentClis(): CheckResult[] {
+  const agents: Array<[string, string]> = [
+    ['Claude Code', 'claude'],
+    ['Codex', 'codex'],
+    ['OpenCode', 'opencode'],
+    ['Kiro', 'kiro-cli'],
+    ['Antigravity', 'agy'],
+    ['Pi', 'pi'],
+  ];
+  const found: string[] = [];
+  const missing: string[] = [];
+  for (const [name, bin] of agents) {
+    try {
+      execSync(`which ${bin}`, { stdio: 'pipe' });
+      found.push(name);
+    } catch {
+      missing.push(`${name} (${bin})`);
+    }
+  }
+  // Generic ACP providers from ~/.baton/acp.json count as available agents too.
+  try {
+    const acpPath = join(process.env.BATON_HOME ?? join(process.env.HOME ?? '~', '.baton'), 'acp.json');
+    const acp = JSON.parse(readFileSync(acpPath, 'utf-8')) as { providers?: Record<string, { command?: string }> };
+    for (const [name, profile] of Object.entries(acp.providers ?? {})) {
+      if (!profile.command) continue;
+      try {
+        execSync(`which ${profile.command}`, { stdio: 'pipe' });
+        found.push(`ACP:${name}`);
+      } catch {
+        missing.push(`ACP:${name} (${profile.command})`);
+      }
+    }
+  } catch {
+    // no acp.json — nothing to report
+  }
+  return [
+    {
+      name: 'Agent CLIs',
+      pass: found.length > 0,
+      detail: found.length > 0 ? `available: ${found.join(', ')}` : 'no agent CLI installed',
+    },
+    ...(missing.length > 0
+      ? [{ name: 'Agent CLIs (missing)', pass: true, detail: missing.join(', ') }]
+      : []),
+  ];
 }

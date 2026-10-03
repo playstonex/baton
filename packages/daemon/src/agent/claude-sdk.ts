@@ -59,6 +59,11 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   private projectPath = '';
   private resolveApproval: ((approved: boolean) => void) | null = null;
 
+  /** PTY-only hook — SDK adapters track provider session ids natively. */
+  extractSessionId(_clean: string): string | null {
+    return null;
+  }
+
   isSdkAvailable(): boolean {
     if (this.sdkAvailable !== null) return this.sdkAvailable;
     try {

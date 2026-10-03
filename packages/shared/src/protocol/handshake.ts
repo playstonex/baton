@@ -65,7 +65,11 @@ export type HelloMessage = z.infer<typeof HelloMessageSchema>;
 export const WelcomeMessageSchema = z.object({
   type: z.literal('welcome'),
   version: z.number(),
+  /** MISNOMER (kept for protocol stability): this is the CLIENT's id, not a
+   * session id. `clientId` carries the same value under the correct name;
+   * COMPAT(clientId): added in v2.2. */
   sessionId: z.string(),
+  clientId: z.string().optional(),
   agents: z.array(
     z.object({
       id: z.string(),
@@ -94,7 +98,10 @@ export function validateWelcome(data: unknown): WelcomeMessage {
 export const DEFAULT_CLIENT_CAPABILITIES: ClientCapabilities = {
   chatMode: true,
   structuredToolCalls: true,
-  sessionResume: false, // COMPAT(sessionResume): opt-in until clients migrate
+  // Truthful since v2.2: seq-based resume is implemented and used by every
+  // current client; previously false while the feature was already live
+  // (the flag was decorative).
+  sessionResume: true,
 };
 
 // Default daemon feature flags for current protocol version
@@ -102,7 +109,7 @@ export const DEFAULT_SERVER_FEATURES: ServerCapabilities = {
   gitRpc: true,
   accessControl: true,
   pushNotifications: true,
-  sessionResume: false, // COMPAT(sessionResume): opt-in until clients migrate
+  sessionResume: true,
 };
 
 // Create a hello message
@@ -129,7 +136,9 @@ export function createWelcome(
   return {
     type: 'welcome',
     version: PROTOCOL_VERSION,
+    // `sessionId` is a misnomer for the client id; send both (COMPAT(clientId)).
     sessionId,
+    clientId: sessionId,
     agents,
     serverTime: Date.now(),
     features: { ...DEFAULT_SERVER_FEATURES, ...features },

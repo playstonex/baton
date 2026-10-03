@@ -13,6 +13,7 @@ import type { AgentState, AgentSnapshot, SessionSummary, TimelineItem } from '@b
 import type { BaseAgentAdapter } from './adapter.js';
 import { spawnPty } from '../pty/bridge.js';
 import { SessionStore, deriveTitle } from '../session/store.js';
+import { stripAnsi } from '../parser/ansi.js';
 import { readdir, stat, readFile, access, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -57,6 +58,8 @@ interface ManagedAgent {
    * Set for stopped agents once they age out of the in-memory retention window.
    */
   offloaded?: boolean;
+  /** Provider-side conversation id (best-effort, captured from PTY output). */
+  providerSessionId?: string;
 }
 
 const MAX_OUTPUT_HISTORY = 10000;
@@ -110,6 +113,12 @@ export class AgentManager {
         break;
       case 'running':
         managed.state = { status: 'running', at, toolCount: (meta?.toolCount as number) ?? 0 };
+        break;
+      case 'thinking':
+        managed.state = { status: 'thinking', at };
+        break;
+      case 'executing':
+        managed.state = { status: 'executing', at, tool: (meta?.tool as string) ?? 'unknown' };
         break;
       case 'waiting_input':
         managed.state = { status: 'waiting_input', at, prompt: (meta?.prompt as string) ?? '' };
@@ -276,12 +285,14 @@ export class AgentManager {
    */
   async restore(): Promise<void> {
     const store = this.sessionStore;
-    if (store.countSessions() === 0) await this.importLegacySnapshots();
-    // Crash recovery: sessions mid-flight when the daemon died are dead.
+    // Crash recovery FIRST (synchronous): sessions mid-flight when the daemon
+    // died are dead — a client connecting in the same tick must not see them
+    // as 'running'. The legacy import can follow in the background.
     const recovered = store.markNonTerminalStopped();
     if (recovered > 0) {
       console.log(`[SESSION] recovered ${recovered} crashed session(s) as stopped`);
     }
+    if (store.countSessions() === 0) await this.importLegacySnapshots();
   }
 
   private async importLegacySnapshots(): Promise<void> {
@@ -414,6 +425,17 @@ export class AgentManager {
 
     // PTY output handler
     pty.onData((data: string) => {
+      // Best-effort provider session id capture — enables exact resume
+      // (`--resume-id`/`--conversation`/`--session`) instead of the coarser
+      // "continue latest" fallback.
+      if (!managed.providerSessionId && adapter.extractSessionId) {
+        const found = adapter.extractSessionId(stripAnsi(data));
+        if (found) {
+          managed.providerSessionId = found;
+          this.sessionStore.patchSession(id, { providerSessionId: found });
+        }
+      }
+
       // Store raw output for reconnection replay
       managed.outputHistory.push(data);
       if (managed.outputHistory.length > MAX_OUTPUT_HISTORY) {
@@ -662,6 +684,17 @@ export class AgentManager {
     }
     if (managed.pty) {
       managed.pty.kill();
+      // Heavy TUI processes (kiro-cli/agy/pi) can take seconds to tear down
+      // after SIGTERM; without this, /api/sessions kept showing 'running'
+      // long after the user pressed Stop. onExit's later transition attempt
+      // is caught by its own try/catch (stopped → stopped is invalid).
+      try {
+        this.transition(id, 'stopped', { exitCode: 0 });
+      } catch {
+        managed.state = { status: 'stopped', at: Date.now(), exitCode: 0 };
+        managed.process.status = 'stopped';
+      }
+      managed.process.stoppedAt = new Date().toISOString();
     }
 
     if (!managed.pty && !managed.sdk) {
@@ -678,6 +711,47 @@ export class AgentManager {
 
     this.evictStoppedBuffers();
     this.notifyChanged();
+  }
+
+  /**
+   * Resume a stopped session: spawns a NEW Baton session whose adapter gets
+   * the recorded provider conversation id (exact resume) or, when never
+   * captured, the provider's "continue latest in this directory" flag.
+   * Lineage (`resumedFrom`) and the old title carry over.
+   */
+  async resumeAgent(id: string, adapter: BaseAgentAdapter): Promise<string> {
+    const managed = this.agents.get(id) ?? this.ensureShell(id);
+    if (!managed) throw new Error(`Agent ${id} not found`);
+    if (
+      !managed.historyOnly &&
+      managed.process.status !== 'stopped' &&
+      managed.process.status !== 'error'
+    ) {
+      throw new Error(`Agent ${id} is still running`);
+    }
+
+    const row = this.sessionStore.getSession(id);
+    const providerSessionId =
+      managed.providerSessionId ?? row?.provider_session_id ?? undefined;
+
+    const config: AgentConfig = {
+      type: managed.process.type,
+      projectPath: managed.process.projectPath,
+      // An empty `resume` object means "continue latest" for adapters that
+      // support it; the provider id makes it exact when available.
+      resume: providerSessionId ? { providerSessionId } : {},
+    };
+
+    const newId = await this.start(config, adapter);
+
+    const carriedTitle = row?.title ?? managed.process.title;
+    this.sessionStore.patchSession(newId, {
+      resumedFrom: id,
+      ...(carriedTitle ? { title: carriedTitle } : {}),
+    });
+    const fresh = this.agents.get(newId);
+    if (fresh && carriedTitle) fresh.process.title = carriedTitle;
+    return newId;
   }
 
   /**

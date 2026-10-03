@@ -1,5 +1,5 @@
 import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
-import { BaseAgentAdapter } from './adapter.js';
+import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 import { execSync } from 'node:child_process';
 
@@ -19,10 +19,18 @@ export class CodexAdapter extends BaseAgentAdapter {
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
     return {
       command: 'codex',
-      args: config.args ?? [],
+      args: [
+        // codex: `resume <id>` continues an exact session, bare `resume` the latest.
+        ...resumeArgs({ idFlag: 'resume', latest: ['resume'] }, config.resume),
+        ...(config.args ?? []),
+      ],
       env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
       cwd: config.projectPath,
     };
+  }
+
+  override extractSessionId(clean: string): string | null {
+    return extractUuid(clean, 'session');
   }
 
   parseOutput(raw: string): ParsedEvent[] {

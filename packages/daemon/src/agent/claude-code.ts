@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { AgentConfig, ParsedEvent, SpawnConfig, AgentType } from '@baton/shared';
-import { BaseAgentAdapter } from './adapter.js';
+import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { ClaudeCodeParser } from '../parser/index.js';
 
 export class ClaudeCodeAdapter extends BaseAgentAdapter {
@@ -24,12 +24,20 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
     return {
       command: 'claude',
-      args: config.args ?? [],
+      args: [
+        // claude: `--resume <id>` continues an exact session, `-c` the latest.
+        ...resumeArgs({ idFlag: '--resume', latest: ['-c'] }, config.resume),
+        ...(config.args ?? []),
+      ],
       env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
       cwd: config.projectPath,
       cols: config.cols ?? 80,
       rows: config.rows ?? 24,
     };
+  }
+
+  override extractSessionId(clean: string): string | null {
+    return extractUuid(clean, 'session');
   }
 
   parseOutput(raw: string): ParsedEvent[] {

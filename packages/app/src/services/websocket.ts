@@ -112,7 +112,7 @@ export class WebSocketService {
           type: 'hello',
           version: 2,
           channels: [0, 1, 2],
-          capabilities: { chatMode: true, structuredToolCalls: true },
+          capabilities: { chatMode: true, structuredToolCalls: true, sessionResume: true },
         }),
       );
     };

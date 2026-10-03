@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
-import { BaseAgentAdapter } from './adapter.js';
+import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 
 /**
@@ -24,10 +24,18 @@ export class AntigravityAdapter extends BaseAgentAdapter {
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
     return {
       command: 'agy',
-      args: [...(config.args ?? [])],
+      args: [
+        // agy: `--conversation <id>` resumes by id, `-c` continues the latest.
+        ...resumeArgs({ idFlag: '--conversation', latest: ['-c'] }, config.resume),
+        ...(config.args ?? []),
+      ],
       env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
       cwd: config.projectPath,
     };
+  }
+
+  override extractSessionId(clean: string): string | null {
+    return extractUuid(clean, 'conversation');
   }
 
   parseOutput(raw: string): ParsedEvent[] {

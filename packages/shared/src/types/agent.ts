@@ -54,6 +54,15 @@ export interface AgentConfig {
   env?: Record<string, string>;
   cols?: number;
   rows?: number;
+  /**
+   * Resume a previous provider-side conversation. When `providerSessionId`
+   * is known the adapter passes the provider's exact resume flag; without
+   * it, adapters fall back to the provider's "continue latest" flag
+   * (kiro `chat -r`, agy `-c`, pi `-c`, claude `-c`).
+   */
+  resume?: {
+    providerSessionId?: string;
+  };
 }
 
 export interface SpawnConfig {

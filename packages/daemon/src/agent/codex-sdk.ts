@@ -89,6 +89,11 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     }
   }
 
+  /** PTY-only hook — SDK adapters track provider session ids natively. */
+  extractSessionId(_clean: string): string | null {
+    return null;
+  }
+
   isSdkAvailable(): boolean {
     return true;
   }

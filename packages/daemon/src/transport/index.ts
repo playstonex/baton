@@ -32,11 +32,14 @@ export class Transport {
   private sessionUnsubs = new Map<string, { unsubRaw: () => void; unsubEvent: () => void }>();
   private sessionOwners = new Map<string, string>();
   private localClientId: string | null = null;
-  private pendingPermissions = new Map<
-    string,
-    { sessionId: string; resolve: (response: string) => void }
-  >();
   private accessModes = new Map<string, AccessMode>();
+  /** Outbound relay sink — set while a relay connection is up. Session
+   * streams (emitSequenced) and broadcasts are forwarded through it so
+   * remote clients see the same live data as local ones. */
+  private relaySink: ((msg: DaemonMessage) => void) | null = null;
+  /** Sessions a remote (relay) client attached to — only these stream over
+   * the relay, instead of leaking every local session's output. */
+  private relaySessions = new Set<string>();
   /** Per-session seq buffers for resume-after-reconnect. COMPAT(sessionResume). */
   private seqBuffers = new Map<string, SeqBuffer>();
   private onPushTokenRegister?: (clientId: string, token: string, platform: string) => void;
@@ -516,44 +519,8 @@ export class Transport {
         this.ensureSessionRegistered(msg.sessionId);
 
         try {
-          // Bounded tail replay: deep history lives in the session store and
-          // is reachable via GET /api/sessions — attach must not ship an
-          // unbounded frame for a long-running session.
-          const history = this.agentManager.getDisplayHistoryTail(msg.sessionId);
-          if (history.length > 0) {
-            this.send(clientId, {
-              type: 'history_replay',
-              sessionId: msg.sessionId,
-              output: history.join(''),
-            });
-          }
-
-          const events = this.agentManager.getEventHistoryTail(msg.sessionId);
-          if (events.length > 0) {
-            this.send(clientId, {
-              type: 'event_history',
-              sessionId: msg.sessionId,
-              events,
-            });
-          }
-
-          const proc = this.agentManager.get(msg.sessionId);
-          if (proc) {
-            this.send(clientId, {
-              type: 'status_update',
-              sessionId: msg.sessionId,
-              status: proc.status,
-            });
-          }
-
-          const ownerId = this.sessionOwners.get(msg.sessionId);
-          if (ownerId) {
-            this.send(clientId, {
-              type: 'session_ownership',
-              sessionId: msg.sessionId,
-              owner: ownerId === this.localClientId ? 'local' : 'remote',
-              claimedBy: ownerId,
-            });
+          for (const reply of this.buildAttachReplay(msg.sessionId)) {
+            this.send(clientId, reply);
           }
         } catch (err) {
           console.log(`[ATTACH] Error replaying history for ${msg.sessionId.slice(0, 8)}: ${err}`);
@@ -655,20 +622,10 @@ export class Transport {
       }
 
       case 'permission_response': {
-        // NOTE: effectively inert — nothing registers pendingPermissions, so this
-        // never writes. Real answers travel on other paths: SDK/ACP sessions via
-        // approve_input / reject_input, PTY sessions via a raw 'y'/'n'
-        // terminal_input from the client. Do NOT make this live without
-        // updating every client at once: current clients send permission_response
-        // TOGETHER with those paths, so wiring it would answer every prompt twice
-        // (and ACP's approve() would consume the NEXT pending request).
-        if (!msg.payload) return;
-        const { requestId, approved } = msg.payload as { requestId: string; approved: boolean };
-        const pending = this.pendingPermissions.get(requestId);
-        if (pending) {
-          this.agentManager.write(pending.sessionId, approved ? 'y\n' : 'n\n');
-          this.pendingPermissions.delete(requestId);
-        }
+        // Deliberately inert, and kept as an explicit no-op rather than
+        // removed: real permission answers travel on approve_input /
+        // reject_input (SDK/ACP) or raw terminal_input (PTY). Handling this
+        // action too would answer every prompt twice.
         break;
       }
 
@@ -695,6 +652,207 @@ export class Transport {
         } as DaemonMessage);
         break;
       }
+    }
+  }
+
+  /**
+   * Build the bounded attach-replay frames for a session (shared by the WS
+   * attach path and the relay attach path). Bounded tail only: deep history
+   * lives in the session store, reachable via GET /api/sessions.
+   */
+  private buildAttachReplay(sessionId: string): DaemonMessage[] {
+    const replies: DaemonMessage[] = [];
+
+    const history = this.agentManager.getDisplayHistoryTail(sessionId);
+    if (history.length > 0) {
+      replies.push({
+        type: 'history_replay',
+        sessionId,
+        output: history.join(''),
+      });
+    }
+
+    const events = this.agentManager.getEventHistoryTail(sessionId);
+    if (events.length > 0) {
+      replies.push({ type: 'event_history', sessionId, events });
+    }
+
+    const proc = this.agentManager.get(sessionId);
+    if (proc) {
+      replies.push({ type: 'status_update', sessionId, status: proc.status });
+    }
+
+    const ownerId = this.sessionOwners.get(sessionId);
+    if (ownerId) {
+      replies.push({
+        type: 'session_ownership',
+        sessionId,
+        owner: ownerId === this.localClientId ? 'local' : 'remote',
+        claimedBy: ownerId,
+      });
+    }
+    return replies;
+  }
+
+  // ── Relay (remote client) path ───────────────────────────────────
+
+  /** Wire (or clear) the outbound relay sink. Pass null on disconnect. */
+  attachRelaySink(sink: ((msg: DaemonMessage) => void) | null): void {
+    this.relaySink = sink;
+    if (!sink) this.relaySessions.clear();
+  }
+
+  /**
+   * Handle a ClientMessage that arrived over the relay from a remote client.
+   * Replies and session streams flow back through the relay sink. This used
+   * to be one hardcoded terminal_input forwarding in index.ts — remote
+   * clients could type but never see any output.
+   */
+  handleRelayMessage(msg: ClientMessage): void {
+    const reply = (m: DaemonMessage): void => {
+      this.relaySink?.(m);
+    };
+
+    switch (msg.type) {
+      case 'hello': {
+        reply(
+          createWelcome(
+            `relay-${crypto.randomUUID()}`,
+            this.agentManager.list().map((a) => ({
+              id: a.id,
+              type: a.type,
+              status: a.status,
+              projectPath: a.projectPath,
+            })),
+            DEFAULT_SERVER_FEATURES,
+          ),
+        );
+        break;
+      }
+
+      case 'terminal_input':
+      case 'chat_input':
+      case 'steer_input':
+      case 'cancel_turn':
+      case 'approve_input':
+      case 'reject_input': {
+        try {
+          if (msg.type === 'terminal_input') this.agentManager.write(msg.sessionId, msg.data);
+          else if (msg.type === 'chat_input') this.agentManager.chatWrite(msg.sessionId, msg.content);
+          else if (msg.type === 'steer_input') this.agentManager.steer(msg.sessionId, msg.content);
+          else if (msg.type === 'cancel_turn') void this.agentManager.cancelTurn(msg.sessionId);
+          else if (msg.type === 'approve_input') void this.agentManager.approve(msg.sessionId, msg.reason);
+          else void this.agentManager.reject(msg.sessionId, msg.reason);
+        } catch (err) {
+          reply({
+            type: 'error',
+            message: err instanceof Error ? err.message : `${msg.type} failed`,
+          });
+        }
+        break;
+      }
+
+      case 'control': {
+        void this.handleRelayControl(msg, reply);
+        break;
+      }
+
+      default:
+        // model/git request families go through their WS handlers; remote
+        // clients use the HTTP API for those (the relay only carries the
+        // session-stream critical path).
+        break;
+    }
+  }
+
+  private async handleRelayControl(
+    msg: Extract<ClientMessage, { type: 'control' }>,
+    reply: (m: DaemonMessage) => void,
+  ): Promise<void> {
+    switch (msg.action) {
+      case 'attach_session': {
+        if (!msg.sessionId) return;
+        if (!this.agentManager.get(msg.sessionId)) {
+          reply({ type: 'error', message: `Session ${msg.sessionId} not found` });
+          return;
+        }
+        this.relaySessions.add(msg.sessionId);
+        this.ensureSessionRegistered(msg.sessionId);
+        for (const frame of this.buildAttachReplay(msg.sessionId)) reply(frame);
+        break;
+      }
+
+      case 'detach_session': {
+        if (msg.sessionId) this.relaySessions.delete(msg.sessionId);
+        break;
+      }
+
+      case 'resume_session': {
+        if (!msg.sessionId) return;
+        if (!this.agentManager.get(msg.sessionId)) {
+          reply({ type: 'error', message: `Session ${msg.sessionId} not found` });
+          return;
+        }
+        this.relaySessions.add(msg.sessionId);
+        this.ensureSessionRegistered(msg.sessionId);
+        const lastSeq = (msg.payload as { lastSeq?: number } | undefined)?.lastSeq ?? 0;
+        const buf = this.seqBuffers.get(msg.sessionId);
+        if (!buf) {
+          reply({
+            type: 'resume_reply',
+            sessionId: msg.sessionId,
+            fromSeq: 0,
+            toSeq: 0,
+            currentSeq: 0,
+            gap: true,
+          });
+          return;
+        }
+        const replay = buf.replay(lastSeq);
+        for (const m of replay.messages) reply(m);
+        reply({
+          type: 'resume_reply',
+          sessionId: msg.sessionId,
+          fromSeq: replay.fromSeq,
+          toSeq: replay.toSeq,
+          currentSeq: replay.currentSeq,
+          gap: replay.gap,
+        });
+        break;
+      }
+
+      case 'stop_agent': {
+        if (!msg.sessionId) return;
+        try {
+          await this.agentManager.stop(msg.sessionId);
+          this.handleSessionStopped(msg.sessionId);
+        } catch (err) {
+          reply({
+            type: 'error',
+            message: err instanceof Error ? err.message : 'Failed to stop agent',
+          });
+        }
+        break;
+      }
+
+      case 'resize': {
+        if (!msg.sessionId || !msg.payload) return;
+        const { cols, rows } = msg.payload as { cols: number; rows: number };
+        try {
+          this.agentManager.resize(msg.sessionId, cols, rows);
+        } catch {
+          // ignore
+        }
+        break;
+      }
+
+      case 'list_agents': {
+        this.broadcastAgentList();
+        break;
+      }
+
+      default:
+        break;
     }
   }
 
@@ -734,9 +892,10 @@ export class Transport {
 
   /**
    * Stamp a sequenced message with the next per-session seq, buffer it for
-   * resume, then broadcast to subscribed clients. The seq field is additive
-   * (optional) so legacy clients that don't advertise sessionResume simply
-   * ignore it. COMPAT(sessionResume).
+   * resume, then broadcast to subscribed clients — local AND remote: the
+   * relay sink streams any session a remote client attached to. The seq
+   * field is additive (optional) so legacy clients that don't advertise
+   * sessionResume simply ignore it. COMPAT(sessionResume).
    */
   private emitSequenced(
     sessionId: string,
@@ -749,6 +908,9 @@ export class Transport {
       if (client.subscriptions.has(sessionId) && client.ws.readyState === OPEN) {
         client.ws.send(payload);
       }
+    }
+    if (this.relaySink && this.relaySessions.has(sessionId)) {
+      this.relaySink(msg);
     }
   }
 
@@ -851,6 +1013,9 @@ export class Transport {
         client.ws.send(data);
       }
     }
+    // Broadcasts are daemon-wide (agent_list, status_update, ownership…) —
+    // remote clients get them too.
+    this.relaySink?.(msg);
   }
 
   stop(): void {

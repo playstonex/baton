@@ -139,6 +139,51 @@ describe('SessionStore', () => {
     expect(long.endsWith('…')).toBe(true);
     expect(deriveTitle('')).toBe('New session');
   });
+
+  it('migrates pre-resume databases by adding the new columns', async () => {
+    const { Database } = await import('bun:sqlite');
+    const legacyPath = join(home, 'legacy.db');
+    // Create a DB with the OLD schema (no provider_session_id / resumed_from).
+    const legacy = new Database(legacyPath, { create: true });
+    legacy.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        project_path TEXT NOT NULL,
+        mode TEXT,
+        title TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        stopped_at TEXT,
+        archived_at TEXT,
+        exit_code INTEGER,
+        pid INTEGER
+      )
+    `);
+    legacy
+      .prepare(
+        `INSERT INTO sessions (id, type, project_path, mode, status, created_at, updated_at)
+         VALUES ('legacy-1', 'kiro', '/tmp/p', 'pty', 'stopped', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      )
+      .run();
+    legacy.close();
+
+    // Opening with SessionStore must ALTER the missing columns in place and
+    // keep the legacy row readable/writable.
+    const { SessionStore: MigratingStore } = await import('../session/store.js');
+    const migrated = new MigratingStore(legacyPath);
+    expect(migrated.getSession('legacy-1')).not.toBeNull();
+    migrated.patchSession('legacy-1', {
+      providerSessionId: 'prov-42',
+      resumedFrom: 'legacy-0',
+    });
+    const row = migrated.getSession('legacy-1');
+    expect(row!.provider_session_id).toBe('prov-42');
+    expect(row!.resumed_from).toBe('legacy-0');
+    expect(migrated.list().sessions[0].providerSessionId).toBe('prov-42');
+    migrated.close();
+  });
 });
 
 describe('AgentManager ↔ SessionStore integration (no runtime needed)', () => {

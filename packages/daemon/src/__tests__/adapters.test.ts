@@ -103,6 +103,77 @@ describe('createSdkAdapter factory semantics', () => {
   });
 });
 
+describe('session resume argv', () => {
+  it('kiro passes exact resume-id, falls back to -r', async () => {
+    const { KiroAdapter } = await import('../agent/kiro.js');
+    const adapter = new KiroAdapter();
+    const exact = adapter.buildSpawnConfig({
+      type: 'kiro',
+      projectPath: '/tmp',
+      resume: { providerSessionId: 'abc123' },
+    });
+    expect(exact.args).toContain('--resume-id');
+    expect(exact.args[exact.args.indexOf('--resume-id') + 1]).toBe('abc123');
+    const latest = adapter.buildSpawnConfig({
+      type: 'kiro',
+      projectPath: '/tmp',
+      resume: {},
+    });
+    expect(latest.args).toContain('-r');
+  });
+
+  it('antigravity uses --conversation / -c; pi uses --session / -c', async () => {
+    const { AntigravityAdapter } = await import('../agent/antigravity.js');
+    const { PiAdapter } = await import('../agent/pi.js');
+    const agy = new AntigravityAdapter().buildSpawnConfig({
+      type: 'antigravity',
+      projectPath: '/tmp',
+      resume: { providerSessionId: 'u-1' },
+    });
+    expect(agy.args).toEqual(['--conversation', 'u-1']);
+    const pi = new PiAdapter().buildSpawnConfig({
+      type: 'pi',
+      projectPath: '/tmp',
+      resume: { providerSessionId: 's-9' },
+    });
+    expect(pi.args).toEqual(['--session', 's-9']);
+    const piLatest = new PiAdapter().buildSpawnConfig({
+      type: 'pi',
+      projectPath: '/tmp',
+      resume: {},
+    });
+    expect(piLatest.args).toEqual(['-c']);
+  });
+
+  it('claude uses --resume / -c; codex uses resume subcommand', async () => {
+    const { ClaudeCodeAdapter } = await import('../agent/claude-code.js');
+    const { CodexAdapter } = await import('../agent/codex.js');
+    const claude = new ClaudeCodeAdapter().buildSpawnConfig({
+      type: 'claude-code',
+      projectPath: '/tmp',
+      resume: { providerSessionId: 'sid' },
+    });
+    expect(claude.args.slice(0, 2)).toEqual(['--resume', 'sid']);
+    const codex = new CodexAdapter().buildSpawnConfig({
+      type: 'codex',
+      projectPath: '/tmp',
+      resume: {},
+    });
+    expect(codex.args[0]).toBe('resume');
+    const codexPlain = new CodexAdapter().buildSpawnConfig({ type: 'codex', projectPath: '/tmp' });
+    expect(codexPlain.args).toEqual([]);
+  });
+
+  it('extracts provider session ids from cleaned output', async () => {
+    const { AntigravityAdapter } = await import('../agent/antigravity.js');
+    const agy = new AntigravityAdapter();
+    expect(
+      agy.extractSessionId('Conversation 3f2504e0-4f89-11d3-9a0c-0305e82c3301 started'),
+    ).toBe('3f2504e0-4f89-11d3-9a0c-0305e82c3301');
+    expect(agy.extractSessionId('no ids here')).toBeNull();
+  });
+});
+
 describe('KiroAdapter (unified entry)', () => {
   it('spawns kiro-cli chat with tools pre-approved for remote use', async () => {
     const { KiroAdapter } = await import('../agent/kiro.js');

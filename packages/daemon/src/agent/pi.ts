@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
-import { BaseAgentAdapter } from './adapter.js';
+import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 
 /**
@@ -25,10 +25,18 @@ export class PiAdapter extends BaseAgentAdapter {
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
     return {
       command: 'pi',
-      args: [...(config.args ?? [])],
+      args: [
+        // pi: `--session <path|id>` resumes a specific session, `-c` the previous.
+        ...resumeArgs({ idFlag: '--session', latest: ['-c'] }, config.resume),
+        ...(config.args ?? []),
+      ],
       env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
       cwd: config.projectPath,
     };
+  }
+
+  override extractSessionId(clean: string): string | null {
+    return extractUuid(clean, 'session');
   }
 
   parseOutput(raw: string): ParsedEvent[] {
