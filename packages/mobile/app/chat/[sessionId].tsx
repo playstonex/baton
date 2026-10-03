@@ -10,6 +10,7 @@ import {
   ActionSheetIOS,
   Alert,
   Clipboard,
+  Keyboard,
   LayoutAnimation,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -21,7 +22,6 @@ import Animated, {
   Easing,
   FadeInDown,
   interpolate,
-  useAnimatedKeyboard,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -892,14 +892,29 @@ export default function ChatScreen() {
     );
   }
 
-  // Keyboard tracking on the UI thread (the keyboardLayoutGuide equivalent):
-  // the content area's animated bottom inset makes everything below it —
-  // docked cards, queue, composer — hug the keyboard frame in real time,
-  // including interactive swipe-to-dismiss. Android relies on window resize.
-  const keyboard = useAnimatedKeyboard();
-  const listKeyboardInset = useAnimatedStyle(() => ({
-    flex: 1,
-    paddingBottom: Platform.OS === 'ios' ? keyboard.height.value : 0,
+  // Keyboard tracking via RN Keyboard events driving a shared value (the
+  // keyboardLayoutGuide equivalent): the animated bottom inset lives on the
+  // *screen* container so every child in flow — transcript, docked cards,
+  // queue, composer — hugs the keyboard frame in real time. (Padding on the
+  // list wrapper alone would only shrink the list's own content box and
+  // never lift its siblings.) Keyboard events replaced useAnimatedKeyboard:
+  // same frame source, but its observer proved flaky on the new arch.
+  // Android relies on window resize instead.
+  const keyboardHeight = useSharedValue(0);
+  useEffect(() => {
+    const willShow = Keyboard.addListener('keyboardWillShow', (e) => {
+      keyboardHeight.value = withTiming(e.endCoordinates.height, { duration: 260 });
+    });
+    const willHide = Keyboard.addListener('keyboardWillHide', () => {
+      keyboardHeight.value = withTiming(0, { duration: 220 });
+    });
+    return () => {
+      willShow.remove();
+      willHide.remove();
+    };
+  }, [keyboardHeight]);
+  const screenKeyboardInset = useAnimatedStyle(() => ({
+    paddingBottom: Platform.OS === 'ios' ? keyboardHeight.value : 0,
   }));
   // The keyboard frame already covers the home-indicator area — collapse the
   // safe-area padding as it rises so the field sits flush on the keyboard.
@@ -907,11 +922,11 @@ export default function ChatScreen() {
     paddingHorizontal: Spacing.md + 2,
     paddingTop: Spacing.sm - 2,
     paddingBottom:
-      Platform.OS === 'ios' ? Math.max(0, insets.bottom - keyboard.height.value) : insets.bottom,
+      Platform.OS === 'ios' ? Math.max(0, insets.bottom - keyboardHeight.value) : insets.bottom,
   }));
 
   return (
-    <View style={[styles.container, { backgroundColor: c.bg }]}>
+    <Animated.View style={[styles.container, { backgroundColor: c.bg }, screenKeyboardInset]}>
       <View style={styles.headerOverlay}>
         <BlurView
           tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
@@ -1061,9 +1076,8 @@ export default function ChatScreen() {
         </BlurView>
       </View>
 
-      <Animated.View style={listKeyboardInset}>
-        <View style={styles.contentArea}>
-          {messages.length === 0 ? (
+      <View style={styles.contentArea}>
+        {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>What should we work on?</Text>
           <Text style={[styles.emptySub, { color: c.textTertiary }]}>
@@ -1150,8 +1164,7 @@ export default function ChatScreen() {
           </Animated.View>
         </View>
         )}
-        </View>
-      </Animated.View>
+      </View>
 
       {(activePermission || waitingApproval) && (
         <Animated.View entering={FadeInDown.duration(Glass.morph.fast)} style={styles.dockedCardWrapper}>
@@ -1265,6 +1278,8 @@ export default function ChatScreen() {
                 backgroundColor: c.isDark
                   ? 'rgba(255,255,255,0.08)'
                   : 'rgba(60,60,67,0.07)',
+                borderColor:
+                  c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
                 opacity: pressed ? 0.7 : 1,
                 transform: [{ scale: pressed ? 0.9 : 1 }],
               },
@@ -1272,9 +1287,33 @@ export default function ChatScreen() {
             hitSlop={4}
             accessibilityLabel="Composer settings"
           >
-            <Ionicons name="options-outline" size={18} color={c.textSecondary} />
-            <View style={styles.tuneBadge}>
-              <Text style={styles.tuneBadgeText}>{thinkingBadge}</Text>
+            <Ionicons
+              name="options-outline"
+              size={18}
+              color={
+                thinkingMode !== 'none'
+                  ? c.isDark
+                    ? Colors.primary[300]
+                    : Colors.primary[500]
+                  : c.textSecondary
+              }
+            />
+            <View
+              style={[
+                styles.tuneBadge,
+                thinkingMode === 'none' && {
+                  backgroundColor: c.subtle,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tuneBadgeText,
+                  thinkingMode === 'none' && { color: c.textTertiary },
+                ]}
+              >
+                {thinkingBadge}
+              </Text>
             </View>
           </Pressable>
 
@@ -1507,7 +1546,7 @@ export default function ChatScreen() {
           wsService.send({ type: 'git_status_request', sessionId });
         }}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -2051,6 +2090,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
