@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { Typography, Spacing, CornerRadius, Colors } from '../constants/theme';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useConnectionStore } from '../stores/connection';
@@ -12,16 +13,21 @@ import { useConnectionStore } from '../stores/connection';
  *
  * Only renders when a host is configured (activeHostId set) — we don't want
  * to nag users who haven't paired yet (the Settings screen handles that case).
+ * The Dashboard is excluded: its server card already carries the connection
+ * state, and a floating banner over that layout just reads as clutter.
  */
 export function OfflineBanner() {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const pathname = usePathname();
   const connected = useConnectionStore((s) => s.connected);
   const activeHostId = useConnectionStore((s) => s.activeHostId);
 
   // Don't show before any host is configured — that's the Settings flow's job.
   if (connected || !activeHostId) return null;
+  // The dashboard's server card owns the offline story.
+  if (pathname === '/' || pathname.startsWith('/(tabs)')) return null;
 
   return (
     <View
