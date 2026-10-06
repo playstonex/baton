@@ -13,7 +13,7 @@
     "./host": "./src/host/index.ts"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.6.4",
     "typescript": "^6.0.3"
   },
   "scripts": {
@@ -23,6 +23,6 @@
   },
   "dependencies": {
     "tweetnacl": "^1.0.3",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }

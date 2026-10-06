@@ -1,7 +1,7 @@
 {
   "name": "@baton/cli",
   "version": "1.0.0",
-  "description": "Baton CLI — control AI agents from the terminal",
+  "description": "Baton CLI \u2014 control AI agents from the terminal",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -16,7 +16,7 @@
     "@baton/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.6.4",
     "typescript": "^6.0.3"
   }
 }

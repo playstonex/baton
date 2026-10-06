@@ -2,6 +2,7 @@
   "name": "baton",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Open-source remote AI Agent orchestration platform",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.8.1",
@@ -24,19 +25,19 @@
       "sharp"
     ],
     "overrides": {
-      "react": "19.2.3",
-      "react-dom": "19.2.3",
-      "@types/react": "19.2.14"
+      "react": "19.2.7",
+      "react-dom": "19.2.7",
+      "@types/react": "19.2.18"
     }
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.62.1",
-    "@typescript-eslint/parser": "^8.62.1",
-    "eslint": "^10.6.0",
-    "prettier": "^3.9.4",
-    "turbo": "^2.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.71.1",
+    "@typescript-eslint/parser": "^8.71.1",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.7",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^5.0.3"
   },
   "dependencies": {
     "tweetnacl": "^1.0.3"
