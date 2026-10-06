@@ -5,6 +5,7 @@ import {
   Text,
   Pressable,
   ScrollView,
+  StyleSheet,
   Linking,
   Share,
 } from 'react-native';
@@ -89,6 +90,10 @@ export default function SettingsScreen() {
   const setHosts = useConnectionStore((s) => s.setHosts);
   const setActiveHost = useConnectionStore((s) => s.setActiveHost);
 
+  const activeHost = useConnectionStore(
+    (s) => s.hosts.find((h) => h.id === s.activeHostId) ?? null,
+  );
+
   const themeMode = useThemeStore((s) => s.theme);
   const setThemeMode = useThemeStore((s) => s.setTheme);
   const c = useThemeColors();
@@ -128,6 +133,17 @@ export default function SettingsScreen() {
     router.replace('/connect');
   }
 
+  /** Hostname-only endpoint for the summary card (no credentials in URLs). */
+  const endpoint = (() => {
+    const url = activeHost?.mode === 'local' ? activeHost.localHttpUrl : activeHost?.relayUrl;
+    if (!url) return '';
+    try {
+      return new URL(url).host;
+    } catch {
+      return '';
+    }
+  })();
+
   function setAccessMode(mode: AccessMode) {
     setAccessModeState(mode);
     wsService.send({
@@ -156,18 +172,58 @@ export default function SettingsScreen() {
           Settings
         </Text>
 
-        <GlassSectionHeader c={c} title="Appearance" />
+        {/* Live connection summary — connection first, mirroring web settings v2 */}
         <GlassCard c={c}>
-          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-            {THEME_OPTIONS.map((opt) => (
-              <GlassPill
-                key={opt.key}
-                c={c}
-                label={opt.label}
-                active={themeMode === opt.key}
-                onPress={() => setThemeMode(opt.key)}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 11,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: connected ? 'rgba(63,185,80,0.15)' : 'rgba(235,77,85,0.15)',
+              }}
+            >
+              <Ionicons
+                name={connected ? 'checkmark' : 'alert-circle-outline'}
+                size={18}
+                color={connected ? Colors.success[400] : Colors.danger[400]}
               />
-            ))}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}
+                numberOfLines={1}
+              >
+                {activeHost?.label ?? 'Server'}
+              </Text>
+              <Text
+                style={[Typography.caption1, { color: c.textTertiary, marginTop: 1 }]}
+                numberOfLines={1}
+              >
+                {connected
+                  ? `Connected · ${activeHost?.mode ?? 'local'}${endpoint ? ` · ${endpoint}` : ''}`
+                  : 'Not connected — retrying'}
+              </Text>
+            </View>
+            {connected && hostId ? (
+              <View
+                style={{
+                  flexShrink: 0,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: c.cardBorder,
+                  backgroundColor: c.isDark ? 'rgba(255,255,255,0.04)' : c.elevated,
+                  borderRadius: 7,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                }}
+              >
+                <Text style={[Typography.mono, { fontSize: 10, color: c.textTertiary }]}>
+                  {hostId.slice(0, 8)}…
+                </Text>
+              </View>
+            ) : null}
           </View>
         </GlassCard>
 
@@ -270,6 +326,10 @@ export default function SettingsScreen() {
         </GlassCard>
 
         {connected && (
+          <GlassButton c={c} label="Disconnect" onPress={disconnect} variant="danger" />
+        )}
+
+        {connected && (
           <>
             <GlassSectionHeader c={c} title="Access Control" />
             <GlassCard c={c}>
@@ -339,36 +399,20 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {connected && hostId ? (
-          <GlassCard c={c}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: Colors.success[400],
-                }}
+        <GlassSectionHeader c={c} title="Appearance" />
+        <GlassCard c={c}>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+            {THEME_OPTIONS.map((opt) => (
+              <GlassPill
+                key={opt.key}
+                c={c}
+                label={opt.label}
+                active={themeMode === opt.key}
+                onPress={() => setThemeMode(opt.key)}
               />
-              <View>
-                <Text
-                  style={[Typography.subhead, { color: Colors.success[400], fontWeight: '600' }]}
-                >
-                  Connected
-                </Text>
-                <Text
-                  style={[Typography.monoSemiBold, { color: Colors.success[400], fontSize: 12 }]}
-                >
-                  {hostId.slice(0, 8)}...
-                </Text>
-              </View>
-            </View>
-          </GlassCard>
-        ) : null}
-
-        {connected && (
-          <GlassButton c={c} label="Disconnect" onPress={disconnect} variant="danger" />
-        )}
+            ))}
+          </View>
+        </GlassCard>
 
         <GlassSectionHeader c={c} title="About" />
         <GlassCard c={c} style={{ padding: 0 }}>

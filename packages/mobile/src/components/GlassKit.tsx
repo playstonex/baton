@@ -23,11 +23,15 @@ export function GlassCard({
   style,
   children,
   blurIntensity,
+  overlay,
 }: {
   c: ThemeColors;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
   blurIntensity?: number;
+  /** Painted edge-to-edge inside the card (above surface+tint, under content) —
+   * attention rails/tints sit flush with the card border, not the content padding. */
+  overlay?: React.ReactNode;
 }) {
   return (
     <BlurView
@@ -57,6 +61,7 @@ export function GlassCard({
         ]}
         pointerEvents="none"
       />
+      {overlay}
       <View style={styles.glassCardContent}>{children}</View>
     </BlurView>
   );

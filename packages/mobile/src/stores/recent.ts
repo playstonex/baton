@@ -22,6 +22,8 @@ export interface RecentSession {
   chatMode?: 'chat' | 'terminal';
   /** Server-derived title (first user prompt) when the daemon provides one. */
   title?: string;
+  /** Transcript event count from the daemon's session store, for the meta line. */
+  eventCount?: number;
 }
 
 interface RecentState {
