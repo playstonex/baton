@@ -1,11 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { AnimatePresence, cubicBezier, motion } from 'framer-motion';
 import type { AgentProcess, AgentType, SessionSummary } from '@baton/shared';
 import { SystemStats } from '../components/SystemStats.js';
 import { wsService } from '../services/websocket.js';
 import { useAgentStore } from '../stores/connection.js';
-import { PageHeader, Card, EmptyState, StatusBadge, StatusDot, Button, Input } from '../lib/ui.js';
-import { IconServer } from '../lib/icons.js';
+import { PageHeader, Card, EmptyState, StatusDot, Button, Input, SectionHeader, SegmentedControl } from '../lib/ui.js';
+import {
+  IconAlertCircle,
+  IconArchive,
+  IconArrowRight,
+  IconPlus,
+  IconRefreshCw,
+  IconSearch,
+  IconTrash,
+  IconX,
+} from '../lib/icons.js';
 
 const AGENT_OPTIONS: {
   type: AgentType;
@@ -62,6 +72,8 @@ export function DashboardScreen() {
   const [daemonOnline, setDaemonOnline] = useState(false);
   const [pastSessions, setPastSessions] = useState<SessionSummary[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const [launchOpen, setLaunchOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
   // Generic ACP providers become selectable agent options when configured.
   useEffect(() => {
@@ -75,15 +87,18 @@ export function DashboardScreen() {
       });
   }, []);
 
-  const agentOptions = [
-    ...AGENT_OPTIONS,
-    ...acpProviders.map((p) => ({
-      type: 'acp' as AgentType,
-      label: p.label,
-      desc: 'Generic ACP provider',
-      acpProvider: p.name,
-    })),
-  ];
+  const agentOptions = useMemo(
+    () => [
+      ...AGENT_OPTIONS,
+      ...acpProviders.map((p) => ({
+        type: 'acp' as AgentType,
+        label: p.label,
+        desc: 'Generic ACP provider',
+        acpProvider: p.name,
+      })),
+    ],
+    [acpProviders],
+  );
 
   const selectedAgent =
     agentOptions.find(
@@ -93,24 +108,19 @@ export function DashboardScreen() {
       ? agentOptions.find((o) => o.type === 'acp')!
       : AGENT_OPTIONS[0]);
 
+  const fetchAgents = useCallback(() => {
+    fetch('/api/agents')
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((list: AgentProcess[]) => {
+        setAgents(list);
+        setDaemonOnline(true);
+      })
+      .catch(() => {
+        setDaemonOnline(false);
+      });
+  }, [setAgents]);
+
   useEffect(() => {
-    let cancelled = false;
-    const fetchAgents = () => {
-      fetch('/api/agents')
-        .then((res) => (res.ok ? res.json() : Promise.reject()))
-        .then((list: AgentProcess[]) => {
-          if (!cancelled) {
-            setAgents(list);
-            setDaemonOnline(true);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setDaemonOnline(false);
-        });
-    };
-
-    fetchAgents();
-
     const unsubList = wsService.on('agent_list', (msg) => {
       if (msg.type === 'agent_list') {
         setAgents(
@@ -145,14 +155,14 @@ export function DashboardScreen() {
     });
 
     wsService.connect();
+    fetchAgents();
 
     return () => {
-      cancelled = true;
       unsubList();
       unsubStatus();
       unsubState();
     };
-  }, [setAgents, updateAgentStatus]);
+  }, [fetchAgents, setAgents, updateAgentStatus]);
 
   // Past sessions come from the daemon's persistent store — they survive
   // daemon restarts, unlike the in-memory live list.
@@ -196,7 +206,7 @@ export function DashboardScreen() {
   }
 
   async function startAgent() {
-    if (!projectPath.trim()) return;
+    if (!projectPath.trim() || !daemonOnline) return;
     setLoading(true);
     try {
       const res = await fetch('/api/agents/start', {
@@ -227,6 +237,7 @@ export function DashboardScreen() {
         startedAt: new Date().toISOString(),
         mode: mode === 'chat' ? 'sdk' : 'pty',
       });
+      setLaunchOpen(false);
       navigate(`/${mode}/${data.sessionId}`);
     } catch (err) {
       console.error(`Failed to connect to Daemon: ${err}`);
@@ -245,6 +256,11 @@ export function DashboardScreen() {
     }
   }
 
+  function retryConnection() {
+    wsService.connect();
+    fetchAgents();
+  }
+
   // Needs-your-attention first, then busy, then idle (paseo's bucket order).
   const activeAgents = agents
     .filter((a) => a.status !== 'stopped')
@@ -252,129 +268,148 @@ export function DashboardScreen() {
   const liveIds = new Set(activeAgents.map((a) => a.id));
   const pastList = pastSessions.filter((s) => !liveIds.has(s.id) && (!s.archivedAt || showArchived));
 
+  const filteredPast = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return pastList;
+    return pastList.filter((s) => {
+      const label = AGENT_OPTIONS.find((o) => o.type === s.type)?.label ?? s.type;
+      return `${s.title ?? ''} ${label} ${s.projectPath}`.toLowerCase().includes(q);
+    });
+  }, [pastList, query]);
+
+  // Most recently used project paths — quick-fill chips in the launch dialog.
+  const recentPaths = useMemo(() => {
+    const seen = new Set<string>();
+    for (const s of pastSessions) {
+      if (s.projectPath && !seen.has(s.projectPath)) seen.add(s.projectPath);
+      if (seen.size >= 3) break;
+    }
+    return [...seen];
+  }, [pastSessions]);
+
+  const openLaunch = () => {
+    if (daemonOnline) setLaunchOpen(true);
+  };
+
   return (
-    <div className="max-w-4xl space-y-8">
+    <div className="mx-auto max-w-5xl">
       <PageHeader
-        title="Baton"
-        description="Agent orchestration dashboard"
+        title="Dashboard"
+        description="Everything running on this host, at a glance."
         actions={
-          <StatusBadge status={daemonOnline ? 'connected' : 'disconnected'} />
+          <>
+            <button
+              type="button"
+              onClick={() => navigate('/settings')}
+              className="inline-flex h-7 items-center gap-2 rounded-full border border-line px-3 text-xs font-medium text-fg-2 transition-colors duration-150 hover:border-line-strong hover:text-fg"
+            >
+              <StatusDot status={daemonOnline ? 'connected' : 'disconnected'} />
+              {daemonOnline ? 'Connected' : 'Offline'}
+            </button>
+            <Button
+              variant="primary"
+              onClick={openLaunch}
+              disabled={!daemonOnline}
+              title={daemonOnline ? undefined : 'Daemon offline'}
+            >
+              <IconPlus className="h-3.5 w-3.5" />
+              New session
+            </Button>
+          </>
         }
       />
 
-      <Card className="p-6">
-        <div className="mb-6 grid gap-6 md:grid-cols-2">
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted">Agent</label>
-            <div className="grid grid-cols-2 gap-2">
-              {agentOptions.map((opt) => {
-                const selected =
-                  opt.type === agentType &&
-                  (!opt.acpProvider || opt.acpProvider === selectedAgent.acpProvider);
-                return (
-                  <button
-                    key={opt.acpProvider ? `acp:${opt.acpProvider}` : opt.type}
-                    type="button"
-                    onClick={() => {
-                      setAgentType(opt.type);
-                      if (opt.acpProvider) setAcpProvider(opt.acpProvider);
-                    }}
-                    className={`rounded-sm border px-3 py-2.5 text-left text-[13px] font-medium transition-colors duration-150 ${
-                      selected
-                        ? 'border-accent bg-accent-soft text-fg'
-                        : 'border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-muted">{selectedAgent.desc}</p>
-          </div>
+      {!daemonOnline ? (
+        <OfflinePanel onRetry={retryConnection} />
+      ) : (
+        <SystemStats />
+      )}
 
-          <div className="flex flex-col">
-            <label className="mb-2 block text-xs font-medium text-muted">Project Path</label>
-            <Input
-              placeholder="/path/to/project"
-              value={projectPath}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProjectPath(e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && startAgent()}
-              className="font-mono"
+      {daemonOnline && (
+        <section className="mb-7">
+          <SectionHeader title="Active" count={activeAgents.length} />
+          {activeAgents.length === 0 ? (
+            <EmptyState
+              icon={<IconArrowRight className="h-5 w-5" />}
+              title="No active sessions"
+              description="Pick an agent, point it at a project, and it starts on this host — chat for rich rendering, terminal for a raw PTY."
+              action={
+                <Button variant="secondary" onClick={openLaunch}>
+                  Start your first session
+                </Button>
+              }
             />
+          ) : (
+            <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
+              {activeAgents.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  onOpen={() =>
+                    navigate(
+                      agent.mode === 'sdk'
+                        ? `/chat/${agent.id}`
+                        : `/terminal/${agent.id}`,
+                    )
+                  }
+                  onStop={() => stopAgent(agent.id)}
+                />
+              ))}
+            </Card>
+          )}
+        </section>
+      )}
 
-            <div className="mt-4 flex items-center gap-2">
-              <SegmentedMode mode={mode} onChange={setMode} />
+      <section>
+        <SectionHeader title="Recent" count={filteredPast.length}>
+          {daemonOnline ? (
+            <div className="flex items-center gap-2">
+              <label className="flex h-7 w-52 items-center gap-1.5 rounded-sm border border-line bg-field px-2 text-meta transition-colors duration-150 focus-within:border-accent">
+                <IconSearch className="h-3.5 w-3.5 shrink-0" />
+                <input
+                  value={query}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+                  placeholder="Filter sessions"
+                  className="w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-meta"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowArchived((v) => !v)}
+                className={`inline-flex h-7 items-center rounded-full border px-3 text-xs font-medium transition-colors duration-150 ${
+                  showArchived
+                    ? 'border-accent/40 bg-accent-soft text-accent-hover'
+                    : 'border-line text-muted hover:text-fg'
+                }`}
+              >
+                Archived
+              </button>
             </div>
+          ) : (
+            <span className="text-xs text-meta">
+              Showing the last known list — it may be stale.
+            </span>
+          )}
+        </SectionHeader>
 
-            <Button
-              variant="primary"
-              size="lg"
-              disabled={loading || !projectPath.trim() || !daemonOnline}
-              onClick={startAgent}
-              className="mt-auto w-full pt-0"
-            >
-              {loading ? 'Starting…' : `Launch ${selectedAgent.label}`}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <SystemStats />
-
-      <div>
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-fg">Active sessions</h2>
-          <span className="text-xs tabular-nums text-meta">{activeAgents.length} total</span>
-        </div>
-
-        {activeAgents.length === 0 ? (
-          <EmptyState
-            icon={<IconServer className="h-5 w-5" />}
-            title="No active sessions"
-            description="Launch an agent to get started."
-          />
+        {filteredPast.length === 0 ? (
+          query.trim() ? (
+            <EmptyState
+              icon={<IconSearch className="h-5 w-5" />}
+              title="No sessions match"
+              description={`Nothing in the recent list matches “${query.trim()}”.`}
+            />
+          ) : (
+            <div className="rounded-md border border-dashed border-line px-6 py-10 text-center">
+              <h4 className="text-[13px] font-medium text-muted">No past sessions</h4>
+              <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
+                Finished sessions are kept here with their full transcripts, ready to resume.
+              </p>
+            </div>
+          )
         ) : (
           <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
-            {activeAgents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                onOpen={() =>
-                  navigate(
-                    agent.mode === 'sdk'
-                      ? `/chat/${agent.id}`
-                      : `/terminal/${agent.id}`,
-                  )
-                }
-                onStop={() => stopAgent(agent.id)}
-              />
-            ))}
-          </Card>
-        )}
-      </div>
-
-      <div>
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-fg">Recent sessions</h2>
-          <button
-            type="button"
-            onClick={() => setShowArchived((v) => !v)}
-            className="text-xs text-muted transition-colors duration-150 hover:text-fg"
-          >
-            {showArchived ? 'Hide archived' : 'Show archived'}
-          </button>
-        </div>
-
-        {pastList.length === 0 ? (
-          <EmptyState
-            icon={<IconServer className="h-5 w-5" />}
-            title="No past sessions"
-            description="Finished sessions are kept here with their transcripts."
-          />
-        ) : (
-          <Card padding={false} className="divide-y divide-line-soft overflow-hidden">
-            {pastList.map((session) => (
+            {filteredPast.map((session) => (
               <PastSessionRow
                 key={session.id}
                 session={session}
@@ -388,7 +423,25 @@ export function DashboardScreen() {
             ))}
           </Card>
         )}
-      </div>
+      </section>
+
+      <LaunchDialog
+        open={launchOpen}
+        onClose={() => setLaunchOpen(false)}
+        agentOptions={agentOptions}
+        selectedAgent={selectedAgent}
+        onSelect={(opt) => {
+          setAgentType(opt.type);
+          if (opt.acpProvider) setAcpProvider(opt.acpProvider);
+        }}
+        mode={mode}
+        onModeChange={setMode}
+        projectPath={projectPath}
+        onProjectPathChange={setProjectPath}
+        recentPaths={recentPaths}
+        loading={loading}
+        onSubmit={startAgent}
+      />
     </div>
   );
 }
@@ -405,37 +458,231 @@ const STATUS_PRIORITY: Record<string, number> = {
   stopped: 7,
 };
 
-function SegmentedMode({
-  mode,
-  onChange,
-}: {
-  mode: 'chat' | 'terminal';
-  onChange: (m: 'chat' | 'terminal') => void;
-}) {
-  const options: Array<{ key: 'chat' | 'terminal'; label: string }> = [
-    { key: 'chat', label: 'Chat' },
-    { key: 'terminal', label: 'Terminal' },
-  ];
+/* ─────────────────────────────────────────────
+   Offline — honest state with a recovery path,
+   shown instead of telemetry + active list.
+   ───────────────────────────────────────────── */
+function OfflinePanel({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="inline-flex w-full rounded-sm border border-line-soft bg-raised p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.key}
-          type="button"
-          onClick={() => onChange(opt.key)}
-          className={`flex-1 rounded-[calc(var(--radius-sm)-2px)] px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
-            mode === opt.key
-              ? 'bg-surface text-fg shadow-[var(--shadow-raised)] dark:bg-active'
-              : 'text-muted hover:text-fg'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
+    <div className="mb-7 flex items-center gap-3.5 rounded-md border border-danger/25 bg-surface px-4 py-4">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-danger-soft text-danger">
+        <IconAlertCircle className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-fg">Can't reach the daemon</div>
+        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+          The Baton daemon isn't responding on{' '}
+          <code className="rounded bg-raised px-1 py-px font-mono text-[11px] text-fg-2">
+            {wsService.httpUrl}
+          </code>
+          . Start it on the host with{' '}
+          <code className="rounded bg-raised px-1 py-px font-mono text-[11px] text-fg-2">
+            baton daemon start
+          </code>
+          , then retry.
+        </p>
+      </div>
+      <Button size="sm" variant="secondary" onClick={onRetry} className="shrink-0">
+        <IconRefreshCw className="h-3.5 w-3.5" />
+        Retry
+      </Button>
     </div>
   );
 }
 
+/* ─────────────────────────────────────────────
+   Launch dialog — the launcher's new home.
+   Command-palette style: agent tiles, project path
+   with recent quick-fills, mode. ↵ launches.
+   ───────────────────────────────────────────── */
+type AgentOption = (typeof AGENT_OPTIONS)[number];
+
+function LaunchDialog({
+  open,
+  onClose,
+  agentOptions,
+  selectedAgent,
+  onSelect,
+  mode,
+  onModeChange,
+  projectPath,
+  onProjectPathChange,
+  recentPaths,
+  loading,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  agentOptions: AgentOption[];
+  selectedAgent: AgentOption;
+  onSelect: (opt: AgentOption) => void;
+  mode: 'chat' | 'terminal';
+  onModeChange: (m: 'chat' | 'terminal') => void;
+  projectPath: string;
+  onProjectPathChange: (v: string) => void;
+  recentPaths: string[];
+  loading: boolean;
+  onSubmit: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="overlay"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-overlay px-4 pt-[12vh]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          onClick={onClose}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="New session"
+            className="w-full max-w-[560px] rounded-lg border border-line-soft bg-surface shadow-[var(--shadow-modal)]"
+            initial={{ opacity: 0, y: 8, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.985 }}
+            transition={{ duration: 0.18, ease: cubicBezier(0.2, 0, 0, 1) }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                onSubmit();
+              }}
+            >
+              <div className="flex items-center justify-between px-4 pt-3.5">
+                <h3 className="text-sm font-semibold text-fg">New session</h3>
+                <div className="flex items-center gap-2">
+                  <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                    esc
+                  </kbd>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Close"
+                    className="flex h-7 w-7 items-center justify-center rounded-sm text-muted transition-colors duration-150 hover:bg-raised hover:text-fg"
+                  >
+                    <IconX className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-4 pb-1 pt-3.5">
+                <div className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.07em] text-meta">
+                  Agent
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {agentOptions.map((opt) => {
+                    const selected =
+                      opt.type === selectedAgent.type &&
+                      (!opt.acpProvider || opt.acpProvider === selectedAgent.acpProvider);
+                    return (
+                      <button
+                        key={opt.acpProvider ? `acp:${opt.acpProvider}` : opt.type}
+                        type="button"
+                        onClick={() => onSelect(opt)}
+                        className={`rounded-sm border px-2.5 py-2 text-left text-[13px] font-medium transition-colors duration-150 ${
+                          selected
+                            ? 'border-accent bg-accent-soft text-fg'
+                            : 'border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 min-h-[18px] text-xs text-muted">{selectedAgent.desc}</p>
+
+                <div className="mb-1.5 mt-4 text-[11px] font-medium uppercase tracking-[0.07em] text-meta">
+                  Project path
+                </div>
+                <Input
+                  autoFocus
+                  value={projectPath}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    onProjectPathChange(e.target.value)
+                  }
+                  placeholder="/path/to/project"
+                  className="font-mono text-[12.5px]"
+                />
+                {recentPaths.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-meta">Recent</span>
+                    {recentPaths.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => onProjectPathChange(p)}
+                        className="max-w-[220px] truncate rounded-full border border-line-soft px-2.5 py-0.5 font-mono text-[10.5px] text-muted transition-colors duration-150 hover:border-line-strong hover:text-fg"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mb-1.5 mt-4 text-[11px] font-medium uppercase tracking-[0.07em] text-meta">
+                  Mode
+                </div>
+                <SegmentedControl
+                  value={mode}
+                  onChange={onModeChange}
+                  options={[
+                    { key: 'chat', label: 'Chat' },
+                    { key: 'terminal', label: 'Terminal' },
+                  ]}
+                  className="flex w-full [&>button]:flex-1"
+                />
+                <p className="mt-2 text-xs text-muted">
+                  <span className="font-medium text-fg-2">Chat</span> — SDK session with rich
+                  rendering. Switch to{' '}
+                  <span className="font-medium text-fg-2">Terminal</span> for a raw PTY in the
+                  browser.
+                </p>
+              </div>
+
+              <div className="mt-2.5 flex items-center justify-between border-t border-line-soft px-4 py-3.5">
+                <span className="flex items-center gap-1.5 text-xs text-meta">
+                  <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px]">
+                    ↵
+                  </kbd>
+                  to launch
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="tertiary" onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" disabled={loading || !projectPath.trim()}>
+                    {loading ? 'Starting…' : `Launch ${selectedAgent.label}`}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Active session row — status dot carries state
+   (no badge for the ordinary cases); rows that need
+   you get a rail + tint so they pop in a scan.
+   ───────────────────────────────────────────── */
 function AgentCard({
   agent,
   onOpen,
@@ -448,35 +695,87 @@ function AgentCard({
   const label = AGENT_OPTIONS.find((option) => option.type === agent.type)?.label ?? agent.type;
   const now = useNow();
   const activity = activityLine(agent, now);
+  const attention: 'warn' | 'danger' | null =
+    agent.status === 'waiting_input' ? 'warn' : agent.status === 'error' ? 'danger' : null;
+
+  const sinceMs = agent.stateDetail?.since ? now - agent.stateDetail.since : sinceStart(agent, now);
+  const dur = sinceMs != null ? formatDuration(sinceMs) : '';
 
   return (
-    <div className="flex items-center justify-between transition-colors duration-150 hover:bg-raised/50">
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 px-5 py-3.5 text-left">
-        <StatusDot status={agent.status} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-fg">
-              {agent.title ?? label}
+    <div
+      className={`relative flex items-center transition-colors duration-150 ${
+        attention === 'warn'
+          ? 'bg-[color-mix(in_srgb,var(--color-warn)_5%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-warn)_8%,transparent)]'
+          : attention === 'danger'
+            ? 'bg-[color-mix(in_srgb,var(--color-danger)_5%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)]'
+            : 'hover:bg-raised/50'
+      }`}
+    >
+      {attention && (
+        <span
+          className={`absolute bottom-2.5 left-0 top-2.5 w-0.5 rounded-r-full ${
+            attention === 'warn' ? 'bg-warn' : 'bg-danger'
+          }`}
+          aria-hidden="true"
+        />
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <StatusDot status={agent.status} />
+          <span className="truncate text-[13px] font-medium text-fg">
+            {agent.title ?? label}
+          </span>
+          {attention === 'warn' && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
+              <span className="h-1 w-1 rounded-full bg-warn" />
+              needs input
             </span>
-            <StatusBadge status={agent.status} />
-          </div>
-          <div className="mt-0.5 truncate font-mono text-xs text-muted">
-            {label !== (agent.title ?? label) ? `${label} · ` : ''}
-            {agent.projectPath}
-          </div>
-          {activity && (
-            <div className={`mt-0.5 truncate text-xs ${activity.className}`}>{activity.text}</div>
+          )}
+          {attention === 'danger' && (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-medium text-danger">
+              error
+            </span>
           )}
         </div>
+        <div className="mt-0.5 truncate font-mono text-[11.5px] text-muted">
+          {label !== (agent.title ?? label) ? `${label} · ` : ''}
+          {agent.projectPath}
+        </div>
+        {activity && (
+          <div className={`mt-0.5 truncate text-xs ${activity.className}`}>{activity.text}</div>
+        )}
       </button>
 
-        <div className="pr-5">
-          <Button size="sm" variant="error" onClick={onStop}>
-            Stop
-          </Button>
-        </div>
+      <div className="flex shrink-0 items-center gap-2.5 pr-4">
+        {dur && (
+          <span
+            className="font-mono text-[11.5px] tabular-nums text-meta"
+            style={attention === 'warn' ? { color: 'var(--color-warn)' } : undefined}
+          >
+            {dur}
+          </span>
+        )}
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onStop}
+          className="hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
+        >
+          Stop
+        </Button>
       </div>
+    </div>
   );
+}
+
+function sinceStart(agent: AgentProcess, now: number): number | null {
+  const started = Date.parse(agent.startedAt);
+  if (Number.isNaN(started)) return null;
+  return Math.max(0, now - started);
 }
 
 /** Ticks once a second so status durations stay live on the dashboard. */
@@ -493,7 +792,7 @@ function formatDuration(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   if (total < 60) return `${total}s`;
   const minutes = Math.floor(total / 60);
-  if (minutes < 60) return `${minutes}m ${total % 60}s`;
+  if (minutes < 60) return `${minutes}m ${String(total % 60).padStart(2, '0')}s`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m`;
 }
@@ -579,6 +878,10 @@ function relativeTime(iso: string): string {
   return new Date(then).toLocaleDateString();
 }
 
+/* ─────────────────────────────────────────────
+   Past session row — one dense mono meta line;
+   Resume / Archive / Delete reveal on hover.
+   ───────────────────────────────────────────── */
 function PastSessionRow({
   session,
   onOpen,
@@ -596,41 +899,63 @@ function PastSessionRow({
     AGENT_OPTIONS.find((option) => option.type === session.type)?.label ?? session.type;
 
   return (
-    <div className="flex items-center justify-between transition-colors duration-150 hover:bg-raised/50">
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 px-5 py-3 text-left">
-        <StatusDot status={session.status} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`truncate text-[13px] font-medium ${session.archivedAt ? 'text-muted line-through' : 'text-fg'}`}>
-              {session.title ?? `${label} session`}
+    <div className="group flex items-center transition-colors duration-150 hover:bg-raised/50">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 px-4 py-2.5 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <StatusDot status={session.status} />
+          <span
+            className={`truncate text-[13px] font-medium ${
+              session.archivedAt ? 'text-muted line-through' : 'text-fg'
+            }`}
+          >
+            {session.title ?? `${label} session`}
+          </span>
+          {session.resumedFrom && (
+            <span className="shrink-0 rounded border border-line-soft px-1.5 py-px text-[10px] text-muted">
+              resumed
             </span>
-            {session.resumedFrom && (
-              <span className="shrink-0 rounded-sm border border-line-soft px-1.5 py-0.5 text-[10px] text-muted">
-                resumed
-              </span>
-            )}
-            <span className="shrink-0 text-[11px] text-meta">
-              {relativeTime(session.updatedAt)}
-              {session.eventCount > 0 ? ` · ${session.eventCount} events` : ''}
+          )}
+          {session.status === 'error' && (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-medium text-danger">
+              error
             </span>
-          </div>
-          <div className="mt-0.5 truncate font-mono text-xs text-muted">
-            {label} · {session.projectPath}
-          </div>
+          )}
+        </div>
+        <div className="mt-0.5 truncate font-mono text-[11.5px] text-muted">
+          {label} · {session.projectPath} · {relativeTime(session.updatedAt)}
+          {session.eventCount > 0 ? ` · ${session.eventCount} event${session.eventCount === 1 ? '' : 's'}` : ''}
         </div>
       </button>
 
-      <div className="flex shrink-0 items-center gap-2 pr-5">
+      <div className="flex shrink-0 items-center gap-1.5 pr-4 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
         {!session.archivedAt && (
           <Button size="sm" variant="secondary" onClick={onResume}>
             Resume
           </Button>
         )}
-        <Button size="sm" variant="tertiary" onClick={onArchive}>
-          Archive
+        <Button
+          size="sm"
+          variant="tertiary"
+          onClick={onArchive}
+          title="Archive"
+          aria-label="Archive session"
+          className="w-7 px-0 text-muted hover:text-fg"
+        >
+          <IconArchive className="h-3.5 w-3.5" />
         </Button>
-        <Button size="sm" variant="error" onClick={onDelete}>
-          Delete
+        <Button
+          size="sm"
+          variant="tertiary"
+          onClick={onDelete}
+          title="Delete"
+          aria-label="Delete session"
+          className="w-7 px-0 text-muted hover:bg-danger-soft hover:text-danger"
+        >
+          <IconTrash className="h-3.5 w-3.5" />
         </Button>
       </div>
     </div>

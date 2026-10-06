@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Card, ProgressBar } from '../lib/ui.js';
 import { IconActivity, IconCpu, IconDisk, IconMemory } from '../lib/icons.js';
 import { usePolling } from '../lib/hooks.js';
 
@@ -15,7 +14,7 @@ interface SystemStats {
 
 function formatBytes(bytes: number): string {
   const gb = bytes / (1024 * 1024 * 1024);
-  return `${gb.toFixed(1)} GB`;
+  return `${gb.toFixed(1)}G`;
 }
 
 function formatUptime(seconds: number): string {
@@ -24,6 +23,21 @@ function formatUptime(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+/**
+ * Capacity meters go green → amber → red by threshold; CPU is activity, so
+ * its healthy color is the accent rather than a status green.
+ */
+function meterColor(pct: number, kind: 'cpu' | 'capacity'): string {
+  const token =
+    pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : kind === 'cpu' ? 'accent' : 'success';
+  return `var(--color-${token})`;
+}
+
+/**
+ * One slim strip of host telemetry — identity line on the left, three micro
+ * meters on the right. Sits between the page header and the session lists;
+ * disappears entirely when the daemon stops answering.
+ */
 export function SystemStats() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,21 +81,17 @@ export function SystemStats() {
 
   if (loading) {
     return (
-      <Card>
-        <div className="mb-4 flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-raised text-muted">
-            <IconActivity className="h-3.5 w-3.5" />
-          </div>
-          <h3 className="text-[13px] font-semibold text-fg">System status</h3>
+      <div
+        className="mb-7 flex h-[46px] items-center gap-4 rounded-md border border-line-soft bg-surface px-4"
+        aria-hidden="true"
+      >
+        <div className="h-2 w-64 animate-pulse rounded bg-raised" />
+        <div className="ml-auto flex gap-5">
+          <div className="h-2 w-24 animate-pulse rounded bg-raised" />
+          <div className="h-2 w-24 animate-pulse rounded bg-raised" />
+          <div className="h-2 w-24 animate-pulse rounded bg-raised" />
         </div>
-        <div className="flex items-center gap-2 text-[13px] text-muted">
-          <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Loading…
-        </div>
-      </Card>
+      </div>
     );
   }
 
@@ -90,62 +100,74 @@ export function SystemStats() {
   }
 
   return (
-    <Card>
-      <div className="mb-4 flex items-center gap-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-accent-soft text-accent-hover">
-          <IconActivity className="h-3.5 w-3.5" />
-        </div>
-        <h3 className="text-[13px] font-semibold text-fg">System status</h3>
+    <div className="mb-7 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-line-soft bg-surface px-4 py-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11.5px] whitespace-nowrap text-muted">
+        <IconActivity className="h-3.5 w-3.5 shrink-0 text-meta" />
+        <span className="shrink-0 font-medium text-fg-2">{stats.hostname}</span>
+        <span className="text-line-strong">·</span>
+        <span className="truncate">{stats.platform}</span>
+        <span className="text-line-strong">·</span>
+        <span className="shrink-0">up {formatUptime(stats.uptime)}</span>
+        <span className="text-line-strong">·</span>
+        <span className="shrink-0 tabular-nums">
+          load {stats.loadAvg.map((n) => n.toFixed(2)).join(' ')}
+        </span>
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">
-        <span className="text-fg-2">{stats.hostname}</span>
-        <span className="text-line-strong">·</span>
-        <span>{stats.platform}</span>
-        <span className="text-line-strong">·</span>
-        <span>up {formatUptime(stats.uptime)}</span>
-        <span className="text-line-strong">·</span>
-        <span className="tabular-nums">load {stats.loadAvg.map((n) => n.toFixed(2)).join(' ')}</span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        <StatBar
-          label={`CPU (${stats.cpu.cores} cores)`}
-          value={`${stats.cpu.usage.toFixed(1)}%`}
-          pct={stats.cpu.usage}
-          color="blue"
-          icon={<IconCpu className="h-3.5 w-3.5" />}
+      <div className="flex shrink-0 items-center gap-5">
+        <Meter
+          icon={<IconCpu className="h-3 w-3" />}
+          label="CPU"
+          value={`${(stats.cpu.usage * 100).toFixed(1)}%`}
+          pct={stats.cpu.usage * 100}
+          kind="cpu"
         />
-        <StatBar
-          label="Memory"
-          value={`${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`}
+        <Meter
+          icon={<IconMemory className="h-3 w-3" />}
+          label="MEM"
+          value={`${formatBytes(stats.memory.used)}/${formatBytes(stats.memory.total)}`}
           pct={stats.memory.percentage}
-          color="green"
-          icon={<IconMemory className="h-3.5 w-3.5" />}
+          kind="capacity"
         />
-        <StatBar
-          label="Disk"
-          value={`${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)}`}
+        <Meter
+          icon={<IconDisk className="h-3 w-3" />}
+          label="DISK"
+          value={`${formatBytes(stats.disk.used)}/${formatBytes(stats.disk.total)}`}
           pct={stats.disk.percentage}
-          color="amber"
-          icon={<IconDisk className="h-3.5 w-3.5" />}
+          kind="capacity"
         />
       </div>
-    </Card>
+    </div>
   );
 }
 
-function StatBar({ label, value, pct, color, icon }: { label: string; value: string; pct: number; color: 'blue' | 'green' | 'amber'; icon: React.ReactNode }) {
+function Meter({
+  label,
+  value,
+  pct,
+  kind,
+  icon,
+}: {
+  label: string;
+  value: string;
+  pct: number;
+  kind: 'cpu' | 'capacity';
+  icon: React.ReactNode;
+}) {
+  const clamped = Math.min(100, Math.max(0, pct));
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-muted">
-          {icon}
-          <span className="text-xs font-medium text-fg-2">{label}</span>
-        </div>
-        <span className="truncate font-mono text-[11px] tabular-nums text-meta">{value}</span>
-      </div>
-      <ProgressBar value={Math.min(100, Math.max(0, pct))} color={color} aria-label={label} />
+    <div className="flex items-center gap-2">
+      <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-fg-2">
+        <span className="text-muted">{icon}</span>
+        {label}
+      </span>
+      <span className="h-[3px] w-14 overflow-hidden rounded-full bg-line-soft">
+        <span
+          className="block h-full rounded-full transition-[width] duration-300"
+          style={{ width: `${clamped}%`, background: meterColor(clamped, kind) }}
+        />
+      </span>
+      <span className="font-mono text-[10.5px] tabular-nums text-meta">{value}</span>
     </div>
   );
 }

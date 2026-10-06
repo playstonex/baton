@@ -2,6 +2,7 @@ import { Outlet, NavLink, useLocation } from 'react-router';
 import { wsService } from './services/websocket.js';
 import { useEffect, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useThemeStore, resolveDark } from './stores/theme.js';
 import {
   IconDashboard,
   IconPipelines,
@@ -34,26 +35,25 @@ const NAV_ITEMS_SYSTEM = [
 export function App() {
   const location = useLocation();
   const [connected, setConnected] = useState(false);
-  const [dark, setDark] = useState(() => {
-    const stored = localStorage.getItem('baton-theme');
-    if (stored === 'dark') return true;
-    if (stored === 'light') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  const themeMode = useThemeStore((s) => s.mode);
+  const setThemeMode = useThemeStore((s) => s.setMode);
+  const [osDark, setOsDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const dark = resolveDark(themeMode, osDark);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
 
   // With no explicit choice stored, keep following the OS light/dark setting
-  // live (the old useTheme 'system' mode did this). An explicit toggle writes
-  // localStorage, after which OS changes are ignored.
+  // live. An explicit choice (sidebar toggle or Settings) writes the store,
+  // after which OS changes are ignored.
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('baton-theme')) setDark(e.matches);
-    };
+    const onChange = (e: MediaQueryListEvent) => setOsDark(e.matches);
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
@@ -71,12 +71,8 @@ export function App() {
   }, []);
 
   const toggleDark = useCallback(() => {
-    setDark((prev) => {
-      const next = !prev;
-      localStorage.setItem('baton-theme', next ? 'dark' : 'light');
-      return next;
-    });
-  }, []);
+    setThemeMode(useThemeStore.getState().mode === 'dark' ? 'light' : 'dark');
+  }, [setThemeMode]);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-2.5 rounded-sm px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-150 ${

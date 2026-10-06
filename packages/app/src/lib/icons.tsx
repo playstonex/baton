@@ -189,6 +189,20 @@ export const IconTrash = createIcon(
   </>,
 );
 
+export const IconArchive = createIcon(
+  <>
+    <rect x="2" y="3" width="12" height="3.5" rx="1" />
+    <path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3" />
+  </>,
+);
+
+export const IconMonitor = createIcon(
+  <>
+    <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" />
+    <path d="M5.5 14h5M8 11.5V14" />
+  </>,
+);
+
 export const IconEdit = createIcon(
   <path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5Z" />,
 );
