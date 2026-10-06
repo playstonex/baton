@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Mobile — Dashboard v2 · Open Design prototype</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     Open Design prototype — Baton Mobile Dashboard v2
+     Keep the native iOS Liquid Glass language (tabs-v3 /
+     chat-v3 lineage); adopt web v2 SEMANTICS:
+     · needs-attention rail + badge on active rows
+     · live duration replaces uppercase status text
+     · host telemetry compresses to one strip of micro meters
+     · history meta gains event counts
+     ═══════════════════════════════════════════════ */
+
+  @font-face {
+    font-family: 'InterVar';
+    src: url('../../packages/app/public/fonts/InterVariable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'JetBrainsMonoVar';
+    src: url('../../packages/app/public/fonts/GeistMono-Variable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+  }
+  body {
+    background: #08090a;
+    font-family: 'InterVar', Inter, -apple-system, 'SF Pro Text', 'PingFang SC', sans-serif;
+    color: #f7f8f8;
+    padding: 48px 32px 96px;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv01', 'ss03';
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; }
+
+  .gallery-head h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .gallery-head h1 .thin { color: #8a8f98; font-weight: 510; }
+  .gallery-head > p { color: #8a8f98; margin-top: 10px; font-size: 14px; line-height: 1.75; max-width: 820px; }
+  .chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .chip { font-size: 12px; color: #8a8f98; border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 4px 12px; }
+  .chip b { color: #f7f8f8; font-weight: 590; }
+
+  h2.section {
+    margin: 64px 0 20px; font-size: 12px; font-weight: 590;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #8a8f98;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2.section::before { content: ""; width: 3px; height: 13px; border-radius: 2px; background: #7170ff; }
+
+  .frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(390px, 1fr)); gap: 36px; max-width: 1360px; }
+  figure.frame { margin: 0; }
+  figcaption { margin-top: 14px; font-size: 13px; color: #8a8f98; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  figcaption b { color: #f7f8f8; font-weight: 590; }
+  .tag { font-size: 10px; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); color: #9fb6ff; white-space: nowrap; }
+  .tag.light { color: #ffd479; }
+
+  /* ─── Phone frame ─── */
+  .phone {
+    width: 390px; border-radius: 56px; padding: 10px;
+    background: linear-gradient(160deg, #2a2b2f, #101113);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.06);
+    margin: 0 auto;
+  }
+  .screen {
+    position: relative; height: 812px; border-radius: 46px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .theme-dark.screen {
+    --bg: #08090a; --card: rgba(19,20,22,0.78); --card-strong: #131416;
+    --border: rgba(255,255,255,0.08); --tint: rgba(255,255,255,0.05);
+    --fg: #f7f8f8; --fg2: rgba(208,214,224,0.85); --fg3: #8a8f98; --meta: #62666d;
+    --accent: #7170ff; --accent-deep: #5e6ad2; --accent-soft: rgba(94,106,210,0.22);
+    --success: #3fb950; --warn: #d9a62e; --danger: #eb4d55;
+    background:
+      radial-gradient(900px 420px at 85% -5%, rgba(94,106,210,0.14), transparent 55%),
+      var(--bg);
+    color: var(--fg);
+  }
+  .theme-light.screen {
+    --bg: #f7f8f8; --card: rgba(255,255,255,0.85); --card-strong: #ffffff;
+    --border: rgba(11,13,15,0.08); --tint: rgba(11,13,15,0.045);
+    --fg: #1b1d22; --fg2: rgba(27,29,34,0.66); --fg3: rgba(27,29,34,0.46); --meta: #9095a0;
+    --accent: #5e6ad2; --accent-deep: #5e6ad2; --accent-soft: rgba(94,106,210,0.12);
+    --success: #1a7f37; --warn: #9a6700; --danger: #cf222e;
+    background:
+      radial-gradient(900px 420px at 85% -5%, rgba(94,106,210,0.08), transparent 55%),
+      var(--bg);
+    color: var(--fg);
+  }
+
+  .island {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 122px; height: 34px; border-radius: 20px; background: #000; z-index: 30;
+  }
+  .statusbar {
+    height: 56px; flex-shrink: 0; display: flex; align-items: flex-end;
+    justify-content: space-between; padding: 0 30px 8px;
+    font-size: 15px; font-weight: 600;
+  }
+  .statusbar .glyphs { display: flex; align-items: center; gap: 6px; }
+
+  .content { flex: 1; overflow: hidden; padding: 8px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+
+  /* Header */
+  .head-row { display: flex; align-items: center; justify-content: space-between; }
+  .head-row h1 { font-size: 32px; font-weight: 600; letter-spacing: -0.8px; }
+  .head-actions { display: flex; align-items: center; gap: 14px; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 17px; border: 1px solid var(--border);
+    background: var(--tint); display: flex; align-items: center; justify-content: center; color: var(--fg2);
+  }
+
+  /* Cards */
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    backdrop-filter: blur(24px);
+  }
+
+  /* Server card + host strip */
+  .server-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+  .pulse-wrap { position: relative; width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .pulse { position: absolute; width: 22px; height: 22px; border-radius: 11px; background: var(--success); opacity: 0.18; }
+  .sdot { width: 10px; height: 10px; border-radius: 5px; }
+  .server-name { font-size: 15px; font-weight: 600; color: var(--fg); }
+  .server-sub { font-size: 12px; color: var(--fg3); margin-top: 1px; }
+  .host-strip {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border-top: 1px solid var(--border); padding: 10px 14px;
+  }
+  .meter { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .meter .m-top { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
+  .meter .m-label { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fg3); }
+  .meter .m-val { font-family: 'JetBrainsMonoVar', ui-monospace, monospace; font-size: 10px; color: var(--meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .meter .track { height: 3px; border-radius: 999px; background: var(--tint); overflow: hidden; }
+  .meter .fill { height: 100%; border-radius: 999px; display: block; }
+
+  /* Primary button */
+  .btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    height: 46px; border-radius: 14px;
+    background: linear-gradient(160deg, rgba(94,106,210,0.28), rgba(94,106,210,0.12));
+    border: 1px solid rgba(94,106,210,0.4);
+    color: var(--accent); font-size: 15px; font-weight: 600;
+  }
+  .theme-light .btn-primary { background: var(--accent-deep); border-color: var(--accent-deep); color: #ffffff; }
+
+  /* Section header */
+  .sec-head { display: flex; align-items: center; gap: 8px; margin: 4px 2px 0; }
+  .sec-head .t { font-size: 13px; font-weight: 600; color: var(--fg2); }
+  .sec-head .n {
+    font-size: 11px; font-weight: 500; color: var(--fg3);
+    background: var(--tint); border-radius: 999px; padding: 1px 7px; font-variant-numeric: tabular-nums;
+  }
+  .sec-head .line { flex: 1; height: 1px; background: var(--border); }
+
+  /* Active session row */
+  .sess { position: relative; overflow: hidden; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+  .sess + .sess { border-top: 1px solid var(--border); }
+  .sess .rail { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; }
+  .sess.attention-warn { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+  .sess.attention-warn .rail { background: var(--warn); }
+  .sess.attention-danger { background: color-mix(in srgb, var(--danger) 7%, transparent); }
+  .sess.attention-danger .rail { background: var(--danger); }
+  .sess-main { flex: 1; min-width: 0; }
+  .sess-title-row { display: flex; align-items: center; gap: 8px; }
+  .sess-title { font-size: 15px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px;
+  }
+  .pill.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  .pill.warn i { width: 4px; height: 4px; border-radius: 2px; background: var(--warn); }
+  .sess-path { font-family: 'JetBrainsMonoVar', ui-monospace, monospace; font-size: 11px; color: var(--fg3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess-act { font-size: 11px; font-weight: 500; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c-warn { color: var(--warn); } .c-success { color: var(--success); } .c-accent { color: var(--accent); } .c-danger { color: var(--danger); }
+  .sess-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .sess-dur { font-family: 'JetBrainsMonoVar', ui-monospace, monospace; font-size: 11px; color: var(--meta); font-variant-numeric: tabular-nums; }
+  .stop-btn { font-size: 13px; font-weight: 600; color: var(--danger); opacity: 0.85; }
+
+  /* History */
+  .group-head { display: flex; align-items: center; gap: 8px; margin: 2px 2px 6px; }
+  .group-head .g { font-size: 13px; font-weight: 600; color: var(--fg2); }
+  .group-head .n { font-size: 11px; color: var(--fg3); }
+  .hist { padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+  .hist + .hist { border-top: 1px solid var(--border); }
+  .hist-main { flex: 1; min-width: 0; }
+  .hist-title { font-size: 15px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hist-meta { display: flex; align-items: baseline; gap: 4px; font-family: 'JetBrainsMonoVar', ui-monospace, monospace; font-size: 11px; color: var(--fg3); margin-top: 2px; white-space: nowrap; }
+  .hist-meta .mid { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .hist-meta .tail { flex-shrink: 0; }
+  .hist-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; color: var(--fg3); }
+  .hist-time { font-size: 11px; color: var(--fg3); flex-shrink: 0; }
+
+  /* Tab bar */
+  .tabbar {
+    flex-shrink: 0; display: flex; align-items: flex-start; justify-content: space-around;
+    padding: 10px 10px 0; border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--card-strong) 82%, transparent);
+    backdrop-filter: blur(28px);
+  }
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 70px; font-size: 10px; font-weight: 500; color: var(--fg3); padding-bottom: 6px; }
+  .tab.active { color: var(--accent); }
+  .tab.active .tab-ico { background: var(--accent-soft); border-radius: 12px; padding: 2px 14px; }
+  .home-indicator { height: 22px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--card-strong) 82%, transparent); }
+  .home-indicator i { width: 134px; height: 5px; border-radius: 3px; background: var(--fg3); opacity: 0.6; }
+
+  /* Launcher sheet */
+  .sheet-backdrop { position: absolute; inset: 0; z-index: 40; background: rgba(0,0,0,0.45); display: flex; flex-direction: column; justify-content: flex-end; padding: 0 12px 12px; }
+  .sheet {
+    border-radius: 24px; overflow: hidden; background: var(--card-strong);
+    border: 1px solid var(--border); box-shadow: 0 -8px 48px rgba(0,0,0,0.5);
+    animation: up 0.28s var(--ease);
+  }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sheet-pad { padding: 8px 18px 18px; }
+  .handle { width: 36px; height: 5px; border-radius: 3px; background: var(--fg3); opacity: 0.5; margin: 6px auto 10px; }
+  .sheet-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .sheet-title-row h3 { font-size: 17px; font-weight: 600; }
+  .sheet-close { width: 28px; height: 28px; border-radius: 14px; background: var(--tint); display: flex; align-items: center; justify-content: center; color: var(--fg2); }
+  .f-label { font-size: 13px; font-weight: 600; color: var(--fg2); margin: 12px 0 6px; }
+  .agent-trigger {
+    display: flex; align-items: center; gap: 10px; min-height: 48px;
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px;
+  }
+  .agent-icon { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .agent-name { font-size: 15px; font-weight: 600; color: var(--fg); flex: 1; }
+  .agent-desc { font-size: 12px; color: var(--fg3); }
+  .path-row { display: flex; gap: 8px; }
+  .path-input {
+    flex: 1; min-width: 0; min-height: 48px; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--tint); padding: 0 14px; display: flex; align-items: center;
+    font-family: 'JetBrainsMonoVar', ui-monospace, monospace; font-size: 13px; color: var(--fg3);
+  }
+  .path-input span {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .browse {
+    border-radius: 12px; padding: 0 18px; display: flex; align-items: center;
+    background: var(--tint); border: 1px solid var(--border); font-size: 15px; font-weight: 600; color: var(--fg);
+  }
+  .wt-strip { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .wt-chip { font-family: 'JetBrainsMonoVar', ui-monospace, monospace; font-size: 10px; color: var(--fg3); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; }
+  .wt-chip.sel { border-color: rgba(94,106,210,0.5); color: var(--accent); background: var(--accent-soft); }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 12px; padding: 3px; gap: 2px; background: var(--tint); }
+  .seg button {
+    flex: 1; height: 34px; border: none; border-radius: 9px; background: transparent;
+    font-family: inherit; font-size: 12px; font-weight: 500; color: var(--fg3);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .seg button.sel { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .mode-hint { font-size: 11px; color: var(--fg3); margin-top: 6px; }
+  .sheet .btn-primary { margin-top: 16px; }
+
+  .gap-16 { height: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="gallery-head">
+    <h1>Dashboard v2 <span class="thin">· 移动端对齐 web v2 语义</span></h1>
+    <p>
+      保留 tabs-v3 / chat-v3 确立的 iOS Liquid Glass 语言与「server first + launcher 收进 sheet」的骨架,
+      对齐 web v2 的<b>信息语义</b>:需要输入的会话用琥珀侧轨 + 徽章突出;右侧改为活时长(等宽数字),
+      不再一行一个状态词;主机遥测压缩成三个微量表(阈值告警色);历史行补事件数。
+      令牌取自 <code>src/constants/theme.ts</code>。
+    </p>
+    <div class="chips">
+      <span class="chip">语言 <b>iOS Liquid Glass(不变)</b></span>
+      <span class="chip">语义 <b>web v2 对齐</b></span>
+      <span class="chip">状态 <b>默认 / 亮色 / 启动 sheet</b></span>
+    </div>
+  </header>
+
+  <!-- ══════════════ 1 · Default dark ══════════════ -->
+  <h2 class="section">01 · 默认态 — 暗色(native)</h2>
+  <div class="frames">
+    <figure class="frame">
+      <div class="phone"><div class="screen theme-dark" id="f1">
+        <div class="island"></div>
+        <div class="statusbar"><span>9:41</span>
+          <span class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+            <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M8 9.2a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM8 5.6c-1.6 0-3 .6-4.1 1.7l1.5 1.5A3.8 3.8 0 0 1 8 7.7c1 0 1.9.4 2.6 1.1l1.5-1.5A5.8 5.8 0 0 0 8 5.6zM8 2C5.5 2 3.2 3 1.5 4.7L3 6.2A6.6 6.6 0 0 1 8 4c1.9 0 3.7.8 5 2.1l1.5-1.5A8.8 8.8 0 0 0 8 2z" transform="translate(0 -2)"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" fill="none" stroke="currentColor" opacity="0.4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity="0.4"/></svg>
+          </span>
+        </div>
+
+        <div class="content">
+          <div class="head-row">
+            <h1>Baton</h1>
+            <div class="head-actions">
+              <div class="icon-btn"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg></div>
+              <div class="icon-btn"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></div>
+            </div>
+          </div>
+
+          <!-- Server card + compact host strip -->
+          <div class="card">
+            <div class="server-row">
+              <div class="pulse-wrap"><span class="pulse"></span><span class="sdot" style="background:var(--success)"></span></div>
+              <div style="flex:1;min-width:0">
+                <div class="server-name">mini</div>
+                <div class="server-sub">mini.local:3210 · up 35h 59m</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--fg3)" stroke-width="1.5"><path d="M6 4l4 4-4 4"/></svg>
+            </div>
+            <div class="host-strip">
+              <div class="meter">
+                <div class="m-top"><span class="m-label">CPU</span><span class="m-val">50.5%</span></div>
+                <div class="track"><span class="fill" style="width:50.5%;background:var(--accent-deep)"></span></div>
+              </div>
+              <div class="meter">
+                <div class="m-top"><span class="m-label">MEM</span><span class="m-val">15.9/16.0G</span></div>
+                <div class="track"><span class="fill" style="width:99%;background:var(--danger)"></span></div>
+              </div>
+              <div class="meter">
+                <div class="m-top"><span class="m-label">DISK</span><span class="m-val">13.7/245.1G</span></div>
+                <div class="track"><span class="fill" style="width:5.6%;background:var(--success)"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-primary">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+            New Session
+          </div>
+
+          <div class="sec-head"><span class="t">Active</span><span class="n">2</span><span class="line"></span></div>
+          <div class="card" style="padding:0">
+            <div class="sess attention-warn">
+              <span class="rail"></span>
+              <div class="sess-main">
+                <div class="sess-title-row">
+                  <span class="sdot" style="width:8px;height:8px;background:var(--warn)"></span>
+                  <span class="sess-title">Fix flaky auth tests</span>
+                  <span class="pill warn"><i></i>needs input</span>
+                </div>
+                <div class="sess-path">Claude Code · /Volumes/Hi/lei/Projects/flowwhips</div>
+                <div class="sess-act c-warn">Waiting for you: Allow Bun.spawn access to ~/.baton?</div>
+              </div>
+              <div class="sess-side">
+                <span class="sess-dur" style="color:var(--warn)">2m 06s</span>
+                <span class="stop-btn">Stop</span>
+              </div>
+            </div>
+            <div class="sess">
+              <div class="sess-main">
+                <div class="sess-title-row">
+                  <span class="sdot" style="width:8px;height:8px;background:var(--success)"></span>
+                  <span class="sess-title">适配iphone due</span>
+                </div>
+                <div class="sess-path">Codex · /Volumes/Hi/lei/Projects/daisy/daisy</div>
+                <div class="sess-act c-success">Working · 32 tool calls · 8h 4m · no activity 38m</div>
+              </div>
+              <div class="sess-side">
+                <span class="sess-dur">8h 4m</span>
+                <span class="stop-btn">Stop</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec-head"><span class="t">Session History</span><span class="n">3</span><span class="line"></span></div>
+          <div>
+            <div class="group-head"><span class="g">daisy</span><span class="n">2</span></div>
+            <div class="card" style="padding:0;margin-bottom:10px">
+              <div class="hist">
+                <div class="hist-main">
+                  <div class="hist-title">查看当前状态</div>
+                  <div class="hist-meta"><span class="mid">Codex · /Volumes/.../daisy/daisy</span><span class="tail">· 77 events</span></div>
+                </div>
+                <div class="hist-actions">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M8 9v5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg>
+                </div>
+              </div>
+              <div class="hist">
+                <div class="hist-main">
+                  <div class="hist-title">hi</div>
+                  <div class="hist-meta"><span class="mid">Antigravity · /Volumes/.../daisy/daisy</span><span class="tail">· 3 events</span></div>
+                </div>
+                <div class="hist-actions">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M8 9v5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="group-head"><span class="g">FlowWhips</span><span class="n">1</span></div>
+            <div class="card" style="padding:0">
+              <div class="hist">
+                <div class="hist-main">
+                  <div class="hist-title">Audit relay crypto handshake</div>
+                  <div class="hist-meta"><span class="mid">Claude Code · /Volumes/.../FlowWhips/daemon</span><span class="tail">· 214 events</span></div>
+                </div>
+                <div class="hist-actions">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M8 9v5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab active">
+            <span class="tab-ico"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg></span>
+            Home
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>
+            Pipelines
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3.5l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.5Z"/></svg>
+            Files
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg></span>
+            Settings
+          </div>
+        </div>
+        <div class="home-indicator"><i></i></div>
+      </div></div>
+      <figcaption><b>默认态 · 暗色</b><span>琥珀轨道行优先;微量表替代厚重的 Host Resources 卡;历史行带事件数</span><span class="tag">390 · dark</span></figcaption>
+    </figure>
+
+    <!-- ══════════════ 2 · Default light ══════════════ -->
+    <figure class="frame">
+      <div class="phone"><div class="screen theme-light" id="f2">
+        <div class="island"></div>
+        <div class="statusbar"><span>9:41</span>
+          <span class="glyphs">
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+            <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M8 9.2a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM8 5.6c-1.6 0-3 .6-4.1 1.7l1.5 1.5A3.8 3.8 0 0 1 8 7.7c1 0 1.9.4 2.6 1.1l1.5-1.5A5.8 5.8 0 0 0 8 5.6zM8 2C5.5 2 3.2 3 1.5 4.7L3 6.2A6.6 6.6 0 0 1 8 4c1.9 0 3.7.8 5 2.1l1.5-1.5A8.8 8.8 0 0 0 8 2z" transform="translate(0 -2)"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" fill="none" stroke="currentColor" opacity="0.4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity="0.4"/></svg>
+          </span>
+        </div>
+
+        <div class="content">
+          <div class="head-row">
+            <h1>Baton</h1>
+            <div class="head-actions">
+              <div class="icon-btn"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg></div>
+              <div class="icon-btn"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="server-row">
+              <div class="pulse-wrap"><span class="pulse"></span><span class="sdot" style="background:var(--success)"></span></div>
+              <div style="flex:1;min-width:0">
+                <div class="server-name">mini</div>
+                <div class="server-sub">mini.local:3210 · up 35h 59m</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--fg3)" stroke-width="1.5"><path d="M6 4l4 4-4 4"/></svg>
+            </div>
+            <div class="host-strip">
+              <div class="meter">
+                <div class="m-top"><span class="m-label">CPU</span><span class="m-val">50.5%</span></div>
+                <div class="track"><span class="fill" style="width:50.5%;background:var(--accent-deep)"></span></div>
+              </div>
+              <div class="meter">
+                <div class="m-top"><span class="m-label">MEM</span><span class="m-val">15.9/16.0G</span></div>
+                <div class="track"><span class="fill" style="width:99%;background:var(--danger)"></span></div>
+              </div>
+              <div class="meter">
+                <div class="m-top"><span class="m-label">DISK</span><span class="m-val">13.7/245.1G</span></div>
+                <div class="track"><span class="fill" style="width:5.6%;background:var(--success)"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-primary">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+            New Session
+          </div>
+
+          <div class="sec-head"><span class="t">Active</span><span class="n">2</span><span class="line"></span></div>
+          <div class="card" style="padding:0">
+            <div class="sess attention-warn">
+              <span class="rail"></span>
+              <div class="sess-main">
+                <div class="sess-title-row">
+                  <span class="sdot" style="width:8px;height:8px;background:var(--warn)"></span>
+                  <span class="sess-title">Fix flaky auth tests</span>
+                  <span class="pill warn"><i></i>needs input</span>
+                </div>
+                <div class="sess-path">Claude Code · /Volumes/Hi/lei/Projects/flowwhips</div>
+                <div class="sess-act c-warn">Waiting for you: Allow Bun.spawn access to ~/.baton?</div>
+              </div>
+              <div class="sess-side">
+                <span class="sess-dur" style="color:var(--warn)">2m 06s</span>
+                <span class="stop-btn">Stop</span>
+              </div>
+            </div>
+            <div class="sess">
+              <div class="sess-main">
+                <div class="sess-title-row">
+                  <span class="sdot" style="width:8px;height:8px;background:var(--success)"></span>
+                  <span class="sess-title">适配iphone due</span>
+                </div>
+                <div class="sess-path">Codex · /Volumes/Hi/lei/Projects/daisy/daisy</div>
+                <div class="sess-act c-success">Working · 32 tool calls · 8h 4m · no activity 38m</div>
+              </div>
+              <div class="sess-side">
+                <span class="sess-dur">8h 4m</span>
+                <span class="stop-btn">Stop</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec-head"><span class="t">Session History</span><span class="n">3</span><span class="line"></span></div>
+          <div>
+            <div class="group-head"><span class="g">daisy</span><span class="n">2</span></div>
+            <div class="card" style="padding:0;margin-bottom:10px">
+              <div class="hist">
+                <div class="hist-main">
+                  <div class="hist-title">查看当前状态</div>
+                  <div class="hist-meta"><span class="mid">Codex · /Volumes/.../daisy/daisy</span><span class="tail">· 77 events</span></div>
+                </div>
+                <div class="hist-actions">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M8 9v5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg>
+                </div>
+              </div>
+              <div class="hist">
+                <div class="hist-main">
+                  <div class="hist-title">hi</div>
+                  <div class="hist-meta"><span class="mid">Antigravity · /Volumes/.../daisy/daisy</span><span class="tail">· 3 events</span></div>
+                </div>
+                <div class="hist-actions">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M8 9v5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="group-head"><span class="g">FlowWhips</span><span class="n">1</span></div>
+            <div class="card" style="padding:0">
+              <div class="hist">
+                <div class="hist-main">
+                  <div class="hist-title">Audit relay crypto handshake</div>
+                  <div class="hist-meta"><span class="mid">Claude Code · /Volumes/.../FlowWhips/daemon</span><span class="tail">· 214 events</span></div>
+                </div>
+                <div class="hist-actions">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M8 9v5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab active">
+            <span class="tab-ico"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg></span>
+            Home
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>
+            Pipelines
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3.5l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5V4.5Z"/></svg>
+            Files
+          </div>
+          <div class="tab">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg></span>
+            Settings
+          </div>
+        </div>
+        <div class="home-indicator"><i></i></div>
+      </div></div>
+      <figcaption><b>默认态 · 亮色</b><span>同一结构在亮色玻璃下;阈值告警语义一致(MEM 红、DISK 绿)</span><span class="tag light">390 · light</span></figcaption>
+    </figure>
+  </div>
+
+  <!-- ══════════════ 3 · Launcher sheet ══════════════ -->
+  <h2 class="section">03 · New Session sheet — 启动器(不变的结构,v2 细节)</h2>
+  <div class="frames" style="max-width:900px;margin:0 auto">
+    <figure class="frame">
+      <div class="phone"><div class="screen theme-dark" id="f3" style="position:relative">
+        <div class="island"></div>
+        <div class="statusbar"><span>9:41</span><span class="glyphs">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M8 9.2a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM8 5.6c-1.6 0-3 .6-4.1 1.7l1.5 1.5A3.8 3.8 0 0 1 8 7.7c1 0 1.9.4 2.6 1.1l1.5-1.5A5.8 5.8 0 0 0 8 5.6zM8 2C5.5 2 3.2 3 1.5 4.7L3 6.2A6.6 6.6 0 0 1 8 4c1.9 0 3.7.8 5 2.1l1.5-1.5A8.8 8.8 0 0 0 8 2z" transform="translate(0 -2)"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" fill="none" stroke="currentColor" opacity="0.4"/><rect x="2" y="2" width="15" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2.2 2.2 0 0 0 0-4z" fill="currentColor" opacity="0.4"/></svg>
+        </span></div>
+        <div class="content" style="opacity:0.35;filter:blur(1px)" aria-hidden="true">
+          <div class="head-row"><h1>Baton</h1><div class="head-actions"><div class="icon-btn">＋</div></div></div>
+          <div class="card"><div class="server-row"><span class="sdot" style="background:var(--success)"></span><div style="flex:1"><div class="server-name">mini</div><div class="server-sub">mini.local:3210</div></div></div></div>
+          <div class="btn-primary">＋ New Session</div>
+          <div class="sec-head"><span class="t">Active</span><span class="n">2</span><span class="line"></span></div>
+          <div class="card" style="padding:0">
+            <div class="sess"><div class="sess-main"><div class="sess-title-row"><span class="sess-title">适配iphone due</span></div><div class="sess-path">Codex · /Volumes/Hi/lei/Projects/daisy/daisy</div><div class="sess-act c-success">Working · 8h 4m</div></div></div>
+            <div class="sess"><div class="sess-main"><div class="sess-title-row"><span class="sess-title">Refactor PTY bridge</span></div><div class="sess-path">OpenCode · /Volumes/Hi/lei/Projects/lunel</div><div class="sess-act c-success">Working · 3m 58s</div></div></div>
+          </div>
+        </div>
+
+        <div class="sheet-backdrop">
+          <div class="sheet">
+            <div class="sheet-pad">
+              <div class="handle"></div>
+              <div class="sheet-title-row">
+                <h3>New Session</h3>
+                <div class="sheet-close"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4l8 8M12 4l-8 8"/></svg></div>
+              </div>
+
+              <div class="f-label">Agent</div>
+              <div class="agent-trigger">
+                <span class="agent-icon" style="background:rgba(217,119,87,0.15);color:#D97757">✦</span>
+                <span class="agent-name">Claude Code</span>
+                <span class="agent-desc">Deep code work</span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--fg3)" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+              </div>
+
+              <div class="f-label">Project</div>
+              <div class="path-row">
+                <div class="path-input"><span>/Volumes/Hi/lei/Projects/</span></div>
+                <div class="browse">Browse</div>
+              </div>
+              <div class="wt-strip">
+                <span class="wt-chip sel">main</span>
+                <span class="wt-chip">feat/relay-cache</span>
+                <span class="wt-chip">fix/session-prune</span>
+              </div>
+
+              <div class="f-label">Mode</div>
+              <div class="seg">
+                <button class="sel">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 10.5a1.5 1.5 0 0 1-1.5 1.5H5l-3 3V3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v7Z"/></svg>
+                  Chat
+                </button>
+                <button>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M4 7h2M4 10h5"/></svg>
+                  Terminal
+                </button>
+              </div>
+              <div class="mode-hint">Structured chat with tool cards &amp; approvals</div>
+
+              <div class="btn-primary">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+                Launch Claude Code
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="home-indicator" style="position:absolute;bottom:0;left:0;right:0;z-index:41;background:transparent"><i></i></div>
+      </div></div>
+      <figcaption><b>启动 sheet · 暗色</b><span>结构沿用现有实现;新增 worktree 快选条与 v2 语气;↳ Browse 打开目录选择</span><span class="tag">sheet</span></figcaption>
+    </figure>
+  </div>
+
+  <footer style="margin-top:72px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.08);color:#8a8f98;font-size:12px;line-height:1.8">
+    Open Design prototype · Baton Mobile Dashboard v2 · 令牌:<code style="font-family:'JetBrainsMonoVar',monospace;font-size:11px;color:#9fb6ff">packages/mobile/src/constants/theme.ts</code> · 动效:column 280ms <code style="font-family:'JetBrainsMonoVar',monospace;font-size:11px;color:#9fb6ff">cubic-bezier(0.2,0,0,1)</code>,按压 opacity 0.85–0.9
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Web — Dashboard v2 · Open Design prototype</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     Open Design prototype — Baton Dashboard v2
+     Tokens: packages/app/src/app.css (linear-app)
+     Design intent:
+     · Sessions first — the launcher becomes a dialog
+     · Host telemetry compresses to one slim strip
+     · Needs-attention rows read at a glance (rail + tint)
+     · Row actions reveal on hover; search filters recents
+     · Honest offline state; composed empty states
+     ═══════════════════════════════════════════════ */
+
+  @font-face {
+    font-family: 'InterVar';
+    src: url('../../packages/app/public/fonts/InterVariable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'GeistMonoVar';
+    src: url('../../packages/app/public/fonts/GeistMono-Variable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+    --font-sans: 'InterVar', Inter, -apple-system, 'SF Pro Text', 'Segoe UI', sans-serif;
+    --font-mono: 'GeistMonoVar', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  body {
+    background: #08090a;
+    font-family: var(--font-sans);
+    color: #f7f8f8;
+    padding: 48px 32px 96px;
+    font-feature-settings: 'cv01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1560px; margin: 0 auto; }
+
+  /* ─── Gallery chrome ─── */
+  .gallery-head h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .gallery-head h1 .thin { color: #8a8f98; font-weight: 510; }
+  .gallery-head > p { color: #8a8f98; margin-top: 10px; font-size: 14px; line-height: 1.75; max-width: 820px; }
+  .chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .chip { font-size: 12px; color: #8a8f98; border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 4px 12px; }
+  .chip b { color: #f7f8f8; font-weight: 590; }
+
+  h2.section {
+    margin: 64px 0 20px; font-size: 12px; font-weight: 590;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #8a8f98;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2.section::before { content: ""; width: 3px; height: 13px; border-radius: 2px; background: #7170ff; }
+
+  figure.frame { margin: 0; }
+  .frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)); gap: 32px; }
+  .frames .frame .browser { height: 100%; }
+  figcaption {
+    margin-top: 12px; font-size: 13px; color: #8a8f98;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  figcaption b { color: #f7f8f8; font-weight: 590; }
+  .tag { font-size: 10px; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); color: #9fb6ff; white-space: nowrap; }
+  .tag.light { color: #ffd479; }
+  .frame.full { grid-column: 1 / -1; }
+
+  .browser {
+    border-radius: 14px; padding: 8px;
+    background: linear-gradient(160deg, #16171a, #0e0f11);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.04);
+  }
+  .browser-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px 10px;
+  }
+  .browser-bar i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.12); }
+  .browser-bar .url {
+    margin-left: 8px; flex: 1; max-width: 380px;
+    font-family: var(--font-mono); font-size: 10.5px; color: #62666d;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 3px 10px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     App tokens — scoped per frame (dark native / light override)
+     ═══════════════════════════════════════════════ */
+  .theme-dark {
+    --canvas: #08090a; --panel: #0f1011; --surface: #131416; --raised: #1a1b1d; --active: #232428;
+    --field: rgba(255,255,255,0.03);
+    --fg: #f7f8f8; --fg-2: #d0d6e0; --muted: #8a8f98; --meta: #62666d;
+    --line: rgba(255,255,255,0.08); --line-soft: rgba(255,255,255,0.05); --line-strong: rgba(255,255,255,0.15);
+    --accent: #5e6ad2; --accent-hover: #7a83e8; --accent-active: #828fff; --accent-on: #ffffff;
+    --accent-soft: rgba(94,106,210,0.22);
+    --success: #3fb950; --success-soft: rgba(63,185,80,0.13);
+    --warn: #d9a62e; --warn-soft: rgba(217,166,46,0.12);
+    --danger: #eb4d55; --danger-soft: rgba(235,77,85,0.12);
+    --overlay: rgba(1,1,2,0.65);
+    --shadow-modal: 0 0 0 1px rgba(255,255,255,0.08), 0 8px 16px rgba(0,0,0,0.32), 0 24px 56px rgba(0,0,0,0.48);
+  }
+  .theme-light {
+    --canvas: #f7f8f8; --panel: #fcfcfc; --surface: #ffffff; --raised: #f3f4f5; --active: #ebedef;
+    --field: #ffffff;
+    --fg: #1b1d22; --fg-2: #42454c; --muted: #6f747e; --meta: #9095a0;
+    --line: rgba(11,13,15,0.10); --line-soft: rgba(11,13,15,0.06); --line-strong: rgba(11,13,15,0.17);
+    --accent: #5e6ad2; --accent-hover: #505cc8; --accent-active: #4752c4; --accent-on: #ffffff;
+    --accent-soft: rgba(94,106,210,0.11);
+    --success: #1a7f37; --success-soft: rgba(26,127,55,0.10);
+    --warn: #9a6700; --warn-soft: rgba(154,103,0,0.10);
+    --danger: #cf222e; --danger-soft: rgba(207,34,46,0.09);
+    --overlay: rgba(8,9,10,0.45);
+    --shadow-modal: 0 0 0 1px rgba(11,13,15,0.10), 0 16px 48px rgba(11,13,15,0.16), 0 4px 12px rgba(11,13,15,0.08);
+  }
+
+  .app {
+    display: flex; height: 920px; overflow: hidden;
+    border-radius: 8px; border: 1px solid var(--line-soft);
+    background: var(--canvas); color: var(--fg);
+    font-size: 13px; line-height: 1.5;
+  }
+
+  /* ─── Sidebar (unchanged from current app) ─── */
+  .sidebar {
+    width: 240px; flex-shrink: 0; display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--line-soft);
+  }
+  .side-logo { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 20px; }
+  .logo-tile {
+    width: 24px; height: 24px; border-radius: 6px; background: var(--accent);
+    color: var(--accent-on); font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .side-logo span { font-size: 13px; font-weight: 590; letter-spacing: -0.01em; }
+  .side-nav { flex: 1; padding: 0 12px; overflow: hidden; }
+  .nav-label {
+    font-size: 11px; font-weight: 510; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--meta); padding: 12px 10px 6px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: 6px;
+    font-size: 13px; font-weight: 510; color: var(--fg-2);
+  }
+  .nav-item svg { color: var(--muted); }
+  .nav-item.active { background: var(--raised); color: var(--fg); }
+  .nav-item.active svg { color: var(--fg-2); }
+  .nav-sep { height: 1px; background: var(--line-soft); margin: 12px 8px; }
+  .side-foot { padding: 16px 12px; }
+  .side-status {
+    display: flex; align-items: center; justify-content: space-between;
+    background: color-mix(in srgb, var(--raised) 60%, transparent);
+    border-radius: 6px; padding: 8px 10px;
+  }
+  .side-status .who { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 510; color: var(--success); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot.success { background: var(--success); }
+  .dot.danger { background: var(--danger); }
+  .theme-btn {
+    width: 24px; height: 24px; border-radius: 6px; border: none; background: transparent;
+    color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+
+  /* ─── Main column ─── */
+  main { flex: 1; overflow: hidden; }
+  .content { max-width: 1024px; margin: 0 auto; padding: 32px 40px 40px; }
+
+  /* Page header */
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+  .page-head h1 { font-size: 20px; font-weight: 590; letter-spacing: -0.02em; }
+  .page-head .sub { margin-top: 3px; font-size: 13px; color: var(--muted); }
+  .head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .conn-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 510; color: var(--fg-2);
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px;
+    background: transparent;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border-radius: 6px; font-family: inherit; font-size: 13px; font-weight: 510;
+    border: none; cursor: pointer; white-space: nowrap;
+    transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-on); height: 32px; padding: 0 12px; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--field); color: var(--fg-2); border: 1px solid var(--line); height: 28px; padding: 0 10px; font-size: 13px; }
+  .btn-secondary:hover { background: var(--raised); color: var(--fg); }
+  .btn-tertiary { background: transparent; color: var(--fg-2); height: 28px; padding: 0 10px; }
+  .btn-tertiary:hover { background: var(--raised); color: var(--fg); }
+  .btn-quiet-danger { background: var(--field); color: var(--muted); border: 1px solid var(--line); height: 28px; padding: 0 10px; }
+  .btn-quiet-danger:hover { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); }
+  .btn-icon {
+    width: 28px; height: 28px; padding: 0; border-radius: 6px;
+    background: transparent; color: var(--muted); border: 1px solid transparent;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease);
+  }
+  .btn-icon:hover { background: var(--raised); color: var(--fg); }
+  .btn-icon.danger:hover { background: var(--danger-soft); color: var(--danger); }
+
+  /* ─── Host strip ─── */
+  .host-strip {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; row-gap: 10px;
+    flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px;
+    padding: 10px 16px; margin-bottom: 28px;
+  }
+  .host-meta { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 1 1 320px; }
+  .host-meta b { color: var(--fg-2); font-weight: 510; flex-shrink: 0; }
+  .host-meta .sep { color: var(--line-strong); }
+  .host-meters { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
+  .meter { display: flex; align-items: center; gap: 8px; }
+  .meter .m-label { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 510; color: var(--fg-2); }
+  .meter .m-label svg { color: var(--muted); }
+  .meter .track { width: 56px; height: 3px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
+  .meter .fill { height: 100%; border-radius: 999px; }
+  .meter .m-val { font-family: var(--font-mono); font-size: 10.5px; color: var(--meta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ─── Section headers ─── */
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .sec-head h3 { font-size: 13px; font-weight: 590; color: var(--fg); }
+  .count-chip {
+    font-size: 11px; font-weight: 510; font-variant-numeric: tabular-nums;
+    color: var(--muted); background: var(--raised);
+    border-radius: 999px; padding: 1px 8px;
+  }
+  .sec-head .line { flex: 1; height: 1px; background: var(--line-soft); }
+  .sec-tools { display: flex; align-items: center; gap: 8px; }
+
+  .search {
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--field);
+    height: 28px; padding: 0 9px; width: 208px; color: var(--meta);
+  }
+  .search input {
+    border: none; outline: none; background: transparent; width: 100%;
+    font-family: inherit; font-size: 13px; color: var(--fg);
+  }
+  .search input::placeholder { color: var(--meta); }
+
+  .toggle-chip {
+    font-size: 12px; font-weight: 510; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; background: transparent;
+    height: 28px; padding: 0 11px; cursor: pointer; font-family: inherit;
+    transition: all 0.15s var(--ease);
+  }
+  .toggle-chip:hover { color: var(--fg); }
+  .toggle-chip.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent-hover); }
+
+  /* ─── Session rows ─── */
+  .rows {
+    background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px;
+    overflow: hidden;
+  }
+  .row { display: flex; align-items: center; position: relative; transition: background 0.15s var(--ease); }
+  .row + .row { border-top: 1px solid var(--line-soft); }
+  .row:hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
+
+  .row .rail { position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 0 2px 2px 0; }
+  .row.attention-warn { background: color-mix(in srgb, var(--warn) 5%, transparent); }
+  .row.attention-warn .rail { background: var(--warn); }
+  .row.attention-warn:hover { background: color-mix(in srgb, var(--warn) 8%, transparent); }
+  .row.attention-danger { background: color-mix(in srgb, var(--danger) 5%, transparent); }
+  .row.attention-danger .rail { background: var(--danger); }
+
+  .row-main { flex: 1; min-width: 0; display: block; padding: 12px 16px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; }
+  .row-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .row-title .t {
+    font-size: 13px; font-weight: 510; color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row-title .t.archived { color: var(--muted); text-decoration: line-through; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+    font-size: 11px; font-weight: 510; border-radius: 999px; padding: 1px 8px;
+  }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.danger { background: var(--danger-soft); color: var(--danger); }
+  .badge.gray { background: var(--raised); color: var(--muted); }
+  .row-sub {
+    margin-top: 2px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row-activity { margin-top: 3px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-accent { color: var(--accent-hover); }
+  .c-success { color: var(--success); }
+  .c-warn { color: var(--warn); }
+  .c-danger { color: var(--danger); }
+  .c-muted { color: var(--muted); }
+
+  .row-side { display: flex; align-items: center; gap: 10px; padding-right: 16px; flex-shrink: 0; }
+  .row-dur { font-family: var(--font-mono); font-size: 11.5px; color: var(--meta); font-variant-numeric: tabular-nums; }
+  .row-actions { display: flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.15s var(--ease); }
+  .row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }
+  .mini-tag {
+    flex-shrink: 0; font-size: 10px; color: var(--muted);
+    border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px;
+  }
+
+  /* ─── Empty & offline ─── */
+  .empty {
+    border: 1px dashed var(--line); border-radius: 8px;
+    padding: 40px 24px; text-align: center;
+  }
+  .empty .glyph {
+    width: 44px; height: 44px; border-radius: 10px; background: var(--raised);
+    color: var(--muted); display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+  }
+  .empty h4 { font-size: 13px; font-weight: 590; color: var(--fg-2); }
+  .empty p { margin-top: 4px; font-size: 12px; color: var(--muted); max-width: 360px; margin-left: auto; margin-right: auto; line-height: 1.6; }
+  .empty .act { margin-top: 16px; }
+
+  .offline {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
+    border-radius: 8px; padding: 16px; margin-bottom: 28px;
+  }
+  .offline .glyph {
+    width: 36px; height: 36px; border-radius: 8px; background: var(--danger-soft); color: var(--danger);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .offline h4 { font-size: 13px; font-weight: 590; color: var(--fg); }
+  .offline p { margin-top: 2px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+  .offline p code { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-2); background: var(--raised); border-radius: 4px; padding: 1px 5px; }
+  .offline .grow { flex: 1; }
+
+  .stale-note { font-size: 12px; color: var(--meta); }
+
+  /* ─── Launch dialog ─── */
+  .overlay {
+    position: absolute; inset: 0; z-index: 40;
+    background: var(--overlay);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 96px;
+  }
+  .dialog {
+    width: 560px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--line-soft);
+    box-shadow: var(--shadow-modal);
+    animation: pop 0.18s var(--ease);
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0; }
+  .dlg-head h3 { font-size: 14px; font-weight: 590; }
+  .kbd {
+    font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+  }
+  .dlg-body { padding: 14px 16px 4px; }
+  .field-label { font-size: 11px; font-weight: 510; letter-spacing: 0.07em; text-transform: uppercase; color: var(--meta); margin-bottom: 7px; }
+  .agent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .agent-tile {
+    border: 1px solid var(--line); border-radius: 6px; background: var(--field);
+    padding: 8px 10px; font-size: 13px; font-weight: 510; color: var(--fg-2);
+    cursor: pointer; font-family: inherit; text-align: left;
+    transition: all 0.15s var(--ease);
+  }
+  .agent-tile:hover { border-color: var(--line-strong); color: var(--fg); }
+  .agent-tile.sel { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+  .agent-desc { margin-top: 9px; font-size: 12px; color: var(--muted); min-height: 18px; }
+
+  .path-input {
+    width: 100%; height: 34px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--field);
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--fg);
+    padding: 0 10px; outline: none;
+    transition: border-color 0.15s var(--ease);
+  }
+  .path-input::placeholder { color: var(--meta); }
+  .path-input:focus { border-color: var(--accent); }
+  .recent-paths { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .recent-paths .lbl { font-size: 11px; color: var(--meta); }
+  .path-chip {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--line-soft); border-radius: 999px; padding: 2px 9px;
+    background: transparent; cursor: pointer; font-family: var(--font-mono);
+    transition: all 0.15s var(--ease);
+  }
+  .path-chip:hover { color: var(--fg); border-color: var(--line-strong); }
+
+  .seg {
+    display: inline-flex; width: 100%; border-radius: 6px;
+    border: 1px solid var(--line-soft); background: var(--raised); padding: 2px;
+    margin-top: 2px;
+  }
+  .seg button {
+    flex: 1; height: 26px; border: none; border-radius: 4px; background: transparent;
+    font-family: inherit; font-size: 12px; font-weight: 510; color: var(--muted); cursor: pointer;
+    transition: all 0.15s var(--ease);
+  }
+  .seg button.sel { background: var(--surface); color: var(--fg); box-shadow: 0 0 0 1px var(--line-soft); }
+  .theme-dark .seg button.sel { background: var(--active); }
+  .mode-hint { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .mode-hint b { color: var(--fg-2); font-weight: 510; }
+
+  .dlg-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; margin-top: 10px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .dlg-foot .hint { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--meta); }
+
+  .gap-28 { height: 28px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="gallery-head">
+    <h1>Dashboard v2 <span class="thin">· 会话优先的重设计</span></h1>
+    <p>
+      首页的首要任务是「掌握现状」：什么在跑、什么需要我、刚才做到哪。Launcher 收进 <b>New session</b> 命令式对话框；
+      主机遥测压缩成一条细带；需要输入的会话用琥珀侧轨突出；行操作悬停显现；离线给出诚实的恢复路径。
+      令牌与 <code>app.css</code> (linear-app) 完全一致 —— 原型即实现规范。
+    </p>
+    <div class="chips">
+      <span class="chip">结构 <b>页头 → 主机条 → Active → Recent</b></span>
+      <span class="chip">交互 <b>行内活动流 · 悬停操作 · 搜索过滤</b></span>
+      <span class="chip">状态 <b>默认 / 空态 / 离线 / 对话框</b></span>
+    </div>
+  </header>
+
+  <!-- ══════════════ 1 · Default, dark ══════════════ -->
+  <h2 class="section" id="s1">01 · 默认态 — 暗色(native)</h2>
+  <figure class="frame full">
+  <div class="browser theme-dark" id="f1">
+    <div class="browser-bar"><i></i><i></i><i></i><span class="url">localhost:5173/</span></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who"><span class="dot success"></span>Online</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z"/></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="content">
+
+          <div class="page-head">
+            <div>
+              <h1>Dashboard</h1>
+              <div class="sub">Everything running on this host, at a glance.</div>
+            </div>
+            <div class="head-actions">
+              <span class="conn-chip"><span class="dot success"></span>Connected</span>
+              <button class="btn btn-primary">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+                New session
+              </button>
+            </div>
+          </div>
+
+          <div class="host-strip">
+            <div class="host-meta">
+              <b>mini.local</b><span class="sep">·</span><span>darwin-arm64</span><span class="sep">·</span><span>up 22h 41m</span><span class="sep">·</span><span>load 2.41 7.41 12.47</span>
+            </div>
+            <div class="host-meters">
+              <div class="meter">
+                <span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="1"/><rect x="6.5" y="6.5" width="3" height="3"/><path d="M6 2v2M10 2v2M6 12v2M10 12v2M2 6h2M2 10h2M12 6h2M12 10h2"/></svg>CPU</span>
+                <span class="track"><span class="fill" style="width:8.2%;background:var(--accent);display:block"></span></span>
+                <span class="m-val">8.2%</span>
+              </div>
+              <div class="meter">
+                <span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5V10H2V5.5Z"/><path d="M4.5 10v2M7.5 10v2M10.5 10v2M5 6.5v2M8 6.5v2M11 6.5v2"/></svg>MEM</span>
+                <span class="track"><span class="fill" style="width:97%;background:var(--danger);display:block"></span></span>
+                <span class="m-val">15.6/16.0G</span>
+              </div>
+              <div class="meter">
+                <span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.5"/><path d="M9.2 9.2 12.5 12.5"/></svg>DISK</span>
+                <span class="track"><span class="fill" style="width:6%;background:var(--success);display:block"></span></span>
+                <span class="m-val">12.7/228.3G</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec-head">
+            <h3>Active</h3><span class="count-chip">3</span><span class="line"></span>
+          </div>
+          <div class="rows">
+            <div class="row attention-warn">
+              <span class="rail"></span>
+              <button class="row-main">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--warn)"></span>
+                  <span class="t">Fix flaky auth tests in session store</span>
+                  <span class="badge warn"><span class="dot" style="background:var(--warn);width:4px;height:4px"></span>needs input</span>
+                </div>
+                <div class="row-sub">Claude Code · /Volumes/Hi/lei/Projects/flowwhips</div>
+                <div class="row-activity c-warn">Waiting for you: Allow Bun.spawn access to ~/.baton/sessions.db?</div>
+              </button>
+              <div class="row-side">
+                <span class="row-dur" style="color:var(--warn)">2m 06s</span>
+                <button class="btn btn-quiet-danger">Stop</button>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--accent-hover)"></span>
+                  <span class="t">Migrate dashboard store to zustand v5</span>
+                </div>
+                <div class="row-sub">Codex · /Volumes/Hi/lei/Projects/daisy</div>
+                <div class="row-activity c-accent">Running Edit · 41s · 17 tool calls</div>
+              </button>
+              <div class="row-side">
+                <span class="row-dur">6m 12s</span>
+                <button class="btn btn-quiet-danger">Stop</button>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--success)"></span>
+                  <span class="t">Refactor PTY bridge error handling</span>
+                </div>
+                <div class="row-sub">OpenCode · /Volumes/Hi/lei/Projects/lunel</div>
+                <div class="row-activity c-success">Working · 3m 58s · 32 tool calls</div>
+              </button>
+              <div class="row-side">
+                <span class="row-dur">12m 47s</span>
+                <button class="btn btn-quiet-danger">Stop</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="gap-28"></div>
+
+          <div class="sec-head">
+            <h3>Recent</h3><span class="count-chip">3</span><span class="line"></span>
+            <div class="sec-tools">
+              <label class="search">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
+                <input placeholder="Filter sessions" />
+              </label>
+              <button class="toggle-chip">Archived</button>
+            </div>
+          </div>
+          <div class="rows">
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--meta)"></span>
+                  <span class="t">Audit relay crypto handshake</span>
+                </div>
+                <div class="row-sub">Claude Code · /Volumes/Hi/lei/Projects/flowwhips · 3h ago · 214 events</div>
+              </button>
+              <div class="row-side">
+                <div class="row-actions" style="opacity:1">
+                  <button class="btn btn-secondary">Resume</button>
+                  <button class="btn-icon" title="Archive"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3.5" rx="1"/><path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3"/></svg></button>
+                  <button class="btn-icon danger" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--meta)"></span>
+                  <span class="t">Write release notes for v0.4</span>
+                  <span class="mini-tag">resumed</span>
+                </div>
+                <div class="row-sub">Codex · /Volumes/Hi/lei/Projects/daisy · 26h ago · 89 events</div>
+              </button>
+              <div class="row-side">
+                <div class="row-actions" style="opacity:1">
+                  <button class="btn btn-secondary">Resume</button>
+                  <button class="btn-icon" title="Archive"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3.5" rx="1"/><path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3"/></svg></button>
+                  <button class="btn-icon danger" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--danger)"></span>
+                  <span class="t">Scaffold E2E smoke suite</span>
+                  <span class="badge gray">error</span>
+                </div>
+                <div class="row-sub">Kiro · /Volumes/Hi/lei/Projects/tathim · 2d ago · 41 events</div>
+              </button>
+              <div class="row-side">
+                <div class="row-actions" style="opacity:1">
+                  <button class="btn btn-secondary">Resume</button>
+                  <button class="btn-icon" title="Archive"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3.5" rx="1"/><path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3"/></svg></button>
+                  <button class="btn-icon danger" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>默认态 · 暗色</b><span>等待输入的会话带琥珀侧轨,遥测压成一条细带,Recent 行操作悬停显现</span><span class="tag">1440 · dark</span></figcaption>
+  </figure>
+
+  <!-- ══════════════ 2 · Default, light ══════════════ -->
+  <h2 class="section" id="s2">02 · 默认态 — 亮色</h2>
+  <figure class="frame full">
+  <div class="browser theme-light" id="f2">
+    <div class="browser-bar" style="background:linear-gradient(160deg,#e8e9eb,#f0f1f2);border-bottom:1px solid rgba(11,13,15,0.06)"><i style="background:rgba(11,13,15,0.14)"></i><i style="background:rgba(11,13,15,0.14)"></i><i style="background:rgba(11,13,15,0.14)"></i><span class="url" style="color:#9095a0;background:rgba(11,13,15,0.04);border-color:rgba(11,13,15,0.06)">localhost:5173/</span></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who"><span class="dot success"></span>Online</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="content">
+
+          <div class="page-head">
+            <div>
+              <h1>Dashboard</h1>
+              <div class="sub">Everything running on this host, at a glance.</div>
+            </div>
+            <div class="head-actions">
+              <span class="conn-chip"><span class="dot success"></span>Connected</span>
+              <button class="btn btn-primary">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+                New session
+              </button>
+            </div>
+          </div>
+
+          <div class="host-strip">
+            <div class="host-meta">
+              <b>mini.local</b><span class="sep">·</span><span>darwin-arm64</span><span class="sep">·</span><span>up 22h 41m</span><span class="sep">·</span><span>load 2.41 7.41 12.47</span>
+            </div>
+            <div class="host-meters">
+              <div class="meter">
+                <span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="1"/><rect x="6.5" y="6.5" width="3" height="3"/><path d="M6 2v2M10 2v2M6 12v2M10 12v2M2 6h2M2 10h2M12 6h2M12 10h2"/></svg>CPU</span>
+                <span class="track"><span class="fill" style="width:8.2%;background:var(--accent);display:block"></span></span>
+                <span class="m-val">8.2%</span>
+              </div>
+              <div class="meter">
+                <span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5V10H2V5.5Z"/><path d="M4.5 10v2M7.5 10v2M10.5 10v2M5 6.5v2M8 6.5v2M11 6.5v2"/></svg>MEM</span>
+                <span class="track"><span class="fill" style="width:97%;background:var(--danger);display:block"></span></span>
+                <span class="m-val">15.6/16.0G</span>
+              </div>
+              <div class="meter">
+                <span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.5"/><path d="M9.2 9.2 12.5 12.5"/></svg>DISK</span>
+                <span class="track"><span class="fill" style="width:6%;background:var(--success);display:block"></span></span>
+                <span class="m-val">12.7/228.3G</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec-head">
+            <h3>Active</h3><span class="count-chip">3</span><span class="line"></span>
+          </div>
+          <div class="rows">
+            <div class="row attention-warn">
+              <span class="rail"></span>
+              <button class="row-main">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--warn)"></span>
+                  <span class="t">Fix flaky auth tests in session store</span>
+                  <span class="badge warn"><span class="dot" style="background:var(--warn);width:4px;height:4px"></span>needs input</span>
+                </div>
+                <div class="row-sub">Claude Code · /Volumes/Hi/lei/Projects/flowwhips</div>
+                <div class="row-activity c-warn">Waiting for you: Allow Bun.spawn access to ~/.baton/sessions.db?</div>
+              </button>
+              <div class="row-side">
+                <span class="row-dur" style="color:var(--warn)">2m 06s</span>
+                <button class="btn btn-quiet-danger">Stop</button>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--accent-hover)"></span>
+                  <span class="t">Migrate dashboard store to zustand v5</span>
+                </div>
+                <div class="row-sub">Codex · /Volumes/Hi/lei/Projects/daisy</div>
+                <div class="row-activity c-accent">Running Edit · 41s · 17 tool calls</div>
+              </button>
+              <div class="row-side">
+                <span class="row-dur">6m 12s</span>
+                <button class="btn btn-quiet-danger">Stop</button>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--success)"></span>
+                  <span class="t">Refactor PTY bridge error handling</span>
+                </div>
+                <div class="row-sub">OpenCode · /Volumes/Hi/lei/Projects/lunel</div>
+                <div class="row-activity c-success">Working · 3m 58s · 32 tool calls</div>
+              </button>
+              <div class="row-side">
+                <span class="row-dur">12m 47s</span>
+                <button class="btn btn-quiet-danger">Stop</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="gap-28"></div>
+
+          <div class="sec-head">
+            <h3>Recent</h3><span class="count-chip">3</span><span class="line"></span>
+            <div class="sec-tools">
+              <label class="search">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
+                <input placeholder="Filter sessions" />
+              </label>
+              <button class="toggle-chip">Archived</button>
+            </div>
+          </div>
+          <div class="rows">
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--meta)"></span>
+                  <span class="t">Audit relay crypto handshake</span>
+                </div>
+                <div class="row-sub">Claude Code · /Volumes/Hi/lei/Projects/flowwhips · 3h ago · 214 events</div>
+              </button>
+              <div class="row-side">
+                <div class="row-actions" style="opacity:1">
+                  <button class="btn btn-secondary">Resume</button>
+                  <button class="btn-icon" title="Archive"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3.5" rx="1"/><path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3"/></svg></button>
+                  <button class="btn-icon danger" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--meta)"></span>
+                  <span class="t">Write release notes for v0.4</span>
+                  <span class="mini-tag">resumed</span>
+                </div>
+                <div class="row-sub">Codex · /Volumes/Hi/lei/Projects/daisy · 26h ago · 89 events</div>
+              </button>
+              <div class="row-side">
+                <div class="row-actions" style="opacity:1">
+                  <button class="btn btn-secondary">Resume</button>
+                  <button class="btn-icon" title="Archive"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3.5" rx="1"/><path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3"/></svg></button>
+                  <button class="btn-icon danger" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title">
+                  <span class="dot" style="background:var(--danger)"></span>
+                  <span class="t">Scaffold E2E smoke suite</span>
+                  <span class="badge gray">error</span>
+                </div>
+                <div class="row-sub">Kiro · /Volumes/Hi/lei/Projects/tathim · 2d ago · 41 events</div>
+              </button>
+              <div class="row-side">
+                <div class="row-actions" style="opacity:1">
+                  <button class="btn btn-secondary">Resume</button>
+                  <button class="btn-icon" title="Archive"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="3.5" rx="1"/><path d="M3.5 6.5v5A1.5 1.5 0 0 0 5 13h6a1.5 1.5 0 0 0 1.5-1.5v-5M6.5 9.5h3"/></svg></button>
+                  <button class="btn-icon danger" title="Delete"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11M5.5 3.5V2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"/><path d="M3.5 3.5l.72 10.08a1 1 0 0 0 1 .92h5.56a1 1 0 0 0 1-.92l.72-10.08"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>默认态 · 亮色</b><span>同一信息架构在亮色令牌下的表现;阈值告警色(MEM 97% → danger)</span><span class="tag light">1440 · light</span></figcaption>
+  </figure>
+
+  <!-- ══════════════ 3 · Launch dialog ══════════════ -->
+  <h2 class="section" id="s3">03 · New session 对话框 — launcher 的新家</h2>
+  <figure class="frame full">
+  <div class="browser theme-dark" id="f3" style="position:relative">
+    <div class="browser-bar"><i></i><i></i><i></i><span class="url">localhost:5173/</span></div>
+    <div class="app" style="position:relative">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who"><span class="dot success"></span>Online</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z"/></svg></button>
+          </div>
+        </div>
+      </aside>
+      <main>
+        <div class="content" aria-hidden="true" style="filter:blur(0px)">
+          <div class="page-head">
+            <div>
+              <h1>Dashboard</h1>
+              <div class="sub">Everything running on this host, at a glance.</div>
+            </div>
+            <div class="head-actions">
+              <span class="conn-chip"><span class="dot success"></span>Connected</span>
+              <button class="btn btn-primary"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New session</button>
+            </div>
+          </div>
+          <div class="host-strip">
+            <div class="host-meta"><b>mini.local</b><span class="sep">·</span><span>darwin-arm64</span><span class="sep">·</span><span>up 22h 41m</span><span class="sep">·</span><span>load 2.41 7.41 12.47</span></div>
+            <div class="host-meters">
+              <div class="meter"><span class="m-label">CPU</span><span class="track"><span class="fill" style="width:8.2%;background:var(--accent);display:block"></span></span><span class="m-val">8.2%</span></div>
+              <div class="meter"><span class="m-label">MEM</span><span class="track"><span class="fill" style="width:97%;background:var(--danger);display:block"></span></span><span class="m-val">15.6/16.0G</span></div>
+              <div class="meter"><span class="m-label">DISK</span><span class="track"><span class="fill" style="width:6%;background:var(--success);display:block"></span></span><span class="m-val">12.7/228.3G</span></div>
+            </div>
+          </div>
+          <div class="sec-head"><h3>Active</h3><span class="count-chip">3</span><span class="line"></span></div>
+          <div class="rows">
+            <div class="row attention-warn"><span class="rail"></span><button class="row-main"><div class="row-title"><span class="dot" style="background:var(--warn)"></span><span class="t">Fix flaky auth tests in session store</span><span class="badge warn">needs input</span></div><div class="row-sub">Claude Code · /Volumes/Hi/lei/Projects/flowwhips</div></button><div class="row-side"><span class="row-dur" style="color:var(--warn)">2m 06s</span></div></div>
+            <div class="row"><button class="row-main"><div class="row-title"><span class="dot" style="background:var(--accent-hover)"></span><span class="t">Migrate dashboard store to zustand v5</span></div><div class="row-sub">Codex · /Volumes/Hi/lei/Projects/daisy</div></button><div class="row-side"><span class="row-dur">6m 12s</span></div></div>
+            <div class="row"><button class="row-main"><div class="row-title"><span class="dot" style="background:var(--success)"></span><span class="t">Refactor PTY bridge error handling</span></div><div class="row-sub">OpenCode · /Volumes/Hi/lei/Projects/lunel</div></button><div class="row-side"><span class="row-dur">12m 47s</span></div></div>
+          </div>
+        </div>
+
+        <div class="overlay">
+          <div class="dialog">
+            <div class="dlg-head">
+              <h3>New session</h3>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="kbd">esc</span>
+                <button class="btn-icon"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+              </div>
+            </div>
+            <div class="dlg-body">
+              <div class="field-label">Agent</div>
+              <div class="agent-grid">
+                <button class="agent-tile sel">Claude Code</button>
+                <button class="agent-tile">Codex</button>
+                <button class="agent-tile">OpenCode</button>
+                <button class="agent-tile">Kiro</button>
+                <button class="agent-tile">Antigravity</button>
+                <button class="agent-tile">Pi</button>
+              </div>
+              <p class="agent-desc">Deep reasoning for large code changes and reviews.</p>
+
+              <div class="field-label" style="margin-top:16px">Project path</div>
+              <input class="path-input" value="/Volumes/Hi/lei/Projects/" />
+              <div class="recent-paths">
+                <span class="lbl">Recent</span>
+                <button class="path-chip">/Volumes/Hi/lei/Projects/flowwhips</button>
+                <button class="path-chip">/Volumes/Hi/lei/Projects/daisy</button>
+                <button class="path-chip">/Volumes/Hi/lei/Projects/lunel</button>
+              </div>
+
+              <div class="field-label" style="margin-top:16px">Mode</div>
+              <div class="seg">
+                <button class="sel">Chat</button>
+                <button>Terminal</button>
+              </div>
+              <p class="mode-hint"><b>Chat</b> — SDK session with rich rendering. Switch to <b>Terminal</b> for a raw PTY in the browser.</p>
+            </div>
+            <div class="dlg-foot">
+              <span class="hint"><span class="kbd">↵</span> to launch</span>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-tertiary">Cancel</button>
+                <button class="btn btn-primary" style="height:32px">Launch Claude Code</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>New session 对话框</b><span>命令面板式启动器:agent 网格 + 项目路径(带最近路径快选)+ 模式,↵ 直接发射;ACP 提供方会自动追加为磁贴</span><span class="tag">560px dialog</span></figcaption>
+  </figure>
+
+  <!-- ══════════════ 4 · Empty state ══════════════ -->
+  <h2 class="section" id="s4">04 · 空态 — 首次启动的引导,不是一片空白</h2>
+  <figure class="frame full">
+  <div class="browser theme-light" id="f4">
+    <div class="browser-bar" style="background:linear-gradient(160deg,#e8e9eb,#f0f1f2);border-bottom:1px solid rgba(11,13,15,0.06)"><i style="background:rgba(11,13,15,0.14)"></i><i style="background:rgba(11,13,15,0.14)"></i><i style="background:rgba(11,13,15,0.14)"></i><span class="url" style="color:#9095a0;background:rgba(11,13,15,0.04);border-color:rgba(11,13,15,0.06)">localhost:5173/</span></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who"><span class="dot success"></span>Online</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="content">
+          <div class="page-head">
+            <div>
+              <h1>Dashboard</h1>
+              <div class="sub">Everything running on this host, at a glance.</div>
+            </div>
+            <div class="head-actions">
+              <span class="conn-chip"><span class="dot success"></span>Connected</span>
+              <button class="btn btn-primary"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New session</button>
+            </div>
+          </div>
+
+          <div class="host-strip">
+            <div class="host-meta"><b>mini.local</b><span class="sep">·</span><span>darwin-arm64</span><span class="sep">·</span><span>up 22h 41m</span><span class="sep">·</span><span>load 2.41 7.41 12.47</span></div>
+            <div class="host-meters">
+              <div class="meter"><span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="8" height="8" rx="1"/><rect x="6.5" y="6.5" width="3" height="3"/><path d="M6 2v2M10 2v2M6 12v2M10 12v2M2 6h2M2 10h2M12 6h2M12 10h2"/></svg>CPU</span><span class="track"><span class="fill" style="width:8.2%;background:var(--accent);display:block"></span></span><span class="m-val">8.2%</span></div>
+              <div class="meter"><span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5V10H2V5.5Z"/><path d="M4.5 10v2M7.5 10v2M10.5 10v2M5 6.5v2M8 6.5v2M11 6.5v2"/></svg>MEM</span><span class="track"><span class="fill" style="width:97%;background:var(--danger);display:block"></span></span><span class="m-val">15.6/16.0G</span></div>
+              <div class="meter"><span class="m-label"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.5"/><path d="M9.2 9.2 12.5 12.5"/></svg>DISK</span><span class="track"><span class="fill" style="width:6%;background:var(--success);display:block"></span></span><span class="m-val">12.7/228.3G</span></div>
+            </div>
+          </div>
+
+          <div class="sec-head"><h3>Active</h3><span class="count-chip">0</span><span class="line"></span></div>
+          <div class="empty">
+            <div class="glyph"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M10 5l3 3-3 3"/></svg></div>
+            <h4>No active sessions</h4>
+            <p>Pick an agent, point it at a project, and it starts on this host — chat for rich rendering, terminal for a raw PTY.</p>
+            <div class="act"><button class="btn btn-secondary">Start your first session</button></div>
+          </div>
+
+          <div class="gap-28"></div>
+
+          <div class="sec-head"><h3>Recent</h3><span class="count-chip">0</span><span class="line"></span></div>
+          <div class="empty" style="padding:28px 24px">
+            <h4 style="color:var(--muted);font-weight:510">No past sessions</h4>
+            <p>Finished sessions are kept here with their full transcripts, ready to resume.</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>空态 · 亮色</b><span>空态给出可执行的下一步(打开启动器),而不是一个图标加一句话</span><span class="tag light">1440 · light</span></figcaption>
+  </figure>
+
+  <!-- ══════════════ 5 · Offline ══════════════ -->
+  <h2 class="section" id="s5">05 · 离线态 — 诚实,且给出恢复路径</h2>
+  <figure class="frame full">
+  <div class="browser theme-dark" id="f5">
+    <div class="browser-bar"><i></i><i></i><i></i><span class="url">localhost:5173/</span></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who" style="color:var(--danger)"><span class="dot danger"></span>Offline</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z"/></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="content">
+          <div class="page-head">
+            <div>
+              <h1>Dashboard</h1>
+              <div class="sub">Everything running on this host, at a glance.</div>
+            </div>
+            <div class="head-actions">
+              <span class="conn-chip" style="color:var(--danger)"><span class="dot danger"></span>Offline</span>
+              <button class="btn btn-primary" style="opacity:0.45;cursor:not-allowed">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+                New session
+              </button>
+            </div>
+          </div>
+
+          <div class="offline">
+            <div class="glyph"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3M8 10.5v.5"/></svg></div>
+            <div class="grow">
+              <h4>Can't reach the daemon</h4>
+              <p>The Baton daemon isn't responding on <code>http://localhost:3210</code>. Start it on the host with <code>baton daemon start</code>, then retry.</p>
+            </div>
+            <button class="btn btn-secondary">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8a6 6 0 0 1-11.54 2.5"/><path d="M14 8H11V5M2 8a6 6 0 0 1 11.54-2.5"/><path d="M2 8H5v3"/></svg>
+              Retry
+            </button>
+          </div>
+
+          <div class="sec-head">
+            <h3>Recent</h3><span class="line"></span>
+            <span class="stale-note">Showing the last known list — it may be stale.</span>
+          </div>
+          <div class="rows" style="opacity:0.62">
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title"><span class="dot" style="background:var(--meta)"></span><span class="t">Audit relay crypto handshake</span></div>
+                <div class="row-sub">Claude Code · /Volumes/Hi/lei/Projects/flowwhips · 3h ago · 214 events</div>
+              </button>
+              <div class="row-side"><div class="row-actions" style="opacity:1"><button class="btn btn-secondary" style="opacity:0.55;cursor:not-allowed">Resume</button></div></div>
+            </div>
+            <div class="row">
+              <button class="row-main" style="padding-top:10px;padding-bottom:10px">
+                <div class="row-title"><span class="dot" style="background:var(--meta)"></span><span class="t">Write release notes for v0.4</span><span class="mini-tag">resumed</span></div>
+                <div class="row-sub">Codex · /Volumes/Hi/lei/Projects/daisy · 26h ago · 89 events</div>
+              </button>
+              <div class="row-side"><div class="row-actions" style="opacity:1"><button class="btn btn-secondary" style="opacity:0.55;cursor:not-allowed">Resume</button></div></div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>离线态 · 暗色</b><span>启动器禁用而非隐藏;离线面板说明原因与恢复命令;缓存的 Recent 降透明展示并注明可能过期</span><span class="tag">1440 · dark</span></figcaption>
+  </figure>
+
+  <footer style="margin-top:72px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.08);color:#8a8f98;font-size:12px;line-height:1.8">
+    Open Design prototype · Baton Web Dashboard v2 · 令牌取自 <code style="font-family:var(--font-mono);font-size:11px;color:#9fb6ff">packages/app/src/app.css</code>(linear-app)· 交互规范:行悬停 150ms <code style="font-family:var(--font-mono);font-size:11px;color:#9fb6ff">cubic-bezier(0.2,0,0,1)</code>,对话框 180ms 上浮,焦点环 <code style="font-family:var(--font-mono);font-size:11px;color:#9fb6ff">focus-ring</code>
+  </footer>
+</div>
+</body>
+</html>

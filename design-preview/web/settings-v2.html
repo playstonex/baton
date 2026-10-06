@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Baton Web — Settings v2 · Open Design prototype</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     Open Design prototype — Baton Settings v2
+     Design intent:
+     · Narrow reading column (768px) — settings are forms
+     · One live connection summary replaces the bottom
+       "current mode" well + the drifting status alert
+     · Local/Remote collapses to a segmented control
+     · Appearance (System/Light/Dark) gets a real home
+     · Feedback renders inline where the action happened
+     ═══════════════════════════════════════════════ */
+
+  @font-face {
+    font-family: 'InterVar';
+    src: url('../../packages/app/public/fonts/InterVariable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'GeistMonoVar';
+    src: url('../../packages/app/public/fonts/GeistMono-Variable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+    --font-sans: 'InterVar', Inter, -apple-system, 'SF Pro Text', 'Segoe UI', sans-serif;
+    --font-mono: 'GeistMonoVar', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  body {
+    background: #08090a;
+    font-family: var(--font-sans);
+    color: #f7f8f8;
+    padding: 48px 32px 96px;
+    font-feature-settings: 'cv01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1560px; margin: 0 auto; }
+
+  .gallery-head h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .gallery-head h1 .thin { color: #8a8f98; font-weight: 510; }
+  .gallery-head > p { color: #8a8f98; margin-top: 10px; font-size: 14px; line-height: 1.75; max-width: 820px; }
+  .chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .chip { font-size: 12px; color: #8a8f98; border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 4px 12px; }
+  .chip b { color: #f7f8f8; font-weight: 590; }
+
+  h2.section {
+    margin: 64px 0 20px; font-size: 12px; font-weight: 590;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #8a8f98;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2.section::before { content: ""; width: 3px; height: 13px; border-radius: 2px; background: #7170ff; }
+  figure.frame { margin: 0; }
+  figcaption { margin-top: 12px; font-size: 13px; color: #8a8f98; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  figcaption b { color: #f7f8f8; font-weight: 590; }
+  .tag { font-size: 10px; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); color: #9fb6ff; white-space: nowrap; }
+  .tag.light { color: #ffd479; }
+
+  .browser {
+    border-radius: 14px; padding: 8px;
+    background: linear-gradient(160deg, #16171a, #0e0f11);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.04);
+  }
+  .browser-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px 10px; }
+  .browser-bar i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.12); }
+  .browser-bar .url {
+    margin-left: 8px; flex: 1; max-width: 380px;
+    font-family: var(--font-mono); font-size: 10.5px; color: #62666d;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 3px 10px;
+  }
+
+  .theme-dark {
+    --canvas: #08090a; --panel: #0f1011; --surface: #131416; --raised: #1a1b1d; --active: #232428;
+    --field: rgba(255,255,255,0.03);
+    --fg: #f7f8f8; --fg-2: #d0d6e0; --muted: #8a8f98; --meta: #62666d;
+    --line: rgba(255,255,255,0.08); --line-soft: rgba(255,255,255,0.05); --line-strong: rgba(255,255,255,0.15);
+    --accent: #5e6ad2; --accent-hover: #7a83e8; --accent-active: #828fff; --accent-on: #ffffff;
+    --accent-soft: rgba(94,106,210,0.22);
+    --success: #3fb950; --success-soft: rgba(63,185,80,0.13);
+    --warn: #d9a62e; --warn-soft: rgba(217,166,46,0.12);
+    --danger: #eb4d55; --danger-soft: rgba(235,77,85,0.12);
+  }
+  .theme-light {
+    --canvas: #f7f8f8; --panel: #fcfcfc; --surface: #ffffff; --raised: #f3f4f5; --active: #ebedef;
+    --field: #ffffff;
+    --fg: #1b1d22; --fg-2: #42454c; --muted: #6f747e; --meta: #9095a0;
+    --line: rgba(11,13,15,0.10); --line-soft: rgba(11,13,15,0.06); --line-strong: rgba(11,13,15,0.17);
+    --accent: #5e6ad2; --accent-hover: #505cc8; --accent-active: #4752c4; --accent-on: #ffffff;
+    --accent-soft: rgba(94,106,210,0.11);
+    --success: #1a7f37; --success-soft: rgba(26,127,55,0.10);
+    --warn: #9a6700; --warn-soft: rgba(154,103,0,0.10);
+    --danger: #cf222e; --danger-soft: rgba(207,34,46,0.09);
+  }
+
+  .app {
+    display: flex; height: 1000px; overflow: hidden;
+    border-radius: 8px; border: 1px solid var(--line-soft);
+    background: var(--canvas); color: var(--fg);
+    font-size: 13px; line-height: 1.5;
+  }
+
+  /* Sidebar — identical to dashboard v2 */
+  .sidebar { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line-soft); }
+  .side-logo { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 20px; }
+  .logo-tile { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); color: var(--accent-on); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .side-logo span { font-size: 13px; font-weight: 590; letter-spacing: -0.01em; }
+  .side-nav { flex: 1; padding: 0 12px; overflow: hidden; }
+  .nav-label { font-size: 11px; font-weight: 510; letter-spacing: 0.08em; text-transform: uppercase; color: var(--meta); padding: 12px 10px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; font-size: 13px; font-weight: 510; color: var(--fg-2); }
+  .nav-item svg { color: var(--muted); }
+  .nav-item.active { background: var(--raised); color: var(--fg); }
+  .nav-item.active svg { color: var(--fg-2); }
+  .nav-sep { height: 1px; background: var(--line-soft); margin: 12px 8px; }
+  .side-foot { padding: 16px 12px; }
+  .side-status { display: flex; align-items: center; justify-content: space-between; background: color-mix(in srgb, var(--raised) 60%, transparent); border-radius: 6px; padding: 8px 10px; }
+  .side-status .who { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 510; color: var(--success); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot.success { background: var(--success); }
+  .dot.danger { background: var(--danger); }
+  .theme-btn { width: 24px; height: 24px; border-radius: 6px; border: none; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  main { flex: 1; overflow: hidden; }
+  .content { max-width: 768px; margin: 0 auto; padding: 32px 40px 40px; }
+
+  .page-head { margin-bottom: 24px; }
+  .page-head h1 { font-size: 20px; font-weight: 590; letter-spacing: -0.02em; }
+  .page-head .sub { margin-top: 3px; font-size: 13px; color: var(--muted); }
+
+  /* Group label */
+  .group-label { font-size: 11px; font-weight: 510; letter-spacing: 0.07em; text-transform: uppercase; color: var(--meta); margin: 28px 0 10px; }
+  .group-label:first-of-type { margin-top: 0; }
+
+  .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 8px; }
+  .card-pad { padding: 16px; }
+
+  /* Connection summary */
+  .conn-summary { display: flex; align-items: center; gap: 12px; }
+  .conn-summary .state {
+    width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--success-soft); color: var(--success);
+  }
+  .conn-summary .state.off { background: var(--danger-soft); color: var(--danger); }
+  .conn-summary h4 { font-size: 13px; font-weight: 590; }
+  .conn-summary .desc { margin-top: 1px; font-size: 12.5px; color: var(--muted); }
+  .conn-summary .endpoint {
+    margin-left: auto; flex-shrink: 0;
+    font-family: var(--font-mono); font-size: 11px; color: var(--fg-2);
+    border: 1px solid var(--line-soft); background: var(--raised);
+    border-radius: 6px; padding: 4px 9px;
+  }
+
+  /* Segmented mode switch */
+  .seg {
+    display: inline-flex; border-radius: 6px;
+    border: 1px solid var(--line-soft); background: var(--raised); padding: 2px;
+  }
+  .seg button {
+    height: 26px; padding: 0 14px; border: none; border-radius: 4px; background: transparent;
+    font-family: inherit; font-size: 12px; font-weight: 510; color: var(--muted); cursor: pointer;
+    transition: all 0.15s var(--ease);
+  }
+  .seg button.sel { background: var(--surface); color: var(--fg); box-shadow: 0 0 0 1px var(--line-soft); }
+  .theme-dark .seg button.sel { background: var(--active); }
+
+  .helper { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+
+  /* Fields */
+  .field { margin-top: 14px; }
+  .field:first-of-type { margin-top: 0; }
+  .field label { display: block; font-size: 12px; font-weight: 510; color: var(--fg-2); margin-bottom: 6px; }
+  .field .hint { margin-top: 5px; font-size: 12px; color: var(--meta); }
+  .input {
+    width: 100%; height: 32px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--field);
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--fg);
+    padding: 0 10px; outline: none;
+    transition: border-color 0.15s var(--ease);
+  }
+  .input::placeholder { color: var(--meta); }
+  .input:focus { border-color: var(--accent); }
+  .input.code { text-align: center; letter-spacing: 0.45em; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border-radius: 6px; font-family: inherit; font-size: 13px; font-weight: 510;
+    border: none; cursor: pointer; white-space: nowrap;
+    transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-on); height: 30px; padding: 0 12px; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--field); color: var(--fg-2); border: 1px solid var(--line); height: 28px; padding: 0 10px; }
+  .btn-secondary:hover { background: var(--raised); color: var(--fg); }
+  .btn-tertiary { background: transparent; color: var(--fg-2); height: 28px; padding: 0 10px; }
+  .btn-tertiary:hover { background: var(--raised); color: var(--fg); }
+
+  .form-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+  .form-foot .note { font-size: 12px; }
+  .note.ok { color: var(--success); }
+  .note.err { color: var(--danger); }
+  .row-2 { display: flex; gap: 8px; align-items: center; }
+  .row-2 .input { flex: 1; }
+
+  /* Paired host row */
+  .paired {
+    display: flex; align-items: center; gap: 10px; margin-top: 14px;
+    border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+    background: var(--success-soft); border-radius: 6px; padding: 9px 12px;
+  }
+  .paired .t { font-size: 12.5px; font-weight: 510; color: var(--success); }
+  .paired .mono { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  /* Pair card */
+  .pair-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .pair-row h4 { font-size: 13px; font-weight: 590; }
+  .pair-row p { margin-top: 3px; font-size: 12.5px; color: var(--muted); max-width: 440px; line-height: 1.55; }
+
+  .qr-panel {
+    margin-top: 16px; border-top: 1px solid var(--line-soft); padding-top: 16px;
+    display: flex; align-items: center; gap: 20px;
+  }
+  .qr-tile { background: #ffffff; border: 1px solid var(--line-soft); border-radius: 8px; padding: 10px; flex-shrink: 0; }
+  .qr-meta { display: grid; gap: 6px; min-width: 0; }
+  .qr-meta .k { font-size: 11px; color: var(--meta); }
+  .qr-meta .v { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; }
+  .qr-meta .row .k { display: inline-block; width: 84px; }
+
+  /* Appearance */
+  .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .theme-opt {
+    border: 1px solid var(--line); border-radius: 8px; background: var(--field);
+    padding: 12px; cursor: pointer; text-align: left; font-family: inherit;
+    transition: all 0.15s var(--ease);
+  }
+  .theme-opt:hover { border-color: var(--line-strong); }
+  .theme-opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .theme-opt .swatch {
+    height: 40px; border-radius: 6px; border: 1px solid var(--line-soft); margin-bottom: 10px;
+    display: flex; align-items: flex-end; padding: 5px; gap: 4px;
+  }
+  .theme-opt .swatch i { display: block; border-radius: 3px; }
+  .sw-system { background: linear-gradient(90deg, #f7f8f8 50%, #131416 50%); }
+  .sw-light { background: #f7f8f8; }
+  .sw-dark { background: #131416; }
+  .theme-opt .name { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 510; color: var(--fg); }
+  .theme-opt .name svg { color: var(--muted); }
+  .theme-opt .desc { margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+
+  /* About rows */
+  .info-rows { display: grid; }
+  .info-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; }
+  .info-row + .info-row { border-top: 1px solid var(--line-soft); }
+  .info-row .k { font-size: 13px; color: var(--muted); }
+  .info-row .v { font-family: var(--font-mono); font-size: 12.5px; color: var(--fg-2); }
+
+  .stack > * + * { margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="gallery-head">
+    <h1>Settings v2 <span class="thin">· 连接为先的收拢</span></h1>
+    <p>
+      设置页按「连接状态 → 连接方式 → 设备配对 → 外观 → 关于」组织成窄栏阅读。
+      顶部新增实时连接摘要,取代原来漂在页中的 StatusAlert 与页底语义重复的 Current mode 卡;
+      Local/Remote 从两张大卡收成分段控件;外观(System/Light/Dark)在设置页有了正式的家,
+      与侧栏开关写同一份 <code>baton-theme</code>。
+    </p>
+    <div class="chips">
+      <span class="chip">结构 <b>摘要 → 连接 → 配对 → 外观 → 关于</b></span>
+      <span class="chip">栏宽 <b>768px 阅读列</b></span>
+      <span class="chip">反馈 <b>就地内联,不再跨区块漂移</b></span>
+    </div>
+  </header>
+
+  <!-- ══════════════ 1 · Local · light ══════════════ -->
+  <h2 class="section">01 · 本地连接 — 亮色</h2>
+  <figure class="frame">
+  <div class="browser theme-light" id="s1">
+    <div class="browser-bar" style="background:linear-gradient(160deg,#e8e9eb,#f0f1f2);border-bottom:1px solid rgba(11,13,15,0.06)"><i style="background:rgba(11,13,15,0.14)"></i><i style="background:rgba(11,13,15,0.14)"></i><i style="background:rgba(11,13,15,0.14)"></i><span class="url" style="color:#9095a0;background:rgba(11,13,15,0.04);border-color:rgba(11,13,15,0.06)">localhost:5173/settings</span></div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who"><span class="dot success"></span>Online</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="content">
+          <div class="page-head">
+            <h1>Settings</h1>
+            <div class="sub">Connection, pairing, and how Baton looks.</div>
+          </div>
+
+          <!-- live summary -->
+          <div class="card card-pad">
+            <div class="conn-summary">
+              <div class="state"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg></div>
+              <div>
+                <h4>Connected to local daemon</h4>
+                <div class="desc">Local · direct HTTP + WebSocket · HTTP 3210 / WS 3211</div>
+              </div>
+              <span class="endpoint">ws://192.168.1.20:3211</span>
+            </div>
+          </div>
+
+          <div class="group-label">Connection</div>
+          <div class="card card-pad">
+            <div class="seg">
+              <button class="sel">Local</button>
+              <button>Remote</button>
+            </div>
+            <p class="helper">Direct daemon access — lowest latency when you're on the same network as the host.</p>
+
+            <div class="field" style="margin-top:16px">
+              <label>Daemon HTTP URL</label>
+              <input class="input" value="http://192.168.1.20:3210" />
+              <div class="hint">The HTTP endpoint where your Baton daemon is listening.</div>
+            </div>
+
+            <div class="form-foot">
+              <span class="note ok">Connected — streaming over ws://192.168.1.20:3211</span>
+              <button class="btn btn-primary">Reconnect</button>
+            </div>
+          </div>
+
+          <div class="group-label">Mobile pairing</div>
+          <div class="card card-pad">
+            <div class="pair-row">
+              <div>
+                <h4>Pair a mobile device</h4>
+                <p>Scan the QR code with the Baton mobile app camera — it configures host, relay and encryption key in one step.</p>
+              </div>
+              <button class="btn btn-secondary">Show QR code</button>
+            </div>
+          </div>
+
+          <div class="group-label">Appearance</div>
+          <div class="theme-grid">
+            <button class="theme-opt sel">
+              <div class="swatch sw-system"><i style="width:14px;height:8px;background:#5e6ad2"></i><i style="width:22px;height:8px;background:#d6d3d1"></i><i style="width:9px;height:8px;background:#a8a29e"></i></div>
+              <div class="name"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5"/><path d="M5.5 14h5M8 11.5V14"/></svg>System</div>
+              <div class="desc">Follow the OS setting, live</div>
+            </button>
+            <button class="theme-opt">
+              <div class="swatch sw-light"><i style="width:14px;height:8px;background:#5e6ad2"></i><i style="width:22px;height:8px;background:#e7e5e4"></i><i style="width:9px;height:8px;background:#a8a29e"></i></div>
+              <div class="name"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>Light</div>
+              <div class="desc">Warm paper, all day</div>
+            </button>
+            <button class="theme-opt">
+              <div class="swatch sw-dark"><i style="width:14px;height:8px;background:#7170ff"></i><i style="width:22px;height:8px;background:#2a2b2f"></i><i style="width:9px;height:8px;background:#4a4b50"></i></div>
+              <div class="name"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z"/></svg>Dark</div>
+              <div class="desc">The native medium</div>
+            </button>
+          </div>
+
+          <div class="group-label">About</div>
+          <div class="card info-rows">
+            <div class="info-row"><span class="k">Application</span><span class="v">Baton</span></div>
+            <div class="info-row"><span class="k">Version</span><span class="v">0.1.0</span></div>
+            <div class="info-row"><span class="k">Transport</span><span class="v">WebSocket + HTTP</span></div>
+            <div class="info-row"><span class="k">Encryption</span><span class="v">NaCl box</span></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>Local · 亮色</b><span>连接摘要常驻顶部;反馈就地渲染在操作旁;外观三选一,带主题缩略色板</span><span class="tag light">768 列 · light</span></figcaption>
+  </figure>
+
+  <!-- ══════════════ 2 · Remote + QR · dark ══════════════ -->
+  <h2 class="section" style="margin-top:56px">02 · 远程配对 + QR — 暗色(native)</h2>
+  <figure class="frame">
+  <div class="browser theme-dark" id="s2">
+    <div class="browser-bar"><i></i><i></i><i></i><span class="url">localhost:5173/settings</span></div>
+    <div class="app" style="height:auto;min-height:1000px">
+      <aside class="sidebar">
+        <div class="side-logo"><div class="logo-tile">B</div><span>Baton</span></div>
+        <nav class="side-nav">
+          <div class="nav-label">Main</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>Dashboard</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="8" r="2"/><circle cx="8" cy="8" r="2"/><path d="M5 8h1M10 8h1"/></svg>Pipelines</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7M6 14V4M10 14V9M14 14V2"/></svg>Analytics</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><path d="M5.5 5.5L7 10.5M10.5 5.5L9 10.5M6 4h4"/></svg>Orchestration</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="3" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="12" cy="8" r="1.5"/><path d="M5 4.5v7M6.5 11.5L10.5 9.5M6.5 5.5L10.5 7.5"/></svg>Pull Requests</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6M8 11v3"/></svg>Worktrees</div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">System</div>
+          <div class="nav-item"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5l6-3 6 3-6 3-6-3z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>API Providers</div>
+          <div class="nav-item active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</div>
+        </nav>
+        <div class="side-foot">
+          <div class="side-status">
+            <span class="who"><span class="dot success"></span>Online</span>
+            <button class="theme-btn"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z"/></svg></button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="content">
+          <div class="page-head">
+            <h1>Settings</h1>
+            <div class="sub">Connection, pairing, and how Baton looks.</div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="conn-summary">
+              <div class="state"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg></div>
+              <div>
+                <h4>Connected via relay</h4>
+                <div class="desc">Remote · NaCl box E2E over relay · host 9f2c8a41…</div>
+              </div>
+              <span class="endpoint">wss://relay.lei.dev:3230</span>
+            </div>
+          </div>
+
+          <div class="group-label">Connection</div>
+          <div class="card card-pad">
+            <div class="seg">
+              <button>Local</button>
+              <button class="sel">Remote</button>
+            </div>
+            <p class="helper">Relay-backed access — pair once, then reach your host securely from anywhere.</p>
+
+            <div class="field" style="margin-top:16px">
+              <label>Relay WebSocket URL</label>
+              <input class="input" value="wss://relay.lei.dev:3230" />
+              <div class="hint">The public WebSocket address of your Baton relay server.</div>
+            </div>
+
+            <div class="field">
+              <label>Pairing code</label>
+              <div class="row-2">
+                <input class="input code" placeholder="000000" maxlength="6" />
+                <button class="btn btn-primary" style="flex-shrink:0">Pair &amp; connect</button>
+              </div>
+              <div class="hint">The 6-digit code displayed by <span style="font-family:var(--font-mono);font-size:11px">baton daemon pair</span> on the host.</div>
+            </div>
+
+            <div class="paired">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)"><path d="M3 8.5l3 3 7-7"/></svg>
+              <span class="t">Paired host</span>
+              <span class="mono">9f2c8a41-02d7-4cbe-a1f3-6b9e55d21c77</span>
+            </div>
+
+            <div class="form-foot">
+              <span class="note ok">Connected to relay — paired 3 days ago</span>
+              <button class="btn btn-tertiary">Forget host</button>
+            </div>
+          </div>
+
+          <div class="group-label">Mobile pairing</div>
+          <div class="card card-pad">
+            <div class="pair-row">
+              <div>
+                <h4>Pair a mobile device</h4>
+                <p>Scan with the Baton mobile app camera — it configures host, relay and encryption key in one step.</p>
+              </div>
+              <button class="btn btn-secondary">Refresh QR</button>
+            </div>
+            <div class="qr-panel">
+              <div class="qr-tile">
+                <svg width="168" height="168" viewBox="0 0 29 29" shape-rendering="crispEdges" style="display:block">
+                  <rect width="29" height="29" fill="#ffffff"/>
+                  <g fill="#1b1d22">
+                    <rect x="0" y="0" width="7" height="7"/><rect x="22" y="0" width="7" height="7"/><rect x="0" y="22" width="7" height="7"/>
+                    <rect x="1" y="1" width="5" height="5" fill="#ffffff"/><rect x="23" y="1" width="5" height="5" fill="#ffffff"/><rect x="1" y="23" width="5" height="5" fill="#ffffff"/>
+                    <rect x="2" y="2" width="3" height="3"/><rect x="24" y="2" width="3" height="3"/><rect x="2" y="24" width="3" height="3"/>
+                    <rect x="9" y="0" width="1" height="1"/><rect x="11" y="0" width="2" height="1"/><rect x="15" y="0" width="1" height="2"/><rect x="17" y="1" width="2" height="1"/><rect x="20" y="0" width="1" height="1"/>
+                    <rect x="9" y="2" width="2" height="1"/><rect x="12" y="2" width="1" height="2"/><rect x="14" y="3" width="2" height="1"/><rect x="18" y="2" width="1" height="2"/><rect x="20" y="2" width="2" height="1"/>
+                    <rect x="0" y="9" width="1" height="2"/><rect x="2" y="9" width="1" height="1"/><rect x="3" y="10" width="2" height="1"/><rect x="5" y="9" width="2" height="2"/><rect x="8" y="9" width="1" height="1"/>
+                    <rect x="10" y="9" width="2" height="2"/><rect x="13" y="10" width="1" height="1"/><rect x="15" y="9" width="2" height="1"/><rect x="18" y="9" width="1" height="2"/><rect x="20" y="10" width="2" height="1"/><rect x="23" y="9" width="2" height="1"/><rect x="26" y="9" width="1" height="2"/><rect x="28" y="9" width="1" height="1"/>
+                    <rect x="1" y="11" width="1" height="2"/><rect x="4" y="12" width="2" height="1"/><rect x="7" y="11" width="1" height="1"/><rect x="9" y="12" width="2" height="1"/><rect x="12" y="12" width="2" height="1"/><rect x="16" y="11" width="1" height="2"/><rect x="19" y="12" width="2" height="1"/><rect x="22" y="11" width="1" height="1"/><rect x="24" y="12" width="2" height="1"/><rect x="27" y="11" width="1" height="1"/>
+                    <rect x="0" y="14" width="2" height="1"/><rect x="3" y="14" width="1" height="2"/><rect x="6" y="14" width="2" height="1"/><rect x="9" y="14" width="1" height="1"/><rect x="11" y="15" width="2" height="1"/><rect x="14" y="14" width="1" height="1"/><rect x="17" y="14" width="2" height="1"/><rect x="20" y="14" width="1" height="2"/><rect x="23" y="14" width="2" height="1"/><rect x="26" y="14" width="1" height="1"/><rect x="28" y="15" width="1" height="1"/>
+                    <rect x="1" y="16" width="1" height="1"/><rect x="5" y="16" width="1" height="2"/><rect x="8" y="16" width="2" height="1"/><rect x="10" y="17" width="1" height="1"/><rect x="13" y="16" width="1" height="2"/><rect x="15" y="17" width="2" height="1"/><rect x="18" y="16" width="1" height="1"/><rect x="21" y="16" width="2" height="1"/><rect x="25" y="16" width="1" height="2"/><rect x="27" y="17" width="2" height="1"/>
+                    <rect x="0" y="19" width="1" height="1"/><rect x="2" y="19" width="2" height="1"/><rect x="6" y="19" width="1" height="1"/><rect x="9" y="19" width="1" height="2"/><rect x="12" y="19" width="2" height="1"/><rect x="16" y="19" width="1" height="1"/><rect x="19" y="19" width="2" height="1"/><rect x="22" y="19" width="1" height="2"/><rect x="26" y="19" width="2" height="1"/>
+                    <rect x="9" y="22" width="1" height="1"/><rect x="11" y="22" width="2" height="1"/><rect x="14" y="22" width="1" height="1"/><rect x="16" y="23" width="2" height="1"/><rect x="19" y="22" width="1" height="1"/><rect x="21" y="23" width="2" height="1"/><rect x="24" y="22" width="1" height="1"/><rect x="26" y="22" width="2" height="1"/><rect x="28" y="23" width="1" height="1"/>
+                    <rect x="9" y="24" width="2" height="1"/><rect x="12" y="25" width="1" height="1"/><rect x="15" y="24" width="2" height="1"/><rect x="18" y="25" width="1" height="1"/><rect x="20" y="24" width="2" height="1"/><rect x="23" y="25" width="1" height="1"/><rect x="25" y="24" width="2" height="1"/>
+                    <rect x="9" y="26" width="1" height="2"/><rect x="11" y="27" width="2" height="1"/><rect x="14" y="26" width="1" height="1"/><rect x="16" y="26" width="2" height="1"/><rect x="19" y="27" width="1" height="1"/><rect x="22" y="26" width="2" height="1"/><rect x="25" y="26" width="1" height="1"/><rect x="27" y="27" width="2" height="1"/>
+                  </g>
+                </svg>
+              </div>
+              <div class="qr-meta">
+                <div class="row"><span class="k">Host</span><span class="v">mini.local</span></div>
+                <div class="row"><span class="k">LAN URL</span><span class="v">http://192.168.1.20:3210</span></div>
+                <div class="row"><span class="k">Relay</span><span class="v">wss://relay.lei.dev:3230</span></div>
+                <div class="row"><span class="k">Fingerprint</span><span class="v">9F:2C:8A:41:02:D7:4C:BE:A1:F3</span></div>
+                <div style="margin-top:4px;font-size:11.5px;color:var(--muted);line-height:1.55">Point the mobile app's camera at the code — the fingerprint is verified on both sides before the first message.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="group-label">Appearance</div>
+          <div class="theme-grid">
+            <button class="theme-opt">
+              <div class="swatch sw-system"><i style="width:14px;height:8px;background:#5e6ad2"></i><i style="width:22px;height:8px;background:#d6d3d1"></i><i style="width:9px;height:8px;background:#a8a29e"></i></div>
+              <div class="name"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5"/><path d="M5.5 14h5M8 11.5V14"/></svg>System</div>
+              <div class="desc">Follow the OS setting, live</div>
+            </button>
+            <button class="theme-opt">
+              <div class="swatch sw-light"><i style="width:14px;height:8px;background:#5e6ad2"></i><i style="width:22px;height:8px;background:#e7e5e4"></i><i style="width:9px;height:8px;background:#a8a29e"></i></div>
+              <div class="name"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>Light</div>
+              <div class="desc">Warm paper, all day</div>
+            </button>
+            <button class="theme-opt sel">
+              <div class="swatch sw-dark"><i style="width:14px;height:8px;background:#7170ff"></i><i style="width:22px;height:8px;background:#2a2b2f"></i><i style="width:9px;height:8px;background:#4a4b50"></i></div>
+              <div class="name"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z"/></svg>Dark</div>
+              <div class="desc">The native medium</div>
+            </button>
+          </div>
+
+          <div class="group-label">About</div>
+          <div class="card info-rows">
+            <div class="info-row"><span class="k">Application</span><span class="v">Baton</span></div>
+            <div class="info-row"><span class="k">Version</span><span class="v">0.1.0</span></div>
+            <div class="info-row"><span class="k">Transport</span><span class="v">WebSocket + HTTP</span></div>
+            <div class="info-row"><span class="k">Encryption</span><span class="v">NaCl box</span></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <figcaption><b>Remote · 暗色</b><span>配对码与按钮同行,配对成功内联回执;QR 面板带主机/中继/指纹元数据与说明</span><span class="tag">768 列 · dark</span></figcaption>
+  </figure>
+
+  <footer style="margin-top:72px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.08);color:#8a8f98;font-size:12px;line-height:1.8">
+    Open Design prototype · Baton Web Settings v2 · 所有交互逻辑(verify-code → token → relay 配置)保持不变,仅重组信息架构与视觉 · 焦点环与动效令牌同 <code style="font-family:var(--font-mono);font-size:11px;color:#9fb6ff">app.css</code>
+  </footer>
+</div>
+</body>
+</html>
