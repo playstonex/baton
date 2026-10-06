@@ -1,4 +1,4 @@
-import type { AgentConfig, SpawnConfig } from './agent.js';
+import type { AgentConfig, SpawnConfig, StatusDetail } from './agent.js';
 
 // Agent types
 // 'kiro' is the canonical type (spawns `kiro-cli chat`); 'kiro-cli' and
@@ -46,6 +46,12 @@ export interface AgentProcess {
   lastActivityAt?: string;
   /** Soft-delete marker — archived sessions are hidden from default lists. */
   archivedAt?: string;
+  /**
+   * Live activity detail (current tool, waiting prompt, error text, when the
+   * status was entered). Present on daemon list/get responses.
+   * COMPAT(statusDetail): optional — clients must handle its absence.
+   */
+  stateDetail?: StatusDetail;
 }
 
 export type { AgentConfig, SpawnConfig } from './agent.js';

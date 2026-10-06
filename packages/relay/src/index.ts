@@ -79,6 +79,9 @@ export class RelayServer {
         return new Response('Not found', { status: 404 });
       },
       websocket: {
+        // Client→host frames carry base64 image attachments end-to-end —
+        // keep the relay from dropping them at the socket.
+        maxPayloadLength: 32 * 1024 * 1024,
         open(ws: import('bun').ServerWebSocket<{ id: string }>) {
           ws.send(JSON.stringify({ type: 'welcome', message: `Baton Relay v${BATON_VERSION}` }));
         },

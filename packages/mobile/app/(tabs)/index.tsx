@@ -77,6 +77,89 @@ function formatTime(ts: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
+function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return `${minutes}m ${total % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+/** Ticks once a second so status durations stay live on the dashboard. */
+function useNow(intervalMs = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
+/**
+ * Display-level staleness marker (open-claude-code's TOOL_DISPLAY_EXPIRY
+ * idea): a "busy" session whose last output is over a minute old is probably
+ * wedged — say so instead of ticking an ever-growing timer like nothing's wrong.
+ */
+function quietSuffix(agent: AgentProcess, now: number): string {
+  const last = agent.lastActivityAt ? Date.parse(agent.lastActivityAt) : NaN;
+  if (Number.isNaN(last)) return '';
+  const quietMs = now - last;
+  if (quietMs < 60_000) return '';
+  return ` · no activity ${formatDuration(quietMs)}`;
+}
+
+/** One-line answer to "what is this session doing right now?" */
+function agentActivity(agent: AgentProcess, now: number): string | null {
+  const detail = agent.stateDetail;
+  switch (agent.status) {
+    case 'executing': {
+      if (!detail) return null;
+      const tool =
+        detail.toolTitle ?? (detail.tool && detail.tool !== 'unknown' ? detail.tool : 'tool');
+      return `Running ${tool} · ${formatDuration(now - detail.since)}${quietSuffix(agent, now)}`;
+    }
+    case 'thinking':
+      return detail
+        ? `Thinking · ${formatDuration(now - detail.since)}${quietSuffix(agent, now)}`
+        : null;
+    case 'running': {
+      if (!detail) return null;
+      const calls = detail.toolCount
+        ? ` · ${detail.toolCount} tool call${detail.toolCount === 1 ? '' : 's'}`
+        : '';
+      return `Working${calls} · ${formatDuration(now - detail.since)}${quietSuffix(agent, now)}`;
+    }
+    case 'waiting_input': {
+      const prompt = detail?.prompt?.replace(/\s+/g, ' ').trim();
+      return prompt ? `Waiting for you: ${prompt}` : null;
+    }
+    case 'idle': {
+      if (!detail) return null;
+      const last = agent.lastActivityAt ? formatTime(Date.parse(agent.lastActivityAt)) : '';
+      return `Idle${last && last !== 'Just now' ? ` · last activity ${last}` : ''}`;
+    }
+    case 'error':
+      return detail?.error ?? null;
+    case 'starting':
+      return 'Starting…';
+    default:
+      return null;
+  }
+}
+
+/** Needs-your-attention first, then busy, then idle (paseo's bucket order). */
+const STATUS_PRIORITY: Record<string, number> = {
+  waiting_input: 0,
+  error: 1,
+  executing: 2,
+  thinking: 3,
+  running: 4,
+  starting: 5,
+  idle: 6,
+  stopped: 7,
+};
+
 function getFilteredSessions(sessions: RecentSession[], pinnedIds: string[], query: string) {
   const filtered = query
     ? sessions.filter(
@@ -143,6 +226,7 @@ export default function DashboardScreen() {
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
+  const now = useNow();
 
   const fetchAgents = useCallback(async () => {
     try {
@@ -202,14 +286,17 @@ export default function DashboardScreen() {
             projectPath: agent.projectPath,
             status: agent.status as AgentProcess['status'],
             startedAt: agent.startedAt ?? '',
+            mode: agent.mode,
             title: agent.title,
+            lastActivityAt: agent.lastActivityAt,
+            stateDetail: agent.detail,
           })),
         );
       }
     });
     const unsubStatus = wsService.on('status_update', (msg: any) => {
       if (msg.type === 'status_update' && 'status' in msg) {
-        updateAgentStatus(msg.sessionId, msg.status as AgentProcess['status']);
+        updateAgentStatus(msg.sessionId, msg.status as AgentProcess['status'], msg.detail);
       }
     });
     return () => {
@@ -230,7 +317,14 @@ export default function DashboardScreen() {
   const runningCount = useMemo(() => agents.filter((a) => a.status !== 'stopped').length, [agents]);
   // "Active Sessions" means LIVE sessions — stopped ones are dead weight in
   // the list (they're not tappable and pile up across daemon restarts).
-  const liveAgents = useMemo(() => agents.filter((a) => a.status !== 'stopped'), [agents]);
+  // Needs-input / error sort first so they can't hide below idle rows.
+  const liveAgents = useMemo(
+    () =>
+      agents
+        .filter((a) => a.status !== 'stopped')
+        .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9)),
+    [agents],
+  );
   // History dedup keys off LIVE agents only: a session stopped during this
   // daemon's lifetime then falls through to Session History, where it stays
   // tappable — instead of vanishing from both lists at once.
@@ -372,6 +466,7 @@ export default function DashboardScreen() {
     const statusColor = STATUS_COLORS?.[agent.status] ?? '#a8a29e';
     const isStopped = agent.status === 'stopped';
     const label = AGENT_OPTIONS.find((o) => o.type === agent.type)?.label ?? agent.type;
+    const activity = isStopped ? null : agentActivity(agent, now);
     return (
       <Pressable
         key={agent.id}
@@ -391,7 +486,7 @@ export default function DashboardScreen() {
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <View style={{ flex: 1 }}>
                 <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
-                  {label}
+                  {agent.title ?? label}
                 </Text>
                 <Text
                   style={[Typography.caption1, { color: c.textTertiary, fontFamily: FontFamily.mono }]}
@@ -399,6 +494,17 @@ export default function DashboardScreen() {
                 >
                   {agent.projectPath}
                 </Text>
+                {activity && (
+                  <Text
+                    style={[
+                      Typography.caption2,
+                      { color: statusColor, marginTop: 2, fontWeight: '500' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {activity}
+                  </Text>
+                )}
               </View>
             </View>
             <View style={styles.agentRight}>

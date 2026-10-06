@@ -1,5 +1,6 @@
 import type {
   AgentConfig,
+  ChatImage,
   ParsedEvent,
   SdkAgentAdapter,
   ThinkingConfig,
@@ -19,7 +20,7 @@ type SdkMessage = {
 
 type SdkUserInput = {
   type: 'user';
-  message: { role: 'user'; content: string };
+  message: { role: 'user'; content: string | Array<Record<string, unknown>> };
   parent_tool_use_id: string | null;
 };
 
@@ -87,22 +88,31 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   async startSession(
     config: AgentConfig,
     onEvent: (event: ParsedEvent) => void,
-  ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }> {
+  ): Promise<{ write: (input: string, images?: ChatImage[]) => void; stop: () => Promise<void> }> {
     this.projectPath = config.projectPath;
     const mod: Record<string, unknown> = await import('@anthropic-ai/claude-agent-sdk');
     const queryMod = mod.query ?? mod.default;
     this.controller = new AbortController();
 
-    const messageQueue: string[] = [];
+    // { text, images } pairs — images turn into base64 image content blocks
+    // next to the text block in the user message.
+    const messageQueue: Array<{ text: string; images?: ChatImage[] }> = [];
     let resolvePrompt: ((value: void) => void) | null = null;
 
     async function* promptGen(): AsyncIterable<SdkUserInput> {
       while (true) {
         if (messageQueue.length > 0) {
           const msg = messageQueue.shift()!;
+          const content: Array<Record<string, unknown>> = [
+            { type: 'text', text: msg.text },
+            ...(msg.images ?? []).map((img) => ({
+              type: 'image',
+              source: { type: 'base64', media_type: img.mediaType, data: img.data },
+            })),
+          ];
           yield {
             type: 'user' as const,
-            message: { role: 'user' as const, content: msg },
+            message: { role: 'user' as const, content },
             parent_tool_use_id: null,
           };
         }
@@ -112,9 +122,9 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
       }
     }
 
-    const write = (input: string) => {
+    const write = (input: string, images?: ChatImage[]) => {
       onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
-      messageQueue.push(input);
+      messageQueue.push({ text: input, images });
       if (resolvePrompt) {
         resolvePrompt();
         resolvePrompt = null;

@@ -33,6 +33,12 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone to dictate chat messages."
+        }
       ]
     ],
     "experiments": {

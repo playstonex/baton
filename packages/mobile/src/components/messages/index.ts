@@ -1,4 +1,5 @@
 export { MarkdownText } from './MarkdownText';
+export { HighlightedText, findMatchRanges, toHighlightSegments } from './HighlightedText';
 export { ThinkingBlock } from './ThinkingBlock';
 export { ToolCallCard } from './ToolCallCard';
 export { FileChangeRow } from './FileChangeRow';

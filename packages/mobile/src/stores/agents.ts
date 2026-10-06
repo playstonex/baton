@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import type { AgentProcess, AgentStatus } from '@baton/shared';
+import type { AgentProcess, AgentStatus, StatusDetail } from '@baton/shared';
 
 const AGENTS_KEY = 'fw_agents';
 
 interface AgentState {
   agents: AgentProcess[];
   setAgents: (agents: AgentProcess[]) => void;
-  updateAgentStatus: (id: string, status: AgentStatus) => void;
+  updateAgentStatus: (id: string, status: AgentStatus, detail?: StatusDetail) => void;
   addAgent: (agent: AgentProcess) => void;
   removeAgent: (id: string) => void;
   loadAgents: () => Promise<void>;
@@ -24,9 +24,11 @@ export const useAgentStore = create<AgentState>()((set) => ({
     set({ agents });
     persistAgents(agents);
   },
-  updateAgentStatus: (id, status) =>
+  updateAgentStatus: (id, status, detail) =>
     set((state) => {
-      const agents = state.agents.map((a) => (a.id === id ? { ...a, status } : a));
+      const agents = state.agents.map((a) =>
+        a.id === id ? { ...a, status, stateDetail: detail } : a,
+      );
       persistAgents(agents);
       return { agents };
     }),

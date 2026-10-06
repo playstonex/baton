@@ -8,6 +8,7 @@ import type {
   ThinkingConfig,
   ReasoningEffort,
   ServiceTier,
+  StatusDetail,
 } from '../types/index.js';
 import type { HelloMessage, WelcomeMessage } from './handshake.js';
 // AccessMode is defined locally below (kept for backward compat with main).
@@ -58,6 +59,13 @@ export interface PongMessage {
 // ── Chat / SDK input messages (Client → Daemon) ────────────────────
 
 /** Conversational message — routed to SDK messageQueue (preferred) or PTY stdin. */
+/** An image attached to a chat message, base64-encoded. */
+export interface ChatImage {
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  /** Base64 payload (no data: prefix). */
+  data: string;
+}
+
 export interface ChatInputMessage {
   type: 'chat_input';
   sessionId: string;
@@ -65,6 +73,12 @@ export interface ChatInputMessage {
   model?: string;
   /** Optional message ID for request-response tracking */
   messageId?: string;
+  /**
+   * Images attached to this message. COMPAT(chatImages): optional — older
+   * daemons ignore it; only SDK-backed sessions can consume them (PTY
+   * sessions get an explicit error ack).
+   */
+  images?: ChatImage[];
 }
 
 /** Mid-turn steering — injects a follow-up while the agent is still running (SDK only). */
@@ -254,6 +268,9 @@ export interface StatusUpdateMessage {
   type: 'status_update';
   sessionId: string;
   status: AgentStatus | SessionStatus;
+  /** What the session is doing right now (tool, waiting prompt, error, since).
+   * COMPAT(statusDetail): added in v2.3, optional — older clients ignore it. */
+  detail?: StatusDetail;
   /** Monotonic per-session sequence number (see TerminalOutputMessage.seq). */
   seq?: number;
 }
@@ -272,6 +289,8 @@ export interface AgentListMessage {
     lastActivityAt?: string;
     stoppedAt?: string;
     archivedAt?: string;
+    /** COMPAT(statusDetail): added in v2.3 — live activity detail, optional. */
+    detail?: StatusDetail;
   }[];
 }
 

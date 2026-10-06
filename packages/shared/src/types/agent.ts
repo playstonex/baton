@@ -24,6 +24,41 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
   stopped: [],
 };
 
+/**
+ * What a session is doing right now, beyond the bare status word — powers the
+ * activity line on dashboard lists. COMPAT(statusDetail): every field is
+ * additive/optional, older clients ignore it.
+ */
+export interface StatusDetail {
+  /** Epoch ms when the current status was entered. */
+  since: number;
+  /** executing — tool currently running (e.g. 'Bash'). */
+  tool?: string;
+  /** executing — human title of the tool call when the parser provides one. */
+  toolTitle?: string;
+  /** waiting_input — the question the agent is blocked on. */
+  prompt?: string;
+  /** error — the error message. */
+  error?: string;
+  /** running — tool calls completed this turn. */
+  toolCount?: number;
+}
+
+export function statusDetailFromState(state: AgentState): StatusDetail {
+  switch (state.status) {
+    case 'running':
+      return { since: state.at, toolCount: state.toolCount };
+    case 'executing':
+      return { since: state.at, tool: state.tool };
+    case 'waiting_input':
+      return { since: state.at, prompt: state.prompt };
+    case 'error':
+      return { since: state.at, error: state.error };
+    default:
+      return { since: state.at };
+  }
+}
+
 // Timeline item for agent history
 export interface TimelineItem {
   timestamp: number;

@@ -1,6 +1,7 @@
 import type {
   AgentConfig,
   AgentProcess,
+  ChatImage,
   ParsedEvent,
   SdkAgentAdapter,
   ThinkingConfig,
@@ -8,8 +9,14 @@ import type {
   AccessMode,
   ServiceTier,
 } from '@baton/shared';
-import { VALID_TRANSITIONS, generateSessionId } from '@baton/shared';
-import type { AgentState, AgentSnapshot, SessionSummary, TimelineItem } from '@baton/shared';
+import { VALID_TRANSITIONS, generateSessionId, statusDetailFromState } from '@baton/shared';
+import type {
+  AgentState,
+  AgentSnapshot,
+  SessionSummary,
+  StatusDetail,
+  TimelineItem,
+} from '@baton/shared';
 import type { BaseAgentAdapter } from './adapter.js';
 import { spawnPty } from '../pty/bridge.js';
 import { SessionStore, deriveTitle } from '../session/store.js';
@@ -27,7 +34,7 @@ interface IPty {
 }
 
 interface SdkSession {
-  write: (input: string) => void;
+  write: (input: string, images?: ChatImage[]) => void;
   stop: () => Promise<void>;
 }
 
@@ -60,6 +67,21 @@ interface ManagedAgent {
   offloaded?: boolean;
   /** Provider-side conversation id (best-effort, captured from PTY output). */
   providerSessionId?: string;
+  /**
+   * Most recent tool call seen in the event stream — the parser emits
+   * tool_use/tool_call_start just before status_change:executing, so this
+   * names what "Executing" actually is on dashboard lists.
+   */
+  lastTool?: string;
+  lastToolTitle?: string;
+  /**
+   * Most recent permission/question prompt — parser emits permission_request
+   * just before status_change:waiting_input, so dashboards can say WHAT the
+   * session is blocked on (paseo's requires_action details).
+   */
+  lastPrompt?: string;
+  /** Epoch ms of the last observed output/event — drives the idle watchdog. */
+  lastOutputAt?: number;
 }
 
 const MAX_OUTPUT_HISTORY = 10000;
@@ -78,6 +100,15 @@ const ATTACH_OUTPUT_BYTES = 256 * 1024;
 const KEEP_STOPPED_BUFFERED = 8;
 /** Throttle for persisted lastActivityAt updates on streaming paths. */
 const TOUCH_INTERVAL_MS = 2000;
+/**
+ * PTY TUIs redraw continuously (spinners emit escape codes), so total output
+ * silence this long while the state claims thinking/executing means the
+ * parser missed the turn-end transition — flip to idle instead of pinning a
+ * dead "Working…" on the dashboard forever. Display-level only; waiting_input
+ * is exempt (a session blocked on the user is silent by design).
+ */
+const IDLE_WATCHDOG_MS = 120_000;
+const WATCHDOG_TICK_MS = 30_000;
 
 export class AgentManager {
   private agents = new Map<string, ManagedAgent>();
@@ -174,12 +205,14 @@ export class AgentManager {
   }
 
   /**
-   * Sync an SDK adapter's reported status into the canonical AgentProcess
+   * Sync an adapter/parser-reported status into the canonical AgentProcess
    * without re-broadcasting (the caller already forwards the raw event).
-   * Terminal states are never left: a late adapter event must not resurrect
-   * a stopped/error session.
+   * Used by the SDK path and by the PTY parser's status_change events so
+   * /api/agents and agent_list report thinking/executing/waiting_input
+   * instead of a perpetual 'running'. Terminal states are never left: a late
+   * adapter event must not resurrect a stopped/error session.
    */
-  private syncSdkStatus(id: string, status: AgentProcess['status']): void {
+  private syncStatus(id: string, status: AgentProcess['status']): void {
     const managed = this.agents.get(id);
     if (!managed) return;
     if (managed.state.status === 'stopped' || managed.state.status === 'error') return;
@@ -202,10 +235,14 @@ export class AgentManager {
         managed.state = { status: 'thinking', at };
         break;
       case 'executing':
-        managed.state = { status: 'executing', at, tool: 'unknown' };
+        managed.state = {
+          status: 'executing',
+          at,
+          tool: managed.lastTool ?? 'unknown',
+        };
         break;
       case 'waiting_input':
-        managed.state = { status: 'waiting_input', at, prompt: '' };
+        managed.state = { status: 'waiting_input', at, prompt: managed.lastPrompt ?? '' };
         break;
       default:
         return; // 'starting'/'initializing' are spawn-internal — never synced
@@ -213,6 +250,42 @@ export class AgentManager {
     managed.process.status = status;
     this.touch(id, true);
     this.notifyChanged();
+  }
+
+  /**
+   * Remember event-stream context that outlives the events themselves: the
+   * tool in flight (names "Executing"), the prompt being waited on (names
+   * "Waiting input"), and the last-activity heartbeat for the idle watchdog.
+   */
+  private trackEventContext(managed: ManagedAgent, event: ParsedEvent): void {
+    managed.lastOutputAt = event.timestamp;
+    managed.process.lastActivityAt = new Date(event.timestamp).toISOString();
+    if (event.type === 'tool_call_start') {
+      managed.lastTool = event.tool;
+      managed.lastToolTitle = event.title;
+    } else if (event.type === 'tool_use') {
+      managed.lastTool = event.tool;
+    } else if (event.type === 'permission_request') {
+      managed.lastPrompt = [event.tool, event.description].filter(Boolean).join(': ') || 'permission';
+    } else if (event.type === 'user_input_prompt') {
+      const q = event.questions?.[0];
+      if (q) managed.lastPrompt = q.question || q.header;
+    }
+  }
+
+  /**
+   * Live activity detail for dashboard lists: what the session is doing right
+   * now (current tool, waiting prompt, error text) and when the status was
+   * entered. Cheap — derived from the in-memory state machine.
+   */
+  getStatusDetail(id: string): StatusDetail | undefined {
+    const managed = this.agents.get(id);
+    if (!managed) return undefined;
+    const detail = statusDetailFromState(managed.state);
+    if (detail.tool !== undefined && managed.lastToolTitle) {
+      detail.toolTitle = managed.lastToolTitle;
+    }
+    return detail;
   }
 
   // ── Session store ────────────────────────────────────────────────
@@ -234,6 +307,10 @@ export class AgentManager {
     const last = this.lastTouch.get(id) ?? 0;
     if (!force && now - last < TOUCH_INTERVAL_MS) return;
     this.lastTouch.set(id, now);
+    // Keep the in-memory process fresh too — agent_list / HTTP list read it
+    // straight off this field and the dashboards render "last activity" from it.
+    const managed = this.agents.get(id);
+    if (managed) managed.process.lastActivityAt = new Date(now).toISOString();
     this.sessionStore.patchSession(id, { updatedAt: new Date(now).toISOString() });
   }
 
@@ -249,12 +326,54 @@ export class AgentManager {
   }
 
   private notifyChanged(): void {
+    this.ensureWatchdog();
     if (this.notifyPending) return;
     this.notifyPending = true;
     queueMicrotask(() => {
       this.notifyPending = false;
       for (const cb of this.changeListeners) cb();
     });
+  }
+
+  // ── Idle watchdog (paseo/happy/remodex sweeper pattern) ─────────
+
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Run the stale-busy sweep only while live PTY sessions exist; unref'd so
+   * it never holds the process (or a test run) open. */
+  private ensureWatchdog(): void {
+    const needs = [...this.agents.values()].some(
+      (m) => m.pty && !m.historyOnly && m.state.status !== 'stopped',
+    );
+    if (needs && !this.watchdogTimer) {
+      this.watchdogTimer = setInterval(() => this.sweepStaleBusy(), WATCHDOG_TICK_MS);
+      this.watchdogTimer.unref?.();
+    } else if (!needs && this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
+  /**
+   * A PTY session parked in thinking/executing with zero output for
+   * IDLE_WATCHDOG_MS is stuck: the parser missed the turn-end marker. Flip it
+   * to idle (transition() also patches the store and fires the event) so
+   * dashboards reflect reality instead of an endless "Working…".
+   */
+  private sweepStaleBusy(): void {
+    const now = Date.now();
+    for (const managed of this.agents.values()) {
+      if (!managed.pty || managed.historyOnly) continue;
+      const { status } = managed.state;
+      if (status !== 'thinking' && status !== 'executing') continue;
+      const last = managed.lastOutputAt ?? managed.state.at;
+      if (now - last <= IDLE_WATCHDOG_MS) continue;
+      try {
+        this.transition(managed.process.id, 'idle');
+      } catch {
+        // state moved on between the check and the flip — leave it
+      }
+    }
   }
 
   /** Derive + persist a provisional title from the first user prompt. */
@@ -425,6 +544,10 @@ export class AgentManager {
 
     // PTY output handler
     pty.onData((data: string) => {
+      // Any bytes at all — spinner redraws included — prove the session is
+      // alive; the idle watchdog keys off this.
+      managed.lastOutputAt = Date.now();
+
       // Best-effort provider session id capture — enables exact resume
       // (`--resume-id`/`--conversation`/`--session`) instead of the coarser
       // "continue latest" fallback.
@@ -474,11 +597,19 @@ export class AgentManager {
         this.sessionStore.appendEvent(id, event);
 
         // Track tool use in state
+        this.trackEventContext(managed, event);
         if (event.type === 'tool_use' && managed.state.status === 'running') {
           managed.state = {
             ...managed.state,
             toolCount: managed.state.toolCount + 1,
           };
+        }
+
+        // Mirror parser status changes into the canonical state — otherwise
+        // /api/agents and agent_list keep reporting 'running' while the
+        // dashboard badge (fed by status_update) shows thinking/executing.
+        if (event.type === 'status_change') {
+          this.syncStatus(id, event.status);
         }
 
         if (event.type === 'tool_use') {
@@ -610,9 +741,10 @@ export class AgentManager {
         // and broadcast below — going through the state machine here would
         // duplicate it, and adapters may legitimately report sequences the
         // map rejects (events racing a stop()).
-        this.syncSdkStatus(id, event.status);
+        this.syncStatus(id, event.status);
       }
 
+      this.trackEventContext(managed, event);
       if (event.type === 'tool_use' && managed.state.status === 'running') {
         managed.state = {
           ...managed.state,
@@ -781,7 +913,7 @@ export class AgentManager {
   list(): AgentProcess[] {
     return Array.from(this.agents.values())
       .filter((m) => !m.historyOnly)
-      .map((m) => m.process);
+      .map((m) => ({ ...m.process, stateDetail: this.getStatusDetail(m.process.id) }));
   }
 
   /**
@@ -894,15 +1026,20 @@ export class AgentManager {
   }
 
   /** Conversational write — appends newline for PTY agents, raw for SDK agents. */
-  chatWrite(id: string, content: string): void {
+  chatWrite(id: string, content: string, images?: ChatImage[]): void {
     const managed = this.agents.get(id);
     if (!managed) throw new Error(`Agent ${id} not found`);
     if (managed.state.status === 'stopped') throw new Error(`Agent ${id} is stopped`);
     this.maybeTitle(id, content);
 
     if (managed.sdk) {
-      managed.sdk.write(content);
+      managed.sdk.write(content, images);
     } else if (managed.pty) {
+      if (images && images.length > 0) {
+        throw new Error(
+          'Image attachments are only supported in SDK chat sessions — this one runs over a terminal',
+        );
+      }
       const transformed = managed.adapter?.transformInput(content) ?? (content + '\n');
       managed.pty.write(transformed);
     } else {

@@ -8,8 +8,10 @@ import {
   Text,
   Modal,
   ActionSheetIOS,
+  ActivityIndicator,
   Alert,
   Clipboard,
+  Image,
   Keyboard,
   LayoutAnimation,
   NativeScrollEvent,
@@ -35,9 +37,16 @@ import * as Haptics from 'expo-haptics';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
+import { useConnectionStore } from '../../src/stores/connection';
+import { useComposerPrefs } from '../../src/stores/composer-prefs';
 import { apiFetch } from '../../src/services/api';
 import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Glass, Shadows } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
+import * as ImagePicker from 'expo-image-picker';
+import { AudioModule, RecordingPresets, useAudioRecorder } from 'expo-audio';
+import { File as FsFile } from 'expo-file-system';
+import { ChatFindBar } from '../../src/components/ChatFindBar';
+import { AttachmentStrip, type PendingAttachment } from '../../src/components/AttachmentStrip';
 import {
   ComposerSettingsSheet,
   type ThinkingMode,
@@ -52,7 +61,7 @@ import {
 } from '../../src/components/AgentQuestionCard';
 import { AgentInputAutocomplete } from '../../src/components/AgentInputAutocomplete';
 import { AllFilesDiffView } from '../../src/components/AllFilesDiffView';
-import type { SessionOwnershipMessage } from '@baton/shared';
+import type { ChatImage, SessionOwnershipMessage, StatusDetail } from '@baton/shared';
 import {
   MarkdownText,
   ThinkingBlock,
@@ -65,6 +74,8 @@ import {
   ToolBurstGroup,
   SubagentActionCard,
   PopoverMenu,
+  HighlightedText,
+  findMatchRanges,
   type ThemeColors,
   type MenuOption,
 } from '../../src/components/messages';
@@ -97,6 +108,85 @@ const EMPTY_SUGGESTIONS: Array<{
 ];
 
 const isRunning = (s: string) => s === 'running' || s === 'thinking' || s === 'executing';
+
+/** mm:ss (h:mm:ss past an hour) — paseo's LiveElapsed clock format. */
+function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  const ss = String(s).padStart(2, '0');
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${ss}`;
+  return `${m}:${ss}`;
+}
+
+function formatTimeOfDay(ts: number): string {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${min} ${ampm}`;
+}
+
+type ActivityTone = 'busy' | 'attention' | 'error';
+
+/**
+ * One-line answer to "what is the agent doing right now?" — the chat-screen
+ * equivalent of happy's AgentInputStatusRow: a verb, the current tool when we
+ * know it (StatusDetail), and a live elapsed clock while a turn is open.
+ */
+function activityLabel(
+  status: string,
+  detail: StatusDetail | undefined,
+  now: number,
+): { text: string; tone: ActivityTone } | null {
+  // No detail (older daemon) → still say what's happening, just without the
+  // elapsed clock.
+  const clock = detail ? ` — ${formatElapsed(now - detail.since)}` : '';
+  switch (status) {
+    case 'executing': {
+      const tool = detail?.toolTitle || detail?.tool || '';
+      return {
+        text: tool ? `Running ${tool}${clock}` : `Working${clock}`,
+        tone: 'busy',
+      };
+    }
+    case 'thinking':
+      return { text: `Thinking${clock}`, tone: 'busy' };
+    case 'running': {
+      const calls = detail?.toolCount
+        ? ` · ${detail.toolCount} tool call${detail.toolCount === 1 ? '' : 's'}`
+        : '';
+      return { text: `Working${calls}${clock}`, tone: 'busy' };
+    }
+    case 'starting':
+    case 'initializing':
+      return { text: 'Starting…', tone: 'busy' };
+    case 'waiting_input': {
+      const prompt = detail?.prompt?.replace(/\s+/g, ' ').trim();
+      return {
+        text: prompt ? `Needs you: ${prompt}` : 'Waiting for your answer…',
+        tone: 'attention',
+      };
+    }
+    case 'error':
+      return { text: detail?.error ?? 'Something went wrong', tone: 'error' };
+    default:
+      return null;
+  }
+}
+
+/** Ticks once a second while `active`, so elapsed clocks stay live. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  return now;
+}
 
 /** Fire-and-forget tactile ticks — iOS-style, never block the interaction. */
 const tapLight = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -224,7 +314,9 @@ export default function ChatScreen() {
   const router = useRouter();
   const messages = useChatStore((s) => s.messages);
   const agentStatus = useChatStore((s) => s.agentStatus);
+  const statusDetail = useChatStore((s) => s.statusDetail);
   const running = isRunning(agentStatus);
+  const wsConnected = useConnectionStore((s) => s.connected);
   const waitingApproval = useChatStore((s) => s.waitingApproval);
   const activePrompt = useChatStore((s) => s.activePrompt);
   const activePermission = useChatStore((s) => s.activePermission);
@@ -235,6 +327,8 @@ export default function ChatScreen() {
   const clearQueue = useChatStore((s) => s.clearQueue);
   const addEvent = useChatStore((s) => s.addEvent);
   const addUserMessage = useChatStore((s) => s.addUserMessage);
+  const resolveDelivery = useChatStore((s) => s.resolveDelivery);
+  const retryMessage = useChatStore((s) => s.retryMessage);
   const setStatus = useChatStore((s) => s.setStatus);
   const setWaitingApproval = useChatStore((s) => s.setWaitingApproval);
   const clear = useChatStore((s) => s.clear);
@@ -322,6 +416,10 @@ export default function ChatScreen() {
     total: number;
   } | null>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  /** New items that arrived while the reader was scrolled up (happy/remodex
+   * unread markers) — cleared by returning to the bottom. */
+  const [unread, setUnread] = useState(0);
+  const prevMsgCountRef = useRef(0);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedBursts, setExpandedBursts] = useState<Set<string>>(new Set());
   const [promptModal, setPromptModal] = useState<{
@@ -332,6 +430,16 @@ export default function ChatScreen() {
   } | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // ── In-chat find (paseo PaneFind pattern) ─────────────────────────────
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findIdx, setFindIdx] = useState(0);
+  // ── Image attachments (happy pattern) ─────────────────────────────────
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  // ── Voice dictation: record → daemon /api/stt → transcript ────────────
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const voiceStartRef = useRef(0);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [menu, setMenu] = useState<{
     title?: string;
     options: MenuOption[];
@@ -341,6 +449,11 @@ export default function ChatScreen() {
   const flatRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const moreBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const modelPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const thinkPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  /** The model the user explicitly picked (pref or live) — daemon-reported
+   * defaults never override it. */
+  const pickedModelRef = useRef<string | null>(null);
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
 
@@ -363,6 +476,35 @@ export default function ChatScreen() {
     clear();
     setVisibleCount(PAGE_SIZE);
     setExpandedBursts(new Set());
+
+    // Session-scoped composer prefs (model pick, thinking level, unsent
+    // draft) — restore them before the first render's worth of sends.
+    void useComposerPrefs.getState().load().then(() => {
+      const prefs = useComposerPrefs.getState();
+      const modelPref = prefs.models[sessionId];
+      const thinkingPref = prefs.thinking[sessionId];
+      if (modelPref && !pickedModelRef.current) {
+        pickedModelRef.current = modelPref;
+        setSelectedModel(modelPref);
+      }
+      if (thinkingPref) {
+        setThinkingMode(thinkingPref.mode);
+        if (thinkingPref.level) setThinkingLevel(thinkingPref.level);
+      }
+      const draft = prefs.drafts[sessionId];
+      if (draft) setInput(draft);
+    });
+
+    const unsubAck = wsService.on('ack', (raw) => {
+      const m = raw as { type: 'ack'; messageId: string; status: 'ok' | 'error'; error?: string };
+      if (m.type !== 'ack' || !m.messageId) return;
+      const ok = m.status === 'ok';
+      resolveDelivery(m.messageId, ok);
+      if (!ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        setErrorToast(m.error ?? 'Failed to send');
+      }
+    });
 
     const unsubEvent = wsService.on('parsed_event', (msg) => {
       if (msg.type === 'parsed_event' && msg.sessionId === sessionId) {
@@ -416,7 +558,10 @@ export default function ChatScreen() {
 
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
-        setStatus(msg.status as string);
+        setStatus(
+          msg.status as string,
+          (msg as { detail?: StatusDetail }).detail,
+        );
       }
     });
 
@@ -427,7 +572,11 @@ export default function ChatScreen() {
     const unsubModels = wsService.on('model_list', (msg) => {
       if (msg.type === 'model_list' && msg.sessionId === sessionId) {
         setModels(msg.models);
-        if (msg.selected) setSelectedModel(msg.selected);
+        // The daemon's "selected" is the adapter default unless this user
+        // already made an explicit pick — never clobber their choice.
+        if (msg.selected && !pickedModelRef.current) {
+          setSelectedModel(msg.selected);
+        }
       }
     });
 
@@ -488,6 +637,7 @@ export default function ChatScreen() {
     return () => {
       unsubEvent();
       unsubEventHistory();
+      unsubAck();
       unsubStatus();
       unsubState();
       unsubModels();
@@ -496,7 +646,7 @@ export default function ChatScreen() {
       unsubGitResult();
       unsubOwnership();
     };
-  }, [sessionId, addEvent, setStatus, setSessionOwner, clear, attachSession]);
+  }, [sessionId, addEvent, setStatus, setSessionOwner, clear, attachSession, resolveDelivery]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -512,6 +662,13 @@ export default function ChatScreen() {
   }, [errorToast]);
 
   useEffect(() => {
+    const delta = messages.length - prevMsgCountRef.current;
+    prevMsgCountRef.current = messages.length;
+    if (isNearBottom) {
+      setUnread(0);
+    } else if (delta > 0) {
+      setUnread((u) => u + delta);
+    }
     if (messages.length > 0 && isNearBottom) {
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 50);
     }
@@ -577,6 +734,195 @@ export default function ChatScreen() {
     return result;
   }, [paginatedMessages]);
 
+  // scrollToIndex needs indices that reflect the LATEST groupedData (window
+  // expansion / burst un-collapse both change it a render after the call).
+  const groupedDataRef = useRef(groupedData);
+  groupedDataRef.current = groupedData;
+
+  // ── In-chat find: matches are message rows; the bar counts rows, while
+  // every occurrence inside a row gets highlighted (paseo's model, scanned
+  // client-side over the full transcript instead of via the host).
+  const findMatches = useMemo(() => {
+    const q = findQuery.trim();
+    if (!q) return [];
+    return messages.flatMap((m) => {
+      const count = findMatchRanges(q, m.content).length;
+      return count > 0 ? [{ msgId: m.id, count }] : [];
+    });
+  }, [messages, findQuery]);
+
+  const findActiveMsgId =
+    findOpen && findMatches.length > 0
+      ? findMatches[Math.min(findIdx, findMatches.length - 1)].msgId
+      : null;
+
+  const findStatus = !findQuery.trim()
+    ? ''
+    : findMatches.length === 0
+      ? 'No matches'
+      : `${Math.min(findIdx, findMatches.length - 1) + 1} of ${findMatches.length}`;
+
+  function goToMatch(nextIdx: number) {
+    if (findMatches.length === 0) return;
+    const idx = ((nextIdx % findMatches.length) + findMatches.length) % findMatches.length;
+    setFindIdx(idx);
+    const msgId = findMatches[idx].msgId;
+
+    // Widen the render window when the hit predates it, and un-collapse a
+    // burst that contains it — then scroll once the projection catches up.
+    const msgIdx = messages.findIndex((m) => m.id === msgId);
+    if (msgIdx >= 0 && messages.length - msgIdx > visibleCount) {
+      setVisibleCount(messages.length - msgIdx);
+    }
+    setExpandedBursts((prev) => {
+      const burst = groupedDataRef.current.find(
+        (g): g is Extract<(typeof groupedDataRef.current)[number], { type: 'burst' }> =>
+          g.type === 'burst' && g.messages.some((m) => m.id === msgId),
+      );
+      if (burst && !prev.has(burst.id)) {
+        const next = new Set(prev);
+        next.add(burst.id);
+        return next;
+      }
+      return prev;
+    });
+    setTimeout(() => {
+      const data = groupedDataRef.current;
+      const rowIdx = data.findIndex((g) =>
+        g.type === 'message' ? g.msg.id === msgId : g.messages.some((m) => m.id === msgId),
+      );
+      if (rowIdx >= 0) {
+        try {
+          flatRef.current?.scrollToIndex({ index: rowIdx, viewPosition: 0.3, animated: true });
+        } catch {
+          // index not yet materialized — the next navigation will land it
+        }
+      }
+    }, 120);
+  }
+
+  useEffect(() => {
+    if (findOpen && findQuery.trim() && findMatches.length > 0) {
+      goToMatch(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findQuery]);
+
+  // ── Image attachments ────────────────────────────────────────────────
+  async function pickAttachments() {
+    const remaining = 4 - attachments.length;
+    if (remaining <= 0) {
+      setErrorToast('Up to 4 images per message');
+      return;
+    }
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        quality: 0.8,
+        base64: true,
+        exif: false,
+      });
+      if (res.canceled) return;
+      const picked: PendingAttachment[] = [];
+      for (const asset of res.assets) {
+        if (!asset.base64) continue;
+        const mediaType = asset.mimeType as PendingAttachment['mediaType'] | undefined;
+        if (
+          mediaType !== 'image/jpeg' &&
+          mediaType !== 'image/png' &&
+          mediaType !== 'image/webp' &&
+          mediaType !== 'image/gif'
+        ) {
+          setErrorToast(`Unsupported image type: ${asset.mimeType ?? 'unknown'}`);
+          continue;
+        }
+        // Base64 is ~4/3 the binary size; ~6M chars ≈ 4.5MB image.
+        if (asset.base64.length > 6_000_000) {
+          setErrorToast(`${asset.fileName ?? 'Image'} is too large (max ~4 MB)`);
+          continue;
+        }
+        picked.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          mediaType,
+          data: asset.base64,
+          width: asset.width,
+          height: asset.height,
+        });
+      }
+      if (picked.length > 0) {
+        tapLight();
+        setAttachments((prev) => [...prev, ...picked].slice(0, 4));
+      }
+    } catch {
+      setErrorToast('Could not open the photo library');
+    }
+  }
+
+  // ── Voice dictation ──────────────────────────────────────────────────
+  async function toggleVoice() {
+    if (voiceState === 'recording') {
+      void stopVoice();
+      return;
+    }
+    if (voiceState !== 'idle') return;
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        setErrorToast('Microphone permission is required for dictation');
+        return;
+      }
+      await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      voiceStartRef.current = Date.now();
+      setVoiceState('recording');
+      tapLight();
+    } catch {
+      setErrorToast('Could not start recording');
+    }
+  }
+
+  async function stopVoice() {
+    if (voiceState !== 'recording') return;
+    setVoiceState('transcribing');
+    try {
+      await recorder.stop();
+      const uri = recorder.uri;
+      if (!uri) throw new Error('No recording captured');
+      const buffer = await new FsFile(uri).arrayBuffer();
+      await AudioModule.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      const res = await apiFetch<{ text: string }>('/api/stt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/mp4' },
+        body: buffer,
+      });
+      const text = res.text?.trim();
+      if (text) {
+        setInput((prev) => (prev ? prev.replace(/\s+$/, '') + ' ' + text : text));
+        if (sessionId) useComposerPrefs.getState().setDraft(sessionId, text);
+        inputRef.current?.focus();
+      } else {
+        setErrorToast('Nothing was transcribed');
+      }
+    } catch (err) {
+      setErrorToast(err instanceof Error ? err.message : 'Transcription failed');
+    } finally {
+      setVoiceState('idle');
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      // Leaving the screen mid-recording: stop the recorder so the mic
+      // indicator doesn't linger.
+      if (voiceState === 'recording') {
+        void recorder.stop().catch(() => {});
+      }
+    };
+  }, [voiceState, recorder]);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
@@ -590,6 +936,7 @@ export default function ChatScreen() {
   function scrollToBottom() {
     flatRef.current?.scrollToEnd({ animated: true });
     setIsNearBottom(true);
+    setUnread(0);
   }
 
   function toggleBurst(burstId: string) {
@@ -621,7 +968,8 @@ export default function ChatScreen() {
   }
 
   function sendChat() {
-    if (!input.trim() || !sessionId) return;
+    const hasAttachments = attachments.length > 0;
+    if ((!input.trim() && !hasAttachments) || !sessionId) return;
     tapLight();
     if (input.trim() === '/review') {
       setInput('');
@@ -632,28 +980,53 @@ export default function ChatScreen() {
       wsService.send({ type: 'control', action: 'claim_session', sessionId });
       setSessionOwner('remote');
     }
-    addUserMessage(input.trim());
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const images: ChatImage[] | undefined = hasAttachments
+      ? attachments.map(({ mediaType, data }) => ({ mediaType, data }))
+      : undefined;
+    const text = input.trim() || (hasAttachments ? '(image)' : '');
+    addUserMessage(text, messageId, images);
+    useComposerPrefs.getState().setDraft(sessionId, input.trim() ? '' : '');
     sendThinkingConfig(thinkingMode, thinkingLevel);
     if (serviceTier !== 'default') {
       wsService.send({ type: 'service_tier_select', sessionId, tier: serviceTier });
     }
-    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     wsService.send({
       type: 'chat_input',
       sessionId,
-      content: input.trim(),
+      content: text,
       model: selectedModel ?? undefined,
       messageId,
+      images,
     });
     setInput('');
+    setAttachments([]);
   }
 
-  function sendSteer() {
-    if (!input.trim() || !sessionId) return;
+  /** Re-send a failed optimistic message under a fresh ack id. */
+  function retrySend(msg: ChatMessage) {
+    if (!sessionId) return;
     tapLight();
-    addUserMessage(input.trim());
-    wsService.send({ type: 'steer_input', sessionId, content: input.trim() });
-    setInput('');
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const images = msg.meta?.images as ChatImage[] | undefined;
+    retryMessage(msg.id, messageId);
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: msg.content,
+      model: selectedModel ?? undefined,
+      messageId,
+      images,
+    });
+  }
+
+  function sendSteer(textArg?: string) {
+    const text = (textArg ?? input).trim();
+    if (!text || !sessionId) return;
+    tapLight();
+    addUserMessage(text);
+    wsService.send({ type: 'steer_input', sessionId, content: text });
+    if (textArg === undefined) setInput('');
   }
 
   function cancelTurn() {
@@ -700,24 +1073,26 @@ export default function ChatScreen() {
 
   function answerQuestion(answerText: string) {
     if (!sessionId || !answerText.trim()) return;
-    addUserMessage(answerText.trim());
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    addUserMessage(answerText.trim(), messageId);
     wsService.send({
       type: 'chat_input',
       sessionId,
       content: answerText.trim(),
       model: selectedModel ?? undefined,
+      messageId,
     });
     useChatStore.getState().setActivePrompt(null);
   }
 
   function sendQueuedPrompt(promptText: string) {
     if (!promptText.trim() || !sessionId) return;
-    addUserMessage(promptText.trim());
+    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    addUserMessage(promptText.trim(), messageId);
     sendThinkingConfig(thinkingMode, thinkingLevel);
     if (serviceTier !== 'default') {
       wsService.send({ type: 'service_tier_select', sessionId, tier: serviceTier });
     }
-    const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     wsService.send({
       type: 'chat_input',
       sessionId,
@@ -748,6 +1123,97 @@ export default function ChatScreen() {
           : mode === 'auto'
             ? { mode: 'auto' }
             : { mode: 'level', level: level ?? 'medium' },
+    });
+  }
+
+  /** Compact model id for pills — "claude-sonnet-4-5" → "sonnet-4-5". */
+  function shortModel(m: string): string {
+    const parts = m.split('-');
+    return parts.length > 2 ? parts.slice(-3).join('-') : m;
+  }
+
+  /** Composer-level model quick-switch (happy's model chip pattern). */
+  async function openModelMenu() {
+    const allModels = Array.from(new Set([...providerModels, ...models]));
+    // Refresh in the background — the daemon's reply updates the sheet/pill
+    // state for the next open even when this menu renders the stale list.
+    wsService.send({ type: 'model_list_request', sessionId });
+    if (allModels.length === 0) {
+      // Nothing to switch between yet — open the full settings sheet instead.
+      wsService.send({ type: 'model_list_request', sessionId });
+      setSettingsOpen(true);
+      return;
+    }
+    const anchor = await measureAnchor(modelPillRef);
+    const options: MenuOption[] = allModels.map((m) => ({
+      label: shortModel(m),
+      selected: m === selectedModel,
+    }));
+    options.push({ separator: true });
+    options.push({ label: 'All settings…' });
+    setMenu({
+      title: 'Model',
+      anchor,
+      options,
+      onSelect: (index) => {
+        if (index < allModels.length && allModels[index] !== selectedModel) {
+          tapLight();
+          const model = allModels[index];
+          pickedModelRef.current = model;
+          setSelectedModel(model);
+          wsService.send({ type: 'model_select', sessionId, model });
+          if (sessionId) useComposerPrefs.getState().setModel(sessionId, model);
+        } else if (index === allModels.length + 1) {
+          wsService.send({ type: 'model_list_request', sessionId });
+          setSettingsOpen(true);
+        }
+      },
+    });
+  }
+
+  /** Thinking-level quick-switch without opening the settings sheet. */
+  async function openThinkingMenu() {
+    const anchor = await measureAnchor(thinkPillRef);
+    const levels: Array<{ label: string; mode: ThinkingMode; level?: ThinkingLevel }> = [
+      { label: 'Off', mode: 'none' },
+      { label: 'Auto', mode: 'auto' },
+      { label: 'Min', mode: 'level', level: 'minimal' },
+      { label: 'Low', mode: 'level', level: 'low' },
+      { label: 'Med', mode: 'level', level: 'medium' },
+      { label: 'High', mode: 'level', level: 'high' },
+      { label: 'Max', mode: 'level', level: 'xhigh' },
+    ];
+    const options: MenuOption[] = levels.map((l) => ({
+      label: l.label,
+      selected:
+        l.mode === 'none'
+          ? thinkingMode === 'none'
+          : l.mode === 'auto'
+            ? thinkingMode === 'auto'
+            : thinkingMode === 'level' && thinkingLevel === l.level,
+    }));
+    options.push({ separator: true });
+    options.push({ label: 'All settings…' });
+    setMenu({
+      title: 'Thinking',
+      anchor,
+      options,
+      onSelect: (index) => {
+        if (index < levels.length) {
+          tapLight();
+          const pick = levels[index];
+          setThinkingMode(pick.mode);
+          if (pick.level) setThinkingLevel(pick.level);
+          sendThinkingConfig(pick.mode, pick.level);
+          if (sessionId) {
+            useComposerPrefs
+              .getState()
+              .setThinking(sessionId, { mode: pick.mode, level: pick.level });
+          }
+        } else if (index === levels.length + 1) {
+          setSettingsOpen(true);
+        }
+      },
     });
   }
 
@@ -850,8 +1316,25 @@ export default function ChatScreen() {
   }
 
   const statusColor = STATUS_COLORS[agentStatus] ?? Colors.surface[400];
-  const sendDisabled = !input.trim();
+  const sendDisabled = !input.trim() && attachments.length === 0;
   const hasInput = !sendDisabled;
+
+  // Live activity line — ticks while anything is worth watching (a running
+  // turn, something blocked on the user, a dropped connection, a recording).
+  const watching =
+    running ||
+    agentStatus === 'waiting_input' ||
+    agentStatus === 'error' ||
+    !wsConnected ||
+    voiceState !== 'idle';
+  const now = useNow(watching);
+  const activity = activityLabel(agentStatus, statusDetail, now);
+  const activityToneColor =
+    activity?.tone === 'attention'
+      ? Colors.warning[400]
+      : activity?.tone === 'error'
+        ? Colors.danger[400]
+        : statusColor;
   /** Mini status badge on the ≡ tune button — current thinking mode. */
   const thinkingBadge =
     thinkingMode === 'none'
@@ -877,6 +1360,8 @@ export default function ChatScreen() {
           isExpanded={expandedBursts.has(item.id)}
           onToggle={() => toggleBurst(item.id)}
           onReview={() => setShowDiffReview(true)}
+          findQuery={findOpen ? findQuery : ''}
+          findActiveMsgId={findActiveMsgId}
         />
       );
     }
@@ -888,6 +1373,9 @@ export default function ChatScreen() {
         onAnswerQuestion={answerQuestion}
         onApprovePermission={() => approveAction(item.msg.meta?.requestId as string | undefined)}
         onRejectPermission={() => rejectAction(item.msg.meta?.requestId as string | undefined)}
+        onRetry={() => retrySend(item.msg)}
+        findQuery={findOpen ? findQuery : ''}
+        findActive={item.msg.id === findActiveMsgId}
       />
     );
   }
@@ -968,10 +1456,18 @@ export default function ChatScreen() {
                 </Text>
               </View>
               <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
-                {currentBranch ? (
-                  <Text style={styles.headerMono}>{currentBranch + '  \u2022  '}</Text>
-                ) : null}
-                {agentStatus.replace('_', ' ')}
+                {!wsConnected ? (
+                  <Text style={{ color: Colors.warning[400] }}>Reconnecting…</Text>
+                ) : activity ? (
+                  <Text style={{ color: activityToneColor }}>{activity.text}</Text>
+                ) : (
+                  <>
+                    {currentBranch ? (
+                      <Text style={styles.headerMono}>{currentBranch + '  \u2022  '}</Text>
+                    ) : null}
+                    {agentStatus === 'unknown' ? 'connecting' : agentStatus.replace('_', ' ')}
+                  </>
+                )}
                 {contextFraction > 0.01
                   ? `  \u2022  ${Math.round(contextFraction * 100)}%`
                   : ''}
@@ -980,6 +1476,32 @@ export default function ChatScreen() {
 
             {/* iOS 26 merged button group — one chrome capsule, hairline lenses. */}
             <GlassCapsule c={c} style={styles.headerGroup} contentStyle={styles.headerGroupContent}>
+              <Pressable
+                onPress={() => {
+                  setFindOpen(true);
+                }}
+                style={({ pressed }) => [
+                  styles.headerGroupBtn,
+                  {
+                    opacity: pressed ? 0.55 : 1,
+                    transform: [{ scale: pressed ? 0.9 : 1 }],
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Find in conversation"
+              >
+                <Ionicons name="search" size={15} color={c.textSecondary} />
+              </Pressable>
+              <View
+                style={[
+                  styles.groupDivider,
+                  {
+                    backgroundColor: c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                  },
+                ]}
+              />
               {gitStatus.trim().length > 0 && (
                 <>
                   <Pressable
@@ -1076,6 +1598,28 @@ export default function ChatScreen() {
         </BlurView>
       </View>
 
+      {/* In-chat find bar — floats just under the header glass. */}
+      {findOpen && (
+        <View style={[styles.findBarWrap, { top: insets.top + HEADER_HEIGHT + 6 }]} pointerEvents="box-none">
+          <ChatFindBar
+            query={findQuery}
+            onQueryChange={(q) => {
+              setFindQuery(q);
+              setFindIdx(0);
+            }}
+            status={findStatus}
+            canNavigate={findMatches.length > 0}
+            onNext={() => goToMatch(findIdx + 1)}
+            onPrevious={() => goToMatch(findIdx - 1)}
+            onClose={() => {
+              setFindOpen(false);
+              setFindQuery('');
+            }}
+            colors={c}
+          />
+        </View>
+      )}
+
       <View style={styles.contentArea}>
         {messages.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -1155,10 +1699,17 @@ export default function ChatScreen() {
               <Pressable
                 onPress={scrollToBottom}
                 hitSlop={4}
-                style={StyleSheet.absoluteFill}
-                accessibilityLabel="Scroll to latest"
+                style={[StyleSheet.absoluteFill, styles.scrollPillInner]}
+                accessibilityLabel={unread > 0 ? `Scroll to latest, ${unread} new` : 'Scroll to latest'}
               >
                 <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
+                {unread > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {unread > 99 ? '99+' : unread}
+                    </Text>
+                  </View>
+                )}
               </Pressable>
             </GlassCapsule>
           </Animated.View>
@@ -1231,22 +1782,46 @@ export default function ChatScreen() {
               contentContainerStyle={styles.queueChipsContainer}
             >
               {promptQueue.map((item, idx) => (
-                <View
+                <Pressable
                   key={idx}
-                  style={[styles.queueChip, { backgroundColor: c.subtle }]}
+                  onPress={() =>
+                    showActionSheet(
+                      'Queued message',
+                      ['Send now (steer)', 'Edit', 'Remove', 'Cancel'],
+                      3,
+                      (action) => {
+                        if (action === 0) {
+                          removeQueuedPrompt(idx);
+                          sendSteer(item);
+                        } else if (action === 1) {
+                          removeQueuedPrompt(idx);
+                          setInput(item);
+                          if (sessionId) {
+                            useComposerPrefs.getState().setDraft(sessionId, item);
+                          }
+                          inputRef.current?.focus();
+                        } else if (action === 2) {
+                          removeQueuedPrompt(idx);
+                        }
+                      },
+                    )
+                  }
+                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
                 >
-                  <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
-                  <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
-                    {item}
-                  </Text>
-                  <Pressable
-                    onPress={() => removeQueuedPrompt(idx)}
-                    hitSlop={6}
-                    style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
-                  >
-                    <Ionicons name="close-circle" size={14} color={c.textTertiary} />
-                  </Pressable>
-                </View>
+                  <View style={[styles.queueChip, { backgroundColor: c.subtle }]}>
+                    <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
+                    <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
+                      {item}
+                    </Text>
+                    <Pressable
+                      onPress={() => removeQueuedPrompt(idx)}
+                      hitSlop={6}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+                    >
+                      <Ionicons name="close-circle" size={14} color={c.textTertiary} />
+                    </Pressable>
+                  </View>
+                </Pressable>
               ))}
             </ScrollView>
           </GlassCapsule>
@@ -1264,6 +1839,177 @@ export default function ChatScreen() {
             onClose={() => setInputFocused(false)}
           />
         )}
+
+        <AttachmentStrip
+          images={attachments}
+          onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+          colors={c}
+        />
+
+        {/* Live activity line + quick pills (happy's status-row pattern):
+         * what the agent is doing this second on the left; attach, dictate,
+         * model and thinking — the four knobs you actually change mid-chat —
+         * one tap away on the right. */}
+        <View style={styles.accessoryRow}>
+          <View style={styles.activitySlot}>
+            {voiceState !== 'idle' ? (
+              <View style={styles.activityLine}>
+                <View
+                  style={[
+                    styles.activityDot,
+                    voiceState === 'recording'
+                      ? { backgroundColor: Colors.danger[400] }
+                      : { backgroundColor: Colors.warning[400] },
+                  ]}
+                />
+                {voiceState === 'recording' ? (
+                  <Text style={[styles.activityText, { color: Colors.danger[400] }]} numberOfLines={1}>
+                    Recording — {formatElapsed(Date.now() - voiceStartRef.current)} · tap mic to stop
+                  </Text>
+                ) : (
+                  <Text style={[styles.activityText, { color: Colors.warning[400] }]} numberOfLines={1}>
+                    Transcribing…
+                  </Text>
+                )}
+              </View>
+            ) : !wsConnected ? (
+              <View style={styles.activityLine}>
+                <View style={[styles.activityDot, { backgroundColor: Colors.warning[400] }]} />
+                <Text
+                  style={[styles.activityText, { color: Colors.warning[400] }]}
+                  numberOfLines={1}
+                >
+                  Reconnecting…
+                </Text>
+              </View>
+            ) : activity ? (
+              <View style={styles.activityLine}>
+                <View style={[styles.activityDot, { backgroundColor: activityToneColor }]} />
+                <Text
+                  style={[styles.activityText, { color: activityToneColor }]}
+                  numberOfLines={1}
+                >
+                  {activity.text}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={pickAttachments}
+            style={({ pressed }) => [
+              styles.iconPill,
+              {
+                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.6 : 1,
+              },
+            ]}
+            hitSlop={4}
+            accessibilityLabel="Attach images"
+          >
+            <Ionicons
+              name="image-outline"
+              size={13}
+              color={attachments.length > 0 ? (c.isDark ? Colors.primary[300] : Colors.primary[500]) : c.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => void toggleVoice()}
+            style={({ pressed }) => [
+              styles.iconPill,
+              {
+                backgroundColor:
+                  voiceState === 'recording'
+                    ? 'rgba(235,77,85,0.16)'
+                    : c.isDark
+                      ? 'rgba(255,255,255,0.07)'
+                      : 'rgba(60,60,67,0.06)',
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.6 : 1,
+              },
+            ]}
+            hitSlop={4}
+            accessibilityLabel={voiceState === 'recording' ? 'Stop recording' : 'Dictate message'}
+          >
+            {voiceState === 'transcribing' ? (
+              <ActivityIndicator size="small" color={Colors.warning[400]} />
+            ) : (
+              <Ionicons
+                name={voiceState === 'recording' ? 'stop' : 'mic-outline'}
+                size={13}
+                color={
+                  voiceState === 'recording'
+                    ? Colors.danger[400]
+                    : voiceState !== 'idle'
+                      ? Colors.warning[400]
+                      : c.textSecondary
+                }
+              />
+            )}
+          </Pressable>
+          <Pressable
+            ref={modelPillRef}
+            onPress={openModelMenu}
+            style={({ pressed }) => [
+              styles.quickPill,
+              {
+                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.6 : 1,
+              },
+            ]}
+            hitSlop={4}
+            accessibilityLabel="Switch model"
+          >
+            <Ionicons name="cube-outline" size={11} color={c.textSecondary} />
+            <Text style={[styles.quickPillText, { color: c.textSecondary }]} numberOfLines={1}>
+              {selectedModel ? shortModel(selectedModel) : 'Model'}
+            </Text>
+            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+          </Pressable>
+          <Pressable
+            ref={thinkPillRef}
+            onPress={openThinkingMenu}
+            style={({ pressed }) => [
+              styles.quickPill,
+              {
+                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.6 : 1,
+              },
+            ]}
+            hitSlop={4}
+            accessibilityLabel="Thinking level"
+          >
+            <Ionicons
+              name="bulb-outline"
+              size={11}
+              color={
+                thinkingMode !== 'none'
+                  ? c.isDark
+                    ? Colors.primary[300]
+                    : Colors.primary[500]
+                  : c.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.quickPillText,
+                {
+                  color:
+                    thinkingMode !== 'none'
+                      ? c.isDark
+                        ? Colors.primary[300]
+                        : Colors.primary[500]
+                      : c.textSecondary,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {thinkingBadge}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Messages-grade glass capsule: tune · input · send/stop/steer. */}
         <GlassCapsule c={c} style={styles.composerCapsule} contentStyle={styles.composerContent}>
@@ -1321,7 +2067,10 @@ export default function ChatScreen() {
             ref={inputRef}
             style={[styles.composerInput, { color: c.textPrimary }]}
             value={input}
-            onChangeText={setInput}
+            onChangeText={(text) => {
+              setInput(text);
+              if (sessionId) useComposerPrefs.getState().setDraft(sessionId, text);
+            }}
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
             onSubmitEditing={() => {
@@ -1405,8 +2154,10 @@ export default function ChatScreen() {
         models={Array.from(new Set([...providerModels, ...models]))}
         selectedModel={selectedModel}
         onSelectModel={(m) => {
+          pickedModelRef.current = m;
           setSelectedModel(m);
           wsService.send({ type: 'model_select', sessionId, model: m });
+          if (sessionId) useComposerPrefs.getState().setModel(sessionId, m);
         }}
         thinkingMode={thinkingMode}
         thinkingLevel={thinkingLevel}
@@ -1414,6 +2165,9 @@ export default function ChatScreen() {
           setThinkingMode(mode);
           if (level) setThinkingLevel(level);
           sendThinkingConfig(mode, level);
+          if (sessionId) {
+            useComposerPrefs.getState().setThinking(sessionId, { mode, level });
+          }
         }}
         serviceTier={serviceTier}
         onServiceTier={(tier) => {
@@ -1557,6 +2311,8 @@ function ToolBurstRenderer({
   isExpanded,
   onToggle,
   onReview,
+  findQuery,
+  findActiveMsgId,
 }: {
   burst: { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
   colors: ThemeColors;
@@ -1564,6 +2320,8 @@ function ToolBurstRenderer({
   isExpanded: boolean;
   onToggle: () => void;
   onReview: () => void;
+  findQuery?: string;
+  findActiveMsgId?: string | null;
 }) {
   return (
     <View style={burstStyles.container}>
@@ -1580,7 +2338,13 @@ function ToolBurstRenderer({
         onToggle={onToggle}
       >
         {burst.messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} colors={c} />
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            colors={c}
+            findQuery={findQuery}
+            findActive={msg.id === findActiveMsgId}
+          />
         ))}
       </ToolBurstGroup>
       {!isStreaming && (
@@ -1629,6 +2393,9 @@ function MessageBubble({
   onAnswerQuestion,
   onApprovePermission,
   onRejectPermission,
+  onRetry,
+  findQuery,
+  findActive,
 }: {
   msg: ChatMessage;
   colors: ThemeColors;
@@ -1636,6 +2403,11 @@ function MessageBubble({
   onAnswerQuestion?: (ans: string) => void;
   onApprovePermission?: () => void;
   onRejectPermission?: () => void;
+  onRetry?: () => void;
+  /** Active chat-find query — matches render highlighted inside text. */
+  findQuery?: string;
+  /** The row the find bar currently points at gets the stronger mark. */
+  findActive?: boolean;
 }) {
   if (msg.eventType === 'user_input_prompt') {
     const rawQuestions = msg.meta?.questions as QuestionItem[] | undefined;
@@ -1671,6 +2443,7 @@ function MessageBubble({
   }
   if (msg.role === 'user') {
     const isLong = msg.content.length > 360 || (msg.content.match(/\n/g) ?? []).length > 8;
+    const images = msg.meta?.images as ChatImage[] | undefined;
     return (
       <Pressable
         onLongPress={onLongPress}
@@ -1678,15 +2451,57 @@ function MessageBubble({
         style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}
       >
         <View style={styles.userRow}>
-          <View style={[styles.userBubble, { backgroundColor: c.isDark ? Colors.primary[600] : Colors.primary[500] }]}>
-            <Text style={styles.userText} numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}>
-              {msg.content}
-            </Text>
+          <View
+            style={[
+              styles.userBubble,
+              {
+                backgroundColor: c.isDark ? Colors.primary[600] : Colors.primary[500],
+                opacity: msg.delivery === 'pending' ? 0.55 : 1,
+              },
+            ]}
+          >
+            {images && images.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.bubbleImageRow}
+              >
+                {images.map((img, i) => (
+                  <Image
+                    key={i}
+                    source={{ uri: `data:${img.mediaType};base64,${img.data}` }}
+                    style={styles.bubbleImage}
+                    resizeMode="cover"
+                  />
+                ))}
+              </ScrollView>
+            )}
+            {msg.content && msg.content !== '(image)' && (
+              <HighlightedText
+                text={msg.content}
+                query={findQuery ?? ''}
+                active={findActive}
+                style={styles.userText}
+                numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
+              />
+            )}
             {isLong && msg.isCollapsed && (
               <Text style={styles.userCollapseHint}>Show more</Text>
             )}
           </View>
         </View>
+        {msg.delivery === 'failed' ? (
+          <Pressable onPress={onRetry} hitSlop={6} style={styles.retryRow}>
+            <Ionicons name="refresh" size={11} color={Colors.danger[400]} />
+            <Text style={[styles.retryText, { color: Colors.danger[400] }]}>
+              Failed to send — tap to retry
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={[styles.userTimestamp, { color: c.textTertiary }]}>
+            {formatTimeOfDay(msg.timestamp)}
+          </Text>
+        )}
       </Pressable>
     );
   }
@@ -1696,7 +2511,13 @@ function MessageBubble({
       <Pressable onLongPress={onLongPress} delayLongPress={300}>
         <View style={styles.assistantRow}>
           <View style={styles.assistantBubble}>
-            <MarkdownText content={msg.content} colors={c} isStreaming={msg.isStreaming} />
+            <MarkdownText
+              content={msg.content}
+              colors={c}
+              isStreaming={msg.isStreaming}
+              highlightQuery={findQuery}
+              highlightActive={findActive}
+            />
             {msg.isStreaming && <TypingIndicator colors={c} />}
           </View>
         </View>
@@ -1722,8 +2543,12 @@ function MessageBubble({
         <View style={styles.systemRow}>
           <ToolCallCard
             toolName={toolName}
+            title={msg.meta?.title as string | undefined}
             args={msg.meta as Record<string, unknown>}
             output={(msg.meta?.output as string) ?? undefined}
+            isRunning={Boolean(msg.meta?.running)}
+            durationMs={msg.meta?.durationMs as number | undefined}
+            success={msg.meta?.success as boolean | undefined}
             colors={c}
           />
         </View>
@@ -1811,9 +2636,12 @@ function MessageBubble({
             isError ? styles.errorBubble : { backgroundColor: c.subtle },
           ]}
         >
-          <Text style={[styles.systemText, isError ? styles.errorText : { color: c.textTertiary }]}>
-            {isError ? `\u26A0\uFE0F ${msg.content}` : msg.content}
-          </Text>
+          <HighlightedText
+            text={isError ? `\u26A0\uFE0F ${msg.content}` : msg.content}
+            query={findQuery ?? ''}
+            active={findActive}
+            style={[styles.systemText, isError ? styles.errorText : { color: c.textTertiary }]}
+          />
         </View>
       </View>
     </Pressable>
@@ -2022,6 +2850,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  scrollPillInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadge: {
+    // Inside the pill — the capsule's glass layers clip overflow:hidden, so
+    // no outside overhang.
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary[500],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  unreadBadgeText: {
+    fontSize: 8.5,
+    lineHeight: 10,
+    fontWeight: '700',
+    color: '#ffffff',
+    fontFamily: FontFamily.mono,
+    fontVariant: ['tabular-nums'],
+  },
   loadEarlierBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2053,6 +2909,26 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   userText: { ...Typography.subhead, fontSize: 14.5, lineHeight: 20, color: '#ffffff' },
+  userTimestamp: {
+    ...Typography.caption2,
+    fontSize: 10,
+    textAlign: 'right',
+    marginTop: 2,
+    marginRight: Spacing.xs,
+  },
+  retryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 2,
+    marginRight: Spacing.xs,
+  },
+  retryText: {
+    ...Typography.caption2,
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
   userCollapseHint: {
     ...Typography.caption2,
     marginTop: 4,
@@ -2084,6 +2960,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm - 2,
     paddingVertical: Spacing.sm - 2,
     minHeight: 48,
+  },
+
+  accessoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 26,
+    paddingHorizontal: Spacing.xs + 2,
+    paddingBottom: 5,
+  },
+  activitySlot: {
+    flex: 1,
+    minWidth: 0,
+  },
+  activityLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  activityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  activityText: {
+    ...Typography.caption2,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    flexShrink: 1,
+  },
+  quickPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 24,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.sm + 1,
+  },
+  iconPill: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  findBarWrap: {
+    position: 'absolute',
+    left: Spacing.md,
+    right: Spacing.md,
+    zIndex: 20,
+  },
+  bubbleImageRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  bubbleImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    borderCurve: 'continuous',
+  },
+  quickPillText: {
+    ...Typography.caption2,
+    fontFamily: FontFamily.mono,
+    fontWeight: '600',
+    maxWidth: 130,
   },
 
   tuneButton: {

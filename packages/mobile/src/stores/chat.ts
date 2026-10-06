@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { ParsedEvent, UserInputPromptEvent, PermissionRequestEvent } from '@baton/shared';
+import type {
+  ChatImage,
+  ParsedEvent,
+  StatusDetail,
+  UserInputPromptEvent,
+  PermissionRequestEvent,
+} from '@baton/shared';
 
 export type MessageKind =
   | 'chat'
@@ -23,6 +29,8 @@ export interface ChatMessage {
   isStreaming?: boolean;
   isCollapsed?: boolean;
   itemId?: string;
+  /** Optimistic-send delivery state; resolved by the daemon's ack. */
+  delivery?: 'pending' | 'failed';
 }
 
 interface InternalState {
@@ -37,14 +45,20 @@ interface InternalState {
 interface ChatState extends InternalState {
   messages: ChatMessage[];
   agentStatus: string;
+  /** Live activity context for the current status (daemon v2.3+). */
+  statusDetail: StatusDetail | undefined;
   waitingApproval: boolean;
   activePrompt: UserInputPromptEvent | null;
   activePermission: PermissionRequestEvent | null;
   promptQueue: string[];
   sessionOwner: 'local' | 'remote' | null;
   addEvent: (event: ParsedEvent) => void;
-  addUserMessage: (content: string) => void;
-  setStatus: (status: string) => void;
+  addUserMessage: (content: string, messageId?: string, images?: ChatImage[]) => void;
+  /** Resolve an optimistic send by the daemon ack's messageId. */
+  resolveDelivery: (messageId: string, ok: boolean) => void;
+  /** Flip a failed send back to pending under a fresh messageId (retry). */
+  retryMessage: (id: string, messageId: string) => void;
+  setStatus: (status: string, detail?: StatusDetail) => void;
   setSessionOwner: (owner: 'local' | 'remote' | null) => void;
   setWaitingApproval: (waiting: boolean) => void;
   setActivePrompt: (prompt: UserInputPromptEvent | null) => void;
@@ -57,6 +71,19 @@ interface ChatState extends InternalState {
 }
 
 const STREAM_THROTTLE_MS = 80;
+
+/**
+ * PTY raw_output events deliberately preserve ANSI escapes on the wire (the
+ * terminal view needs them); the chat transcript only wants plain text, so
+ * strip CSI/OSC/other escape sequences before buffering. C0 controls except
+ * tab/newline are dropped too — TUI redraw junk must never reach a bubble.
+ */
+const ANSI_ESCAPE =
+  /\u001B\[[0-9;?]*[ -/]*[@-~]|\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)|\u001B[@-_Z\\-_]|\r(?!\n)|\u0008/g;
+
+function stripAnsiCodes(text: string): string {
+  return text.replace(ANSI_ESCAPE, '');
+}
 
 function isBareShellPrompt(text: string): boolean {
   const trimmed = text.trim();
@@ -80,7 +107,9 @@ function pruneDuplicateMessages(messages: ChatMessage[]): ChatMessage[] {
   const result: ChatMessage[] = [];
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    const key = `${m.kind}:${m.content}:${m.itemId ?? ''}`;
+    // Optimistic sends carry a messageId — two image-only messages both read
+    // "(image)" and must not collapse into one during the idle prune.
+    const key = `${m.kind}:${m.content}:${m.itemId ?? ''}:${(m.meta?.messageId as string) ?? ''}`;
     if (!seen.has(key)) {
       seen.add(key);
       result.unshift(m);
@@ -137,6 +166,7 @@ function flushStream(
 export const useChatStore = create<ChatState>()((set, get) => ({
   messages: [],
   agentStatus: 'unknown',
+  statusDetail: undefined,
   waitingApproval: false,
   activePrompt: null,
   activePermission: null,
@@ -155,7 +185,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       console.log(`[chat] addEvent type=${event.type} role=${'role' in event ? (event as { role?: string }).role : ''} contentLen=${contentLen} status=${'status' in event ? (event as { status?: string }).status : ''}`);
     }
     if (event.type === 'raw_output') {
-      if (!event.content?.trim()) return;
+      const content = stripAnsiCodes(event.content);
+      if (!content.trim()) return;
 
       if (event.itemId) {
         const existingMsgId = get()._itemIdToMsgId.get(event.itemId);
@@ -164,7 +195,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             const msgs = [...s.messages];
             const idx = msgs.findIndex((m) => m.id === existingMsgId);
             if (idx >= 0) {
-              msgs[idx] = { ...msgs[idx], content: msgs[idx].content + event.content };
+              msgs[idx] = { ...msgs[idx], content: msgs[idx].content + content };
             }
             return { messages: msgs };
           });
@@ -173,7 +204,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       set((s) => ({
-        _streamBuffer: s._streamBuffer + event.content,
+        _streamBuffer: s._streamBuffer + content,
         _streamTimer: s._streamTimer ?? setTimeout(() => flushStream(set, get), STREAM_THROTTLE_MS),
       }));
       return;
@@ -192,13 +223,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         if (event.status === 'idle' || event.status === 'stopped') {
           const msgs = pruneDuplicateMessages(
             state.messages.map((m) => {
-              if (!m.isStreaming) return m;
-              const meta = m.meta ? { ...m.meta, isStreaming: false } : m.meta;
+              if (!m.isStreaming && !m.meta?.running) return m;
+              const meta = m.meta
+                ? { ...m.meta, isStreaming: false, running: false }
+                : m.meta;
               return { ...m, isStreaming: false, meta };
             }),
           );
           return {
             agentStatus: event.status,
+            statusDetail: undefined,
             waitingApproval: false,
             activePrompt: null,
             activePermission: null,
@@ -382,11 +416,98 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               content,
               timestamp: ts,
               eventType: 'tool_use',
-              meta: event.args as Record<string, unknown>,
+              meta: { ...(event.args as Record<string, unknown>), tool: event.tool },
               itemId,
             },
           ],
         };
+      }
+
+      if (event.type === 'tool_call_start') {
+        const key = `call:${event.callId}`;
+        const msgs = [...state.messages];
+        let idx = state._itemIdToMsgId.has(key)
+          ? msgs.findIndex((m) => m.id === state._itemIdToMsgId.get(key))
+          : -1;
+        if (idx < 0) {
+          // The PTY parser emits tool_use first, then tool_call_start for the
+          // same call — enrich that card in place instead of duplicating it.
+          // Only the trailing un-claimed run of tool rows is eligible.
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i];
+            if (m.kind !== 'toolActivity') break;
+            if (!m.meta?.callId && m.content.startsWith(event.tool)) {
+              idx = i;
+              break;
+            }
+          }
+        }
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (idx >= 0) {
+          updatedItemIdMap.set(key, msgs[idx].id);
+          msgs[idx] = {
+            ...msgs[idx],
+            isStreaming: true,
+            meta: {
+              ...msgs[idx].meta,
+              callId: event.callId,
+              tool: event.tool,
+              title: event.title,
+              description: event.description,
+              running: true,
+            },
+          };
+          return { _itemIdToMsgId: updatedItemIdMap, messages: msgs };
+        }
+        // No tool_use row to attach to (adapter only emits start events) —
+        // create the card here.
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        updatedItemIdMap.set(key, id);
+        return {
+          _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
+          messages: [
+            ...state.messages,
+            {
+              id,
+              turnId: tid,
+              role: 'system' as const,
+              kind: 'toolActivity' as const,
+              content: event.title ?? event.tool,
+              timestamp: ts,
+              eventType: 'tool_call_start',
+              isStreaming: true,
+              meta: {
+                ...(event.args as Record<string, unknown>),
+                tool: event.tool,
+                callId: event.callId,
+                title: event.title,
+                description: event.description,
+                running: true,
+              },
+            },
+          ],
+        };
+      }
+
+      if (event.type === 'tool_call_end') {
+        const targetId = state._itemIdToMsgId.get(`call:${event.callId}`);
+        if (!targetId) return state;
+        const msgs = [...state.messages];
+        const idx = msgs.findIndex((m) => m.id === targetId);
+        if (idx < 0) return state;
+        msgs[idx] = {
+          ...msgs[idx],
+          isStreaming: false,
+          meta: {
+            ...msgs[idx].meta,
+            running: false,
+            success: event.success,
+            durationMs: event.durationMs,
+          },
+        };
+        return { messages: msgs };
       }
 
       if (event.type === 'file_change') {
@@ -686,7 +807,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
-  addUserMessage: (content) => {
+  addUserMessage: (content, messageId, images) => {
     set((state) => {
       const newTurn = state._turnCounter + 1;
       const tid = `t-${newTurn}`;
@@ -705,13 +826,50 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             content,
             timestamp: Date.now(),
             eventType: 'chat_message',
+            delivery: messageId ? ('pending' as const) : undefined,
+            meta: {
+              ...(messageId ? { messageId } : {}),
+              ...(images && images.length > 0 ? { images } : {}),
+            },
           },
         ],
       };
     });
   },
 
-  setStatus: (status) => set({ agentStatus: status }),
+  resolveDelivery: (messageId, ok) => {
+    set((state) => {
+      const idx = state.messages.findIndex((m) => m.meta?.messageId === messageId);
+      if (idx < 0) return state;
+      const msgs = [...state.messages];
+      const target = msgs[idx];
+      if (!ok && target.delivery !== 'failed') {
+        msgs[idx] = { ...target, delivery: 'failed' };
+        return { messages: msgs };
+      }
+      if (ok && target.delivery === 'pending') {
+        msgs[idx] = { ...target, delivery: undefined };
+        return { messages: msgs };
+      }
+      return state;
+    });
+  },
+
+  retryMessage: (id, messageId) => {
+    set((state) => {
+      const idx = state.messages.findIndex((m) => m.id === id);
+      if (idx < 0) return state;
+      const msgs = [...state.messages];
+      msgs[idx] = {
+        ...msgs[idx],
+        delivery: 'pending',
+        meta: { ...msgs[idx].meta, messageId },
+      };
+      return { messages: msgs };
+    });
+  },
+
+  setStatus: (status, detail) => set({ agentStatus: status, statusDetail: detail }),
 
   setSessionOwner: (owner) => set({ sessionOwner: owner }),
 
@@ -750,6 +908,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set({
       messages: [],
       agentStatus: 'unknown',
+      statusDetail: undefined,
       waitingApproval: false,
       activePrompt: null,
       activePermission: null,

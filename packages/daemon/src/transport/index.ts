@@ -74,6 +74,9 @@ export class Transport {
         return new Response('WebSocket expected', { status: 400 });
       },
       websocket: {
+        // Base64 image attachments ride inside chat_input frames — the 16MB
+        // Bun default would silently drop a 4-image message at the socket.
+        maxPayloadLength: 32 * 1024 * 1024,
         open(ws: import('bun').ServerWebSocket<{ clientId: string }>) {
           const clientId = crypto.randomUUID();
           ws.data = { clientId };
@@ -168,7 +171,7 @@ export class Transport {
 
       case 'chat_input': {
         try {
-          this.agentManager.chatWrite(msg.sessionId, msg.content);
+          this.agentManager.chatWrite(msg.sessionId, msg.content, msg.images);
           if (msg.messageId) {
             this.send(clientId, { type: 'ack', status: 'ok', messageId: msg.messageId });
           }
@@ -679,7 +682,12 @@ export class Transport {
 
     const proc = this.agentManager.get(sessionId);
     if (proc) {
-      replies.push({ type: 'status_update', sessionId, status: proc.status });
+      replies.push({
+        type: 'status_update',
+        sessionId,
+        status: proc.status,
+        detail: this.agentManager.getStatusDetail(sessionId),
+      });
     }
 
     const ownerId = this.sessionOwners.get(sessionId);
@@ -873,10 +881,13 @@ export class Transport {
       this.emitSequenced(sid, msg);
 
       if (event.type === 'status_change') {
+        // State was already synced before the event callbacks fired, so the
+        // detail reflects this very transition.
         const statusMsg: DaemonMessage = {
           type: 'status_update',
           sessionId: sid,
           status: event.status,
+          detail: this.agentManager.getStatusDetail(sid),
         };
         this.emitSequenced(sid, statusMsg);
       }
@@ -954,6 +965,7 @@ export class Transport {
         startedAt: a.startedAt,
         lastActivityAt: a.lastActivityAt,
         stoppedAt: a.stoppedAt,
+        detail: a.stateDetail,
       })),
     });
   }
@@ -978,6 +990,7 @@ export class Transport {
         startedAt: a.startedAt,
         lastActivityAt: a.lastActivityAt,
         stoppedAt: a.stoppedAt,
+        detail: a.stateDetail,
       })),
     });
   }

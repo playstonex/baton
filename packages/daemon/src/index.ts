@@ -256,6 +256,50 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json(pushService.listSubscriptions());
   });
 
+  // Voice dictation for chat clients — one recorded clip in, transcript out.
+  // Proxied through Deepgram so the API key never leaves the daemon host.
+  // Fixed upstream host (public https), no caller-controlled URL.
+  app.post('/api/stt', async (c) => {
+    const key = process.env.DEEPGRAM_API_KEY;
+    if (!key) {
+      return c.json(
+        { error: 'Speech-to-text is not configured — set DEEPGRAM_API_KEY on the daemon host' },
+        503,
+      );
+    }
+    const contentType = c.req.header('content-type') ?? 'audio/mp4';
+    if (!/^audio\//.test(contentType)) {
+      return c.json({ error: 'Content-Type must be audio/*' }, 400);
+    }
+    const audio = await c.req.arrayBuffer();
+    if (audio.byteLength === 0) {
+      return c.json({ error: 'Empty audio body' }, 400);
+    }
+    if (audio.byteLength > 20 * 1024 * 1024) {
+      return c.json({ error: 'Audio clip too large' }, 413);
+    }
+    try {
+      const upstream = await fetch(
+        'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true',
+        {
+          method: 'POST',
+          headers: { Authorization: `Token ${key}`, 'Content-Type': contentType },
+          body: audio,
+        },
+      );
+      if (!upstream.ok) {
+        return c.json({ error: `Transcription service error (${upstream.status})` }, 502);
+      }
+      const data = (await upstream.json()) as {
+        results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> };
+      };
+      const transcript = data.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '';
+      return c.json({ text: transcript });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'STT failed' }, 502);
+    }
+  });
+
   app.post('/api/agents/start', async (c) => {
     const body = await c.req.json<StartAgentRequest>();
     const absPath = resolve(body.projectPath);

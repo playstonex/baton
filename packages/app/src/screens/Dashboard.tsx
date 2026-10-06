@@ -94,16 +94,22 @@ export function DashboardScreen() {
       : AGENT_OPTIONS[0]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/agents', { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((list: AgentProcess[]) => {
-        setAgents(list);
-        setDaemonOnline(true);
-      })
-      .catch((err) => {
-        if (err.name !== 'AbortError') setDaemonOnline(false);
-      });
+    let cancelled = false;
+    const fetchAgents = () => {
+      fetch('/api/agents')
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((list: AgentProcess[]) => {
+          if (!cancelled) {
+            setAgents(list);
+            setDaemonOnline(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setDaemonOnline(false);
+        });
+    };
+
+    fetchAgents();
 
     const unsubList = wsService.on('agent_list', (msg) => {
       if (msg.type === 'agent_list') {
@@ -118,6 +124,7 @@ export function DashboardScreen() {
             title: agent.title,
             lastActivityAt: agent.lastActivityAt,
             stoppedAt: agent.stoppedAt,
+            stateDetail: agent.detail,
           })),
         );
       }
@@ -125,18 +132,22 @@ export function DashboardScreen() {
 
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && 'status' in msg) {
-        updateAgentStatus(msg.sessionId, msg.status as AgentProcess['status']);
+        updateAgentStatus(msg.sessionId, msg.status as AgentProcess['status'], msg.detail);
       }
     });
 
     const unsubState = wsService.on('_state', () => {
       setDaemonOnline(wsService.connected);
+      // Reconnect reconcile (lunel's pattern): after a socket drop the store
+      // may have missed transitions — pull the authoritative list instead of
+      // waiting for the next push.
+      if (wsService.connected) fetchAgents();
     });
 
     wsService.connect();
 
     return () => {
-      controller.abort();
+      cancelled = true;
       unsubList();
       unsubStatus();
       unsubState();
@@ -234,7 +245,10 @@ export function DashboardScreen() {
     }
   }
 
-  const activeAgents = agents.filter((a) => a.status !== 'stopped');
+  // Needs-your-attention first, then busy, then idle (paseo's bucket order).
+  const activeAgents = agents
+    .filter((a) => a.status !== 'stopped')
+    .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
   const liveIds = new Set(activeAgents.map((a) => a.id));
   const pastList = pastSessions.filter((s) => !liveIds.has(s.id) && (!s.archivedAt || showArchived));
 
@@ -379,6 +393,18 @@ export function DashboardScreen() {
   );
 }
 
+/** Needs-your-attention first, then busy, then idle (paseo's bucket order). */
+const STATUS_PRIORITY: Record<string, number> = {
+  waiting_input: 0,
+  error: 1,
+  executing: 2,
+  thinking: 3,
+  running: 4,
+  starting: 5,
+  idle: 6,
+  stopped: 7,
+};
+
 function SegmentedMode({
   mode,
   onChange,
@@ -420,6 +446,8 @@ function AgentCard({
   onStop: () => void;
 }) {
   const label = AGENT_OPTIONS.find((option) => option.type === agent.type)?.label ?? agent.type;
+  const now = useNow();
+  const activity = activityLine(agent, now);
 
   return (
     <div className="flex items-center justify-between transition-colors duration-150 hover:bg-raised/50">
@@ -436,6 +464,9 @@ function AgentCard({
             {label !== (agent.title ?? label) ? `${label} · ` : ''}
             {agent.projectPath}
           </div>
+          {activity && (
+            <div className={`mt-0.5 truncate text-xs ${activity.className}`}>{activity.text}</div>
+          )}
         </div>
       </button>
 
@@ -446,6 +477,92 @@ function AgentCard({
         </div>
       </div>
   );
+}
+
+/** Ticks once a second so status durations stay live on the dashboard. */
+function useNow(intervalMs = 1000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
+function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return `${minutes}m ${total % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+/**
+ * Display-level staleness marker (open-claude-code's TOOL_DISPLAY_EXPIRY
+ * idea): a "busy" session whose last output is over a minute old is probably
+ * wedged — say so instead of ticking an ever-growing timer like nothing's wrong.
+ */
+function quietSuffix(agent: AgentProcess, now: number): string {
+  if (!agent.lastActivityAt) return '';
+  const last = Date.parse(agent.lastActivityAt);
+  if (Number.isNaN(last)) return '';
+  const quietMs = now - last;
+  if (quietMs < 60_000) return '';
+  return ` · no activity ${formatDuration(quietMs)}`;
+}
+
+/** One-line answer to "what is this session doing right now?" */
+function activityLine(
+  agent: AgentProcess,
+  now: number,
+): { text: string; className: string } | null {
+  const detail = agent.stateDetail;
+  switch (agent.status) {
+    case 'executing': {
+      if (!detail) return null;
+      const tool =
+        detail.toolTitle ?? (detail.tool && detail.tool !== 'unknown' ? detail.tool : 'tool');
+      return {
+        text: `Running ${tool} · ${formatDuration(now - detail.since)}${quietSuffix(agent, now)}`,
+        className: 'text-accent-hover',
+      };
+    }
+    case 'thinking':
+      return detail
+        ? {
+            text: `Thinking · ${formatDuration(now - detail.since)}${quietSuffix(agent, now)}`,
+            className: 'text-accent-hover',
+          }
+        : null;
+    case 'running': {
+      if (!detail) return null;
+      const calls = detail.toolCount
+        ? ` · ${detail.toolCount} tool call${detail.toolCount === 1 ? '' : 's'}`
+        : '';
+      return {
+        text: `Working${calls} · ${formatDuration(now - detail.since)}${quietSuffix(agent, now)}`,
+        className: 'text-success',
+      };
+    }
+    case 'waiting_input': {
+      const prompt = detail?.prompt?.replace(/\s+/g, ' ').trim();
+      return prompt
+        ? { text: `Waiting for you: ${prompt}`, className: 'text-warn' }
+        : null;
+    }
+    case 'idle': {
+      if (!detail) return null;
+      const last = agent.lastActivityAt ? relativeTime(agent.lastActivityAt) : '';
+      return { text: `Idle${last ? ` · last activity ${last}` : ''}`, className: 'text-warn' };
+    }
+    case 'error':
+      return detail?.error ? { text: detail.error, className: 'text-danger' } : null;
+    case 'starting':
+      return { text: 'Starting…', className: 'text-muted' };
+    default:
+      return null;
+  }
 }
 
 function relativeTime(iso: string): string {
