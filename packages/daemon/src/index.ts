@@ -24,6 +24,7 @@ import { Orchestrator } from './orchestrator/index.js';
 import { ScheduleService } from './scheduler/schedule.js';
 import { WorkspaceCheckpointService } from './workspace/checkpoint.js';
 import { getVapidKeys } from './system/vapid.js';
+import { transcribeClip } from './system/stt.js';
 import { AnalyticsService } from './system/analytics.js';
 import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
@@ -257,47 +258,16 @@ export function createDaemon(port = DEFAULT_PORT) {
   });
 
   // Voice dictation for chat clients — one recorded clip in, transcript out.
-  // Proxied through Deepgram so the API key never leaves the daemon host.
-  // Fixed upstream host (public https), no caller-controlled URL.
+  // The Deepgram relay (system/stt.ts) keeps the API key entirely on the host.
   app.post('/api/stt', async (c) => {
-    const key = process.env.DEEPGRAM_API_KEY;
-    if (!key) {
-      return c.json(
-        { error: 'Speech-to-text is not configured — set DEEPGRAM_API_KEY on the daemon host' },
-        503,
-      );
+    const outcome = await transcribeClip({
+      audio: await c.req.arrayBuffer(),
+      contentType: c.req.header('content-type'),
+    });
+    if (!outcome.ok) {
+      return c.json({ error: outcome.error }, outcome.status as 400 | 413 | 502 | 503);
     }
-    const contentType = c.req.header('content-type') ?? 'audio/mp4';
-    if (!/^audio\//.test(contentType)) {
-      return c.json({ error: 'Content-Type must be audio/*' }, 400);
-    }
-    const audio = await c.req.arrayBuffer();
-    if (audio.byteLength === 0) {
-      return c.json({ error: 'Empty audio body' }, 400);
-    }
-    if (audio.byteLength > 20 * 1024 * 1024) {
-      return c.json({ error: 'Audio clip too large' }, 413);
-    }
-    try {
-      const upstream = await fetch(
-        'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true',
-        {
-          method: 'POST',
-          headers: { Authorization: `Token ${key}`, 'Content-Type': contentType },
-          body: audio,
-        },
-      );
-      if (!upstream.ok) {
-        return c.json({ error: `Transcription service error (${upstream.status})` }, 502);
-      }
-      const data = (await upstream.json()) as {
-        results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> };
-      };
-      const transcript = data.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '';
-      return c.json({ text: transcript });
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : 'STT failed' }, 502);
-    }
+    return c.json({ text: outcome.text });
   });
 
   app.post('/api/agents/start', async (c) => {
@@ -1192,12 +1162,20 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
 
     const req = (await c.req.json()) as ResponsesApiRequest;
-    // Reviewed 2026-09-29: local daemon proxying user-configured providers.
-    // /proxy/* is localOnly-guarded; baseUrl is http(s)-validated at
-    // provider create/update AND at the fetch boundary (proxy.ts).
-    // mimosa-ignore
+    // Reviewed 2026-10-06: local daemon proxying user-configured providers.
+    // /proxy/* is localOnly-guarded; baseUrl is validated HERE and at the
+    // fetch boundary (proxy.ts) — provider create/update paths never feed it.
+    let baseUrl: URL;
+    try {
+      baseUrl = new URL(provider.baseUrl);
+    } catch {
+      return c.json({ error: 'Provider baseUrl is not a valid URL' }, 400);
+    }
+    if (baseUrl.protocol !== 'https:' && baseUrl.protocol !== 'http:') {
+      return c.json({ error: 'Provider baseUrl must be http(s)' }, 400);
+    }
     const result = await proxyResponses(req, {
-      baseUrl: provider.baseUrl,
+      baseUrl: baseUrl.toString(),
       apiKey,
       upstreamFormat: provider.upstreamFormat ?? 'responses',
     });
@@ -1315,16 +1293,25 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
+  // Checkpoint ids are `cp_<base36>_<base36>` (checkpoint.ts create) — the
+  // guard keeps client-supplied ids from escaping the checkpoints dir via
+  // path traversal before they ever reach a file path or git call.
+  const isCheckpointId = (id: unknown): id is string =>
+    typeof id === 'string' && /^cp_[a-z0-9]+_[a-z0-9]+$/i.test(id);
+
   app.post('/api/workspace/revert-preview', async (c) => {
     const body = await c.req.json<{ cwd: string; checkpointId: string }>();
     if (!body?.cwd) return c.json({ error: 'cwd required' }, 400);
     if (!isPathAllowed(resolve(body.cwd))) {
       return c.json({ error: 'Path not allowed' }, 403);
     }
+    if (!isCheckpointId(body.checkpointId)) {
+      return c.json({ error: 'Invalid checkpoint id' }, 400);
+    }
     try {
-      // Reviewed 2026-09-29: cwd is isPathAllowed-guarded here, then
-      // realpath-canonicalized in the service before an arg-array git spawn.
-      // mimosa-ignore
+      // cwd is isPathAllowed-guarded and realpath-canonicalized in the
+      // service; checkpointId passed the format gate above; git runs via
+      // arg-array spawn with the patch on stdin.
       const preview = await checkpointService.revertPreview(body.cwd, body.checkpointId);
       return c.json(preview);
     } catch (err) {
@@ -1338,12 +1325,14 @@ export function createDaemon(port = DEFAULT_PORT) {
     if (!isPathAllowed(resolve(body.cwd))) {
       return c.json({ error: 'Path not allowed' }, 403);
     }
+    if (!isCheckpointId(body.checkpointId)) {
+      return c.json({ error: 'Invalid checkpoint id' }, 400);
+    }
     try {
-      // Reviewed 2026-09-29: same guard chain as revert-preview above.
-      // mimosa-ignore
+      // Same guard chain as revert-preview above.
       await checkpointService.revertApply(body.cwd, body.checkpointId);
       return c.json({ ok: true });
-    } catch (err) {
+      } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Revert failed' }, 500);
     }
   });
@@ -1354,7 +1343,11 @@ export function createDaemon(port = DEFAULT_PORT) {
     if (!isPathAllowed(resolve(cwd))) {
       return c.json({ error: 'Path not allowed' }, 403);
     }
-    const removed = await checkpointService.remove(cwd, c.req.param('id'));
+    const id = c.req.param('id');
+    if (!isCheckpointId(id)) {
+      return c.json({ error: 'Invalid checkpoint id' }, 400);
+    }
+    const removed = await checkpointService.remove(cwd, id);
     if (!removed) return c.json({ error: 'Not found' }, 404);
     return c.json({ ok: true });
   });
