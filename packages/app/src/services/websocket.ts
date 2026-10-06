@@ -59,6 +59,10 @@ export class WebSocketService {
     return this.config.localHttpUrl ?? `http://${window.location.hostname}:3210`;
   }
 
+  get relayUrl(): string | undefined {
+    return this.config.relayUrl;
+  }
+
   configure(config: Partial<ConnectionConfig>): void {
     const next = { ...this.config, ...config };
     // Seq numbers and advertised features belong to ONE daemon. Switching hosts
