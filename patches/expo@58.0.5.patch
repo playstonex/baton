@@ -1,0 +1,31 @@
+diff --git a/types/index.d.ts b/types/index.d.ts
+index 0d5c297695e7144a2365edd56b09084d716f91aa..166e22d821b012958d77cfd945587614423bca7a 100644
+--- a/types/index.d.ts
++++ b/types/index.d.ts
+@@ -1,4 +1,3 @@
+ import 'expo-modules-core/types';
+ import './global';
+ import './metro-require';
+-import './react-native-web';
+diff --git a/types/react-native-web.d.ts b/types/react-native-web.d.ts
+index d6159045aa4b1f6864037cfc1c001a68605b416d..2684af23899c05db1a154631fa36f4246984a4e8 100644
+--- a/types/react-native-web.d.ts
++++ b/types/react-native-web.d.ts
+@@ -107,7 +107,7 @@ declare module 'react-native' {
+     /** @platform web */
+     willChange?: string;
+     /** @platform web */
+-    position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
++    position?: 'absolute' | 'relative' | 'static';
+   }
+ 
+   /**
+@@ -224,7 +224,7 @@ declare module 'react-native' {
+     /** @platform web */
+     willChange?: string;
+     /** @platform web */
+-    position?: 'static' | 'relative' | 'absolute' | 'fixed' | 'sticky';
++    position?: 'absolute' | 'relative' | 'static';
+     /** @platform web */
+     fontFeatureSettings?: string;
+     /** @platform web */

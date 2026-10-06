@@ -5,7 +5,6 @@ import { Alert, Platform, View, ActivityIndicator } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';
-import { HeroUINativeProvider } from 'heroui-native';
 import { useFonts } from 'expo-font';
 import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import {
@@ -182,22 +181,19 @@ export default function RootLayout() {
   if (!hasCompletedOnboarding) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <HeroUINativeProvider>
-          <StatusBar style={c.isDark ? 'light' : 'dark'} />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="onboarding" />
-          </Stack>
-        </HeroUINativeProvider>
+        <StatusBar style={c.isDark ? 'light' : 'dark'} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="onboarding" />
+        </Stack>
       </GestureHandlerRootView>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <HeroUINativeProvider>
-        <StatusBar style={c.isDark ? 'light' : 'dark'} />
-        <SessionNavigationWiring />
-        <Stack
+      <StatusBar style={c.isDark ? 'light' : 'dark'} />
+      <SessionNavigationWiring />
+      <Stack
           screenOptions={{
             headerTintColor: c.textPrimary,
             headerTransparent: true,
@@ -278,7 +274,6 @@ export default function RootLayout() {
             }}
           />
         </Stack>
-      </HeroUINativeProvider>
     </GestureHandlerRootView>
   );
 }

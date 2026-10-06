@@ -278,7 +278,7 @@ export default function PipelinesScreen() {
                 Create one above to get started
               </Text>
             </View>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item: p }) => {
           const statusColor = STEP_STATUS_COLOR[p.status] ?? c.textTertiary;

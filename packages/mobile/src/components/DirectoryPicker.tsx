@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -10,7 +11,6 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Spinner } from 'heroui-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { apiFetch } from '../services/api';
 import { useThemeColors } from '../hooks/useThemeColors';
@@ -121,7 +121,7 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
 
         {loading ? (
           <View style={styles.center}>
-            <Spinner size="sm" />
+            <ActivityIndicator size="small" color={c.textSecondary} />
           </View>
         ) : error ? (
           <View style={styles.center}>

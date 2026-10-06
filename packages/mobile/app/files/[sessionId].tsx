@@ -1,9 +1,8 @@
-import { View, Text, FlatList, Pressable, Image } from 'react-native';
+import { View, Text, FlatList, Pressable, Image, ActivityIndicator } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { BlurView } from 'expo-blur';
-import { Spinner } from 'heroui-native';
 import { useAgentStore } from '../../src/stores/agents';
 import { apiFetch, getDaemonUrl } from '../../src/services/api';
 import { FilePreview } from '../../src/components/FilePreview';
@@ -204,7 +203,7 @@ export default function FilesScreen() {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Spinner size="lg" />
+          <ActivityIndicator size="large" color={Colors.primary[500]} />
         </View>
       ) : (
         <FlatList

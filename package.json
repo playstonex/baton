@@ -25,9 +25,18 @@
       "sharp"
     ],
     "overrides": {
-      "react": "19.2.7",
-      "react-dom": "19.2.7",
-      "@types/react": "19.2.18"
+      "react": "19.3.0",
+      "react-dom": "19.3.0",
+      "@types/react": "19.3.0"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "expo-modules-core>react-native-worklets": "^0.13.0"
+      }
+    },
+    "patchedDependencies": {
+      "expo@58.0.5": "patches/expo@58.0.5.patch",
+      "react-native-webview@14.0.1": "patches/react-native-webview@14.0.1.patch"
     }
   },
   "devDependencies": {

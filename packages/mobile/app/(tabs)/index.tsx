@@ -106,6 +106,14 @@ function quietSuffix(agent: AgentProcess, now: number): string {
   return ` · no activity ${formatDuration(quietMs)}`;
 }
 
+/** Right-side live duration: time since the current state began, else since start. */
+function sessionDuration(agent: AgentProcess, now: number): string | null {
+  const since =
+    agent.stateDetail?.since ?? (agent.startedAt ? Date.parse(agent.startedAt) : NaN);
+  if (Number.isNaN(since)) return null;
+  return formatDuration(Math.max(0, now - since));
+}
+
 /** One-line answer to "what is this session doing right now?" */
 function agentActivity(agent: AgentProcess, now: number): string | null {
   const detail = agent.stateDetail;
@@ -277,6 +285,7 @@ export default function DashboardScreen() {
           lastActivity: Date.parse(s.updatedAt) || Date.now(),
           title: s.title,
           chatMode: s.mode === 'sdk' ? 'chat' : 'terminal',
+          eventCount: s.eventCount,
         })),
       );
     } catch {
@@ -499,25 +508,110 @@ export default function DashboardScreen() {
       : c.textTertiary;
     const label = AGENT_OPTIONS.find((o) => o.type === agent.type)?.label ?? agent.type;
     const activity = connected ? agentActivity(agent, now) : null;
+    // Rows that need the user pop in a scan: amber rail + tint for permission
+    // prompts, red for errors (web dashboard v2's scanning aid).
+    const attention: 'warn' | 'danger' | null =
+      connected && agent.status === 'waiting_input'
+        ? 'warn'
+        : connected && agent.status === 'error'
+          ? 'danger'
+          : null;
+    const dur = connected ? sessionDuration(agent, now) : null;
     return (
       <Pressable
         key={agent.id}
         onPress={() => openSession(agent.id, agent.type)}
         style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }, { marginBottom: Spacing.sm }]}
       >
-        <GlassCard c={c} blurIntensity={Glass.blur.card - 10}>
+        <GlassCard
+          c={c}
+          blurIntensity={Glass.blur.card - 10}
+          style={attention ? { overflow: 'hidden' } : undefined}
+          overlay={
+            attention ? (
+              <>
+                <View
+                  pointerEvents="none"
+                  style={[
+                    StyleSheet.absoluteFill,
+                    {
+                      backgroundColor:
+                        attention === 'warn'
+                          ? 'rgba(217,166,46,0.10)'
+                          : 'rgba(235,77,85,0.10)',
+                      borderRadius: 16,
+                    },
+                  ]}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 10,
+                    bottom: 10,
+                    width: 3,
+                    borderRadius: 2,
+                    backgroundColor:
+                      attention === 'warn' ? Colors.warning[400] : Colors.danger[400],
+                  }}
+                />
+              </>
+            ) : undefined
+          }
+        >
           <View style={styles.agentRow}>
             <View style={styles.agentLeft}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <View style={{ flex: 1 }}>
-                <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
-                  {agent.title ?? label}
-                </Text>
+                <View style={styles.titleRow}>
+                  <Text
+                    style={[
+                      Typography.subhead,
+                      { color: c.textPrimary, fontWeight: '600', flexShrink: 1 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {agent.title ?? label}
+                  </Text>
+                  {attention === 'warn' && (
+                    <View style={styles.attentionPill}>
+                      <View
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: 2,
+                          backgroundColor: Colors.warning[400],
+                        }}
+                      />
+                      <Text
+                        style={[
+                          Typography.caption2,
+                          { color: Colors.warning[400], fontWeight: '600' },
+                        ]}
+                      >
+                        needs input
+                      </Text>
+                    </View>
+                  )}
+                  {attention === 'danger' && (
+                    <View style={[styles.attentionPill, { backgroundColor: Colors.danger[400] + '26' }]}>
+                      <Text
+                        style={[
+                          Typography.caption2,
+                          { color: Colors.danger[400], fontWeight: '600' },
+                        ]}
+                      >
+                        error
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <Text
                   style={[Typography.caption1, { color: c.textTertiary, fontFamily: FontFamily.mono }]}
                   numberOfLines={1}
                 >
-                  {agent.projectPath}
+                  {label} · {agent.projectPath}
                 </Text>
                 {activity ? (
                   <Text
@@ -547,18 +641,20 @@ export default function DashboardScreen() {
               </View>
             </View>
             <View style={styles.agentRight}>
-              <Text
-                style={[
-                  Typography.caption2,
-                  {
-                    color: connected ? statusColor : Colors.warning[400],
-                    fontWeight: '600',
-                    textTransform: 'capitalize',
-                  },
-                ]}
-              >
-                {connected ? agent.status.replace('_', ' ') : 'reconnecting'}
-              </Text>
+              {dur && (
+                <Text
+                  style={[
+                    Typography.mono,
+                    {
+                      fontSize: 11,
+                      color: attention === 'warn' ? Colors.warning[400] : c.textTertiary,
+                      fontVariant: ['tabular-nums' as const],
+                    },
+                  ]}
+                >
+                  {dur}
+                </Text>
+              )}
               {connected && (
                 <Pressable
                   onPress={() => stopAgent(agent.id)}
@@ -614,12 +710,23 @@ export default function DashboardScreen() {
                   <Ionicons name="trash-outline" size={14} color={Colors.danger[400]} />
                 </Pressable>
               </View>
-              <Text
-                style={[Typography.mono, { color: c.textTertiary, marginTop: 2, fontSize: 12 }]}
-                numberOfLines={1}
-              >
-                {session.projectPath || 'terminal session'}
-              </Text>
+              <View style={styles.sessionMetaRow}>
+                <Text
+                  style={[
+                    Typography.mono,
+                    { color: c.textTertiary, fontSize: 12, flex: 1 },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {agentOption?.label ?? session.type} · {session.projectPath || 'terminal session'}
+                </Text>
+                {session.eventCount ? (
+                  <Text style={[Typography.mono, { color: c.textTertiary, fontSize: 12 }]}>
+                    {' · '}
+                    {session.eventCount} {session.eventCount === 1 ? 'event' : 'events'}
+                  </Text>
+                ) : null}
+              </View>
             </View>
             <Text style={[Typography.caption2, { color: c.textTertiary }]}>
               {formatTime(session.lastActivity)}
@@ -826,7 +933,7 @@ export default function DashboardScreen() {
                 </View>
               ))}
             </View>
-          ) : null
+          ) : undefined
         }
       />
 
@@ -1287,6 +1394,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  attentionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(217,166,46,0.16)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  sessionMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 2,
+  },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',

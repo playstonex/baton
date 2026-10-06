@@ -183,7 +183,7 @@ export default function TerminalScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
   const xtermRef = useRef<XtermWebViewRef>(null);
-  const textInputRef = useRef<TextInput>(null);
+  const textInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const [status, setStatus] = useState('running');
   const [xtermStatus, setXtermStatus] = useState<string>('loading...');
   const [wsConnected, setWsConnected] = useState(wsService.connected);

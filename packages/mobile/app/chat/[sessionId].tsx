@@ -447,7 +447,7 @@ export default function ChatScreen() {
     anchor?: { x: number; y: number; width: number; height: number };
   } | null>(null);
   const flatRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const moreBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const modelPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const thinkPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
@@ -1688,7 +1688,7 @@ export default function ChatScreen() {
                     Load earlier messages
                   </Text>
                 </Pressable>
-              ) : null
+              ) : undefined
             }
           />
           <Animated.View
