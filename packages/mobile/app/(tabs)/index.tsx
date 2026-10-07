@@ -1,6 +1,6 @@
-import { Alert, FlatList, Modal, Pressable, TextInput, View, Text, StyleSheet, ScrollView } from 'react-native';
+import { Alert, FlatList, Pressable, TextInput, View, Text, StyleSheet } from 'react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useFocusEffect, Redirect, type Href } from 'expo-router';
+import { useRouter, useFocusEffect, useNavigation, Redirect, type Href } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -220,6 +220,7 @@ function getGroupedSessions(sessions: RecentSession[], pinnedIds: string[], quer
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const agents = useAgentStore((s) => s.agents);
   const setAgents = useAgentStore((s) => s.setAgents);
   const updateAgentStatus = useAgentStore((s) => s.updateAgentStatus);
@@ -340,6 +341,13 @@ export default function DashboardScreen() {
       fetchAgents();
     }, [fetchAgents]),
   );
+
+  // The directory picker overlays the whole screen; the tab header's native
+  // blur band sits above in-window overlays and swallows the picker's header
+  // buttons — hide the tab header while the picker is open.
+  useEffect(() => {
+    navigation.setOptions?.({ headerShown: !pickerOpen });
+  }, [pickerOpen, navigation]);
 
   // "Active Sessions" means LIVE sessions — stopped ones are dead weight in
   // the list (they're not tappable and pile up across daemon restarts).
@@ -938,14 +946,14 @@ export default function DashboardScreen() {
       />
 
       {/* ── New Session sheet — the launcher, out of the page flow ── */}
-      <Modal
-        visible={sheetOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSheetOpen(false)}
-      >
-        <Pressable style={styles.sheetBackdrop} onPress={() => setSheetOpen(false)}>
-          <Pressable style={styles.sheetCard} onPress={() => {}}>
+      {/* In-window overlay instead of <Modal>: on RN 0.88-rc the Modal/overlay
+          ScrollView swallows touches of its children (they fall through to the
+          backdrop); X outside the ScrollView still worked, so the fix is no
+          ScrollView here + plain in-window layering. */}
+      {sheetOpen && (
+        <View style={styles.sheetHost} pointerEvents="box-none">
+          <Pressable style={styles.sheetBackdrop} onPress={() => setSheetOpen(false)} />
+          <View style={styles.sheetCard}>
             <BlurView
               tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
               intensity={Glass.blur.sheet}
@@ -994,7 +1002,7 @@ export default function DashboardScreen() {
                 </Pressable>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <View>
                 <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Agent</Text>
                 <Pressable
                   onPress={() => setMenuOpen(true)}
@@ -1141,21 +1149,19 @@ export default function DashboardScreen() {
                   loading={loading}
                   variant="primary"
                 />
-              </ScrollView>
+              </View>
             </BlurView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </View>
+      )}
 
       {/* Agent selector */}
-      <Modal
-        visible={menuOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setMenuOpen(false)}
-      >
-        <Pressable style={styles.menuOverlay} onPress={() => setMenuOpen(false)}>
-          <Pressable style={{ marginHorizontal: Spacing.xl }} onPress={() => {}}>
+      {/* Agent selector — in-window overlay, not <Modal> (RN 0.88-rc Modal
+          collapses its subtree out of the hit-test tree, so the rows go dead). */}
+      {menuOpen && (
+        <View style={styles.menuHost} pointerEvents="box-none">
+          <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)} />
+          <View style={styles.menuCard}>
             <GlassCard c={c} blurIntensity={Glass.blur.sheet}>
               <Text
                 style={[
@@ -1209,9 +1215,9 @@ export default function DashboardScreen() {
                 );
               })}
             </GlassCard>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </View>
+      )}
 
       <DirectoryPicker
         visible={pickerOpen}
@@ -1329,15 +1335,26 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
 
+  sheetHost: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   sheetBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheetCard: {
-    maxHeight: '82%',
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
+    position: 'absolute',
+    left: Spacing.md,
+    right: Spacing.md,
+    bottom: Spacing.md,
   },
   sheetBlur: {
     borderRadius: 24,
@@ -1371,10 +1388,24 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
 
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+  menuHost: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
+  },
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  menuCard: {
+    marginHorizontal: Spacing.xl,
   },
   menuRow: {
     flexDirection: 'row',

@@ -2,8 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -89,25 +87,23 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
     );
   }
 
+  // In-window overlay instead of <Modal>: on RN 0.88-rc, touch handling inside a
+  // Modal only reaches the scrolling container — header buttons outside the
+  // FlatList never fire (verified on simulator).
+  if (!visible) return null;
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      onRequestClose={onClose}
-      statusBarTranslucent={Platform.OS === 'android'}
-    >
-      <View style={[styles.modal, { backgroundColor: c.bg, paddingTop: insets.top }]}>
-        <View style={[styles.header, { borderBottomColor: c.cardBorder }]}>
-          <Pressable onPress={onClose} style={styles.headerBtn}>
-            <Text style={[styles.headerBtnText, { color: c.textSecondary }]}>Cancel</Text>
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
-            {currentPath}
-          </Text>
-          <Pressable onPress={() => onSelect(currentPath)} style={styles.headerBtn}>
-            <Text style={[styles.headerBtnText, { color: '#2383e2' }]}>Select</Text>
-          </Pressable>
-        </View>
+    <View style={[styles.modal, { backgroundColor: c.bg, paddingTop: insets.top }]} pointerEvents="box-none">
+      <View style={[styles.header, { borderBottomColor: c.cardBorder }]}>
+        <Pressable onPress={onClose} style={styles.headerBtn} hitSlop={8}>
+          <Text style={[styles.headerBtnText, { color: c.textSecondary }]}>Cancel</Text>
+        </Pressable>
+        <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
+          {currentPath}
+        </Text>
+        <Pressable onPress={() => onSelect(currentPath)} style={styles.headerBtn} hitSlop={8}>
+          <Text style={[styles.headerBtnText, { color: '#2383e2' }]}>Select</Text>
+        </Pressable>
+      </View>
 
         <Pressable
           onPress={goUp}
@@ -147,12 +143,18 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
           />
         )}
       </View>
-    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modal: { flex: 1 },
+  modal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    elevation: 8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
