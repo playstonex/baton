@@ -39,7 +39,9 @@
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone to dictate chat messages."
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
