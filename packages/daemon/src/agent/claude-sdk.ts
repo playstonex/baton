@@ -7,6 +7,7 @@ import type {
   ReasoningEffort,
   AccessMode,
   ServiceTier,
+  PermissionMode,
 } from '@baton/shared';
 import { execSync, execFileSync } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
@@ -54,6 +55,11 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
 
   selectedAccessMode: AccessMode = 'on-request';
   selectedServiceTier: ServiceTier = 'default';
+  selectedPermissionMode: PermissionMode = 'default';
+
+  setPermissionMode(mode: PermissionMode): void {
+    this.selectedPermissionMode = mode;
+  }
 
   private controller: AbortController | null = null;
   private sdkAvailable: boolean | null = null;
@@ -135,20 +141,106 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
       this.controller?.abort();
     };
 
+    if (config.permissionMode) {
+      this.selectedPermissionMode = config.permissionMode;
+    }
+
     const options: Record<string, unknown> = {
       maxTurns: 50,
       // Without this the controller below is a no-op: stop()/abort() never
       // reaches the query and the session keeps running (and showing as
       // "Running") after the user taps Stop.
       abortController: this.controller,
+      cwd: config.projectPath,
     };
     if (this.selectedModel) options.model = this.selectedModel;
-    else options.model = 'claude-sonnet-7-20251119';
     if (this.selectedReasoningEffort) options.effort = this.selectedReasoningEffort;
-    else options.effort = 'medium';
     if (this.selectedThinkingBudget) {
       options.thinking = { budget_tokens: this.selectedThinkingBudget };
     }
+
+    options.canUseTool = async (
+      toolName: string,
+      _input: Record<string, unknown>,
+      opts: { requestId?: string; description?: string } = {},
+    ) => {
+      // 1. YOLO / bypassPermissions: auto-allow without prompt
+      if (
+        this.selectedPermissionMode === 'yolo' ||
+        this.selectedPermissionMode === 'bypassPermissions' ||
+        this.selectedAccessMode === 'full-access'
+      ) {
+        return { behavior: 'allow' };
+      }
+
+      // 2. Read-only / plan: allow inspection tools, block modifications
+      if (this.selectedPermissionMode === 'read-only' || this.selectedPermissionMode === 'plan') {
+        const readOnlyTools = [
+          'Read',
+          'read',
+          'Glob',
+          'glob',
+          'Grep',
+          'grep',
+          'LSP',
+          'WebSearch',
+          'WebFetch',
+        ];
+        if (readOnlyTools.includes(toolName)) {
+          return { behavior: 'allow' };
+        }
+        return {
+          behavior: 'deny',
+          message: 'Read-only plan mode: file edits and command executions are blocked.',
+        };
+      }
+
+      // 3. Safe-YOLO / acceptEdits: auto-allow safe file edits, prompt on shell/system
+      if (
+        this.selectedPermissionMode === 'safe-yolo' ||
+        this.selectedPermissionMode === 'acceptEdits'
+      ) {
+        const safeEditTools = [
+          'Read',
+          'read',
+          'Write',
+          'write',
+          'Edit',
+          'edit',
+          'MultiEdit',
+          'Glob',
+          'glob',
+          'Grep',
+          'grep',
+          'LSP',
+        ];
+        if (safeEditTools.includes(toolName)) {
+          return { behavior: 'allow' };
+        }
+      }
+
+      // 4. Default: request user permission
+      const requestId = opts.requestId || `perm_${Date.now().toString(36)}`;
+      onEvent({
+        type: 'permission_request',
+        requestId,
+        tool: toolName,
+        action: toolName,
+        description: opts.description || `Permission requested for ${toolName}`,
+        timestamp: Date.now(),
+      });
+      onEvent({ type: 'status_change', status: 'waiting_input', timestamp: Date.now() });
+
+      return new Promise<Record<string, unknown>>((resolve) => {
+        this.resolveApproval = (approved: boolean) => {
+          if (approved) {
+            resolve({ behavior: 'allow' });
+          } else {
+            resolve({ behavior: 'deny', message: 'Rejected by user' });
+          }
+        };
+      });
+    };
 
     const queryFn = queryMod as (args: Record<string, unknown>) => AsyncIterable<unknown>;
     const asyncIterable = queryFn({
@@ -199,8 +291,7 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
         const toolInput = (block.input as Record<string, unknown>) ?? {};
 
         if (toolName === 'Bash' || toolName === 'bash') {
-          const command =
-            (toolInput.command as string) ?? (toolInput.description as string) ?? '';
+          const command = (toolInput.command as string) ?? (toolInput.description as string) ?? '';
           onEvent({
             type: 'command_exec',
             command,
@@ -394,7 +485,11 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
 
   async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
     try {
-      execFileSync('git', ['add', '-A'], { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      execFileSync('git', ['add', '-A'], {
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
       // Message flows via stdin (-F -), never into argv — no quoting or
       // option-position concerns at all.
       execFileSync('git', ['commit', '-F', '-'], {

@@ -12,7 +12,15 @@ interface IPty {
 }
 
 type Command =
-  | { type: 'spawn'; command: string; args: string[]; cwd: string; env: [string, string][]; cols: number; rows: number }
+  | {
+      type: 'spawn';
+      command: string;
+      args: string[];
+      cwd: string;
+      env: [string, string][];
+      cols: number;
+      rows: number;
+    }
   | { type: 'write'; data: string }
   | { type: 'resize'; cols: number; rows: number }
   | { type: 'kill'; signal?: string };
@@ -112,7 +120,8 @@ export async function spawnPty(
                   for (const cb of dataCallbacks) cb(event.data);
                   break;
                 case 'exit':
-                  for (const cb of exitCallbacks) cb({ exitCode: event.code, signal: event.signal });
+                  for (const cb of exitCallbacks)
+                    cb({ exitCode: event.code, signal: event.signal });
                   break;
                 case 'error':
                   console.error('Rust PTY error:', event.message);
@@ -152,7 +161,9 @@ export async function spawnPty(
   await readyPromise;
 
   const pty: IPty = {
-    get pid() { return readyPid; },
+    get pid() {
+      return readyPid;
+    },
     kill(signal?: string) {
       sendCommand({ type: 'kill', signal });
     },

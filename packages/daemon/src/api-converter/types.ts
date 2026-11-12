@@ -13,7 +13,12 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   tools?: ChatTool[];
   tool_choice?: 'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
-  response_format?: { type: 'json_object' | 'text' } | { type: 'json_schema'; json_schema: { name: string; schema: Record<string, unknown>; strict?: boolean } };
+  response_format?:
+    | { type: 'json_object' | 'text' }
+    | {
+        type: 'json_schema';
+        json_schema: { name: string; schema: Record<string, unknown>; strict?: boolean };
+      };
   seed?: number;
   stop?: string | string[];
   n?: number;
@@ -101,7 +106,12 @@ export interface ChatStreamChoice {
   delta: {
     role?: 'assistant';
     content?: string;
-    tool_calls?: Array<{ index: number; id?: string; type?: 'function'; function?: { name?: string; arguments?: string } }>;
+    tool_calls?: Array<{
+      index: number;
+      id?: string;
+      type?: 'function';
+      function?: { name?: string; arguments?: string };
+    }>;
   };
   finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null;
 }
@@ -136,7 +146,11 @@ export interface ResponsesApiRequest {
 export type ResponsesInput = string | ResponsesInputItem[];
 
 export type ResponsesInputItem =
-  | { type: 'message'; role: 'user' | 'assistant' | 'system' | 'developer'; content: ResponsesContent[] }
+  | {
+      type: 'message';
+      role: 'user' | 'assistant' | 'system' | 'developer';
+      content: ResponsesContent[];
+    }
   | { type: 'function_call'; call_id: string; name: string; arguments: string }
   | { type: 'function_call_output'; call_id: string; output: string }
   | { type: 'reasoning'; content: ResponsesReasoningContent[]; encrypted_content?: string };

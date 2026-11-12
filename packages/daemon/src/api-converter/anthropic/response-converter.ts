@@ -73,9 +73,7 @@ export function convertAnthropicToResponses(
   };
 }
 
-function mapStatus(
-  stopReason: MessagesResponse['stop_reason'],
-): ResponsesApiResponse['status'] {
+function mapStatus(stopReason: MessagesResponse['stop_reason']): ResponsesApiResponse['status'] {
   switch (stopReason) {
     case 'end_turn':
     case 'tool_use':

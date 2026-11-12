@@ -14,7 +14,11 @@ interface Props {
  * Quiet inline row (Codex-style) — no filled card, just a collapsible
  * "Thought process" line that keeps the transcript visually calm.
  */
-export const ThinkingBlock = React.memo(function ThinkingBlock({ content, colors, isStreaming }: Props) {
+export const ThinkingBlock = React.memo(function ThinkingBlock({
+  content,
+  colors,
+  isStreaming,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => {
@@ -39,9 +43,7 @@ export const ThinkingBlock = React.memo(function ThinkingBlock({ content, colors
         {isStreaming ? 'Thinking' : 'Thought process'}
       </Text>
       {isStreaming && <TypingIndicator colors={colors} />}
-      {expanded && (
-        <Text style={[styles.content, { color: colors.textSecondary }]}>{content}</Text>
-      )}
+      {expanded && <Text style={[styles.content, { color: colors.textSecondary }]}>{content}</Text>}
     </Pressable>
   );
 });

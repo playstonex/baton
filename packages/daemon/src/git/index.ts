@@ -147,7 +147,10 @@ export class GitService {
     // Get default branch from remote
     let defaultBranch = 'main';
     try {
-      const remoteOut = await this.executeGit(projectPath, ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+      const remoteOut = await this.executeGit(projectPath, [
+        'symbolic-ref',
+        'refs/remotes/origin/HEAD',
+      ]);
       if (remoteOut.exitCode === 0) {
         defaultBranch = remoteOut.stdout.split('/').pop() ?? 'main';
       }
@@ -306,7 +309,11 @@ export class GitService {
       case 'git_remote_url':
         return this.remoteUrl(projectPath);
       case 'git_diff':
-        return this.diff(projectPath, payload?.file as string | undefined, payload?.staged as boolean | undefined);
+        return this.diff(
+          projectPath,
+          payload?.file as string | undefined,
+          payload?.staged as boolean | undefined,
+        );
       case 'git_commit_diff':
         return this.commitDiff(projectPath, payload?.hash as string);
       default:

@@ -76,9 +76,7 @@ export function App() {
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-2.5 rounded-sm px-2.5 py-[7px] text-[13px] font-medium transition-colors duration-150 ${
-      isActive
-        ? 'bg-raised text-fg'
-        : 'text-fg-2 hover:bg-raised/60 hover:text-fg'
+      isActive ? 'bg-raised text-fg' : 'text-fg-2 hover:bg-raised/60 hover:text-fg'
     }`;
 
   return (
@@ -151,9 +149,7 @@ export function App() {
               <div className="flex items-center gap-2">
                 <StatusDot status={connected ? 'connected' : 'disconnected'} />
                 <span
-                  className={`text-xs font-medium ${
-                    connected ? 'text-success' : 'text-danger'
-                  }`}
+                  className={`text-xs font-medium ${connected ? 'text-success' : 'text-danger'}`}
                 >
                   {connected ? 'Online' : 'Offline'}
                 </span>

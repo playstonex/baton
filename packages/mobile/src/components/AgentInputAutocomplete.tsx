@@ -11,7 +11,7 @@ import {
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { searchProjectFiles } from '../services/api';
-import { FontFamily, Typography, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
+import { FontFamily, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
 import type { ThemeColors } from './messages';
 
 export interface SlashCommand {
@@ -166,9 +166,7 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: c.isDark
-              ? Glass.opacity.dark.surface
-              : Glass.opacity.light.surface,
+            backgroundColor: c.isDark ? Glass.opacity.dark.surface : Glass.opacity.light.surface,
             borderRadius: CornerRadius.medium,
           },
         ]}
@@ -192,7 +190,9 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
         <Text style={[styles.headerTitle, { color: c.textSecondary }]}>
           {type === 'file' ? 'Insert File Reference (@)' : 'Slash Commands (/)'}
         </Text>
-        {loading && <ActivityIndicator size="small" color={Colors.primary[500]} style={{ marginLeft: 6 }} />}
+        {loading && (
+          <ActivityIndicator size="small" color={Colors.primary[500]} style={{ marginLeft: 6 }} />
+        )}
       </View>
 
       {/* Suggestion list */}
@@ -219,18 +219,11 @@ export const AgentInputAutocomplete: React.FC<AgentInputAutocompleteProps> = ({
                 },
               ]}
             >
-              <View
-                style={[
-                  styles.iconWrap,
-                  { backgroundColor: Colors.primary[500] + '18' },
-                ]}
-              >
+              <View style={[styles.iconWrap, { backgroundColor: Colors.primary[500] + '18' }]}>
                 <Ionicons name={cmd.icon as any} size={15} color={Colors.primary[500]} />
               </View>
               <View style={styles.itemTextCol}>
-                <Text style={[styles.cmdName, { color: Colors.primary[500] }]}>
-                  {cmd.name}
-                </Text>
+                <Text style={[styles.cmdName, { color: Colors.primary[500] }]}>{cmd.name}</Text>
                 <Text style={[styles.cmdDesc, { color: c.textTertiary }]} numberOfLines={1}>
                   {cmd.description}
                 </Text>

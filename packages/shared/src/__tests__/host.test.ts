@@ -9,7 +9,9 @@ import {
   type HostConnection,
 } from '../host/index.js';
 
-function tcpConn(overrides: Partial<Extract<HostConnection, { type: 'directTcp' }>> = {}): HostConnection {
+function tcpConn(
+  overrides: Partial<Extract<HostConnection, { type: 'directTcp' }>> = {},
+): HostConnection {
   return { id: 'c1', type: 'directTcp', host: '192.168.1.4', port: 3210, ...overrides };
 }
 
@@ -105,15 +107,11 @@ describe('validateHostProfile', () => {
 
   it('flags a preferredConnectionId pointing outside the list', () => {
     const issues = validateHostProfile(profile({ preferredConnectionId: 'nope' }));
-    expect(
-      issues.some((i) => i.field === 'preferredConnectionId'),
-    ).toBe(true);
+    expect(issues.some((i) => i.field === 'preferredConnectionId')).toBe(true);
   });
 
   it('validates port ranges on directTcp', () => {
-    const issues = validateHostProfile(
-      profile({ connections: [tcpConn({ port: 99999 })] }),
-    );
+    const issues = validateHostProfile(profile({ connections: [tcpConn({ port: 99999 })] }));
     expect(issues.some((i) => i.message.includes('port'))).toBe(true);
   });
 });

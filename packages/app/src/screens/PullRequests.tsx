@@ -1,13 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { PullRequestSummary, PullRequestCheck, PullRequestCheckStatus } from '@baton/shared';
-import {
-  Card,
-  Button,
-  Input,
-  StatusAlert,
-  LoadingSpinner,
-  EmptyState,
-} from '../lib/ui.js';
+import { Card, Button, Input, StatusAlert, LoadingSpinner, EmptyState } from '../lib/ui.js';
 import {
   IconGitBranch,
   IconExternalLink,
@@ -279,14 +272,16 @@ function PullRequestRow({
       {expanded && (
         <div className="border-t border-line-soft bg-canvas px-5 py-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted">
-              Checks
-            </span>
+            <span className="text-xs font-semibold text-muted">Checks</span>
             <Button
               size="sm"
               variant="secondary"
               disabled={checkingOut || !canCheckout}
-              title={canCheckout ? 'Fetch this PR into the local project path' : 'Set a local project path first'}
+              title={
+                canCheckout
+                  ? 'Fetch this PR into the local project path'
+                  : 'Set a local project path first'
+              }
               onClick={onCheckout}
             >
               {checkingOut ? (
@@ -325,10 +320,7 @@ function PullRequestRow({
   );
 }
 
-const CHECK_STYLES: Record<
-  PullRequestCheckStatus,
-  { bg: string; text: string; label: string }
-> = {
+const CHECK_STYLES: Record<PullRequestCheckStatus, { bg: string; text: string; label: string }> = {
   success: { bg: 'bg-success-soft', text: 'text-success', label: 'Passed' },
   failure: { bg: 'bg-danger-soft', text: 'text-danger', label: 'Failed' },
   pending: { bg: 'bg-warn-soft', text: 'text-warn', label: 'Pending' },
@@ -347,13 +339,13 @@ function CheckRow({ check }: { check: PullRequestCheck }) {
 
   return (
     <div className="flex items-center gap-3 rounded-sm border border-line-soft bg-surface px-3 py-2">
-      <span className={`flex h-5 w-5 items-center justify-center rounded-sm ${style.bg} ${style.text}`}>
+      <span
+        className={`flex h-5 w-5 items-center justify-center rounded-sm ${style.bg} ${style.text}`}
+      >
         <Icon className={`h-3 w-3 ${check.status === 'pending' ? 'animate-spin' : ''}`} />
       </span>
       <span className="min-w-0 flex-1 truncate text-[13px] text-fg-2">{check.name}</span>
-      {check.workflow && (
-        <span className="shrink-0 text-[11px] text-meta">{check.workflow}</span>
-      )}
+      {check.workflow && <span className="shrink-0 text-[11px] text-meta">{check.workflow}</span>}
       <span className={`shrink-0 text-[11px] font-medium ${style.text}`}>{style.label}</span>
       {check.url && (
         <a

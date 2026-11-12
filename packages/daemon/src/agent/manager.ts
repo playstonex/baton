@@ -8,6 +8,7 @@ import type {
   ReasoningEffort,
   AccessMode,
   ServiceTier,
+  PermissionMode,
 } from '@baton/shared';
 import { VALID_TRANSITIONS, generateSessionId, statusDetailFromState } from '@baton/shared';
 import type {
@@ -266,7 +267,8 @@ export class AgentManager {
     } else if (event.type === 'tool_use') {
       managed.lastTool = event.tool;
     } else if (event.type === 'permission_request') {
-      managed.lastPrompt = [event.tool, event.description].filter(Boolean).join(': ') || 'permission';
+      managed.lastPrompt =
+        [event.tool, event.description].filter(Boolean).join(': ') || 'permission';
     } else if (event.type === 'user_input_prompt') {
       const q = event.questions?.[0];
       if (q) managed.lastPrompt = q.question || q.header;
@@ -500,7 +502,9 @@ export class AgentManager {
       rows,
     });
 
-    console.log(`[AGENT] Started ${id.slice(0, 8)} type=${config.type} pid=${pty.pid} cwd=${spawnConfig.cwd}`);
+    console.log(
+      `[AGENT] Started ${id.slice(0, 8)} type=${config.type} pid=${pty.pid} cwd=${spawnConfig.cwd}`,
+    );
 
     const agentProcess: AgentProcess = {
       id,
@@ -510,6 +514,7 @@ export class AgentManager {
       pid: pty.pid,
       startedAt: new Date().toISOString(),
       mode: 'pty',
+      permissionMode: config.permissionMode ?? 'default',
     };
 
     const managed: ManagedAgent = {
@@ -566,7 +571,9 @@ export class AgentManager {
       }
 
       if (!managed.firstOutputReceived) {
-        console.log(`[PTY] First output for ${id.slice(0, 8)} (${data.length}b) | rawCallbacks: ${managed.rawCallbacks.size}`);
+        console.log(
+          `[PTY] First output for ${id.slice(0, 8)} (${data.length}b) | rawCallbacks: ${managed.rawCallbacks.size}`,
+        );
         managed.firstOutputReceived = true;
         if (managed.state.status === 'initializing') {
           this.transition(id, 'running');
@@ -690,6 +697,7 @@ export class AgentManager {
       status: 'starting',
       startedAt: new Date().toISOString(),
       mode: 'sdk',
+      permissionMode: config.permissionMode ?? 'default',
     };
 
     const managed: ManagedAgent = {
@@ -725,50 +733,50 @@ export class AgentManager {
     let stop: () => Promise<void>;
     try {
       ({ write, stop } = await sdkAdapter.startSession(config, (event: ParsedEvent) => {
-      managed.eventHistory.push(event);
-      if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
-        managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
-      }
-      this.sessionStore.appendEvent(id, event);
-
-      if (managed.state.status === 'initializing') {
-        this.transition(id, 'running');
-      } else if (event.type === 'status_change') {
-        // Mirror adapter-reported status into the daemon's canonical state so
-        // /api/agents, agent_list and attach-time status_update tell the
-        // truth. Without this every SDK session stayed 'running' forever.
-        // Deliberately not transition(): the raw event is already recorded
-        // and broadcast below — going through the state machine here would
-        // duplicate it, and adapters may legitimately report sequences the
-        // map rejects (events racing a stop()).
-        this.syncStatus(id, event.status);
-      }
-
-      this.trackEventContext(managed, event);
-      if (event.type === 'tool_use' && managed.state.status === 'running') {
-        managed.state = {
-          ...managed.state,
-          toolCount: managed.state.toolCount + 1,
-        };
-      }
-
-      if (event.type === 'tool_use') {
-        this.pushTimeline(managed, 'tool_use', `Tool: ${event.tool}`);
-      } else if (event.type === 'error') {
-        this.pushTimeline(managed, 'error', event.message);
-      } else if (event.type === 'chat_message' || event.type === 'raw_output') {
-        // Mirror assistant text into displayHistory so terminal reconnection
-        // shows the conversation even for SDK-only agents.
-        managed.displayHistory.push(event.content);
-        if (managed.displayHistory.length > MAX_OUTPUT_HISTORY) {
-          managed.displayHistory = managed.displayHistory.slice(-OUTPUT_TRIM_TO);
+        managed.eventHistory.push(event);
+        if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
+          managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
         }
-        this.sessionStore.appendOutput(id, event.content);
-        this.touch(id);
-        for (const cb of managed.rawCallbacks) cb(event.content, id);
-      }
+        this.sessionStore.appendEvent(id, event);
 
-      for (const cb of managed.eventCallbacks) cb(event, id);
+        if (managed.state.status === 'initializing') {
+          this.transition(id, 'running');
+        } else if (event.type === 'status_change') {
+          // Mirror adapter-reported status into the daemon's canonical state so
+          // /api/agents, agent_list and attach-time status_update tell the
+          // truth. Without this every SDK session stayed 'running' forever.
+          // Deliberately not transition(): the raw event is already recorded
+          // and broadcast below — going through the state machine here would
+          // duplicate it, and adapters may legitimately report sequences the
+          // map rejects (events racing a stop()).
+          this.syncStatus(id, event.status);
+        }
+
+        this.trackEventContext(managed, event);
+        if (event.type === 'tool_use' && managed.state.status === 'running') {
+          managed.state = {
+            ...managed.state,
+            toolCount: managed.state.toolCount + 1,
+          };
+        }
+
+        if (event.type === 'tool_use') {
+          this.pushTimeline(managed, 'tool_use', `Tool: ${event.tool}`);
+        } else if (event.type === 'error') {
+          this.pushTimeline(managed, 'error', event.message);
+        } else if (event.type === 'chat_message' || event.type === 'raw_output') {
+          // Mirror assistant text into displayHistory so terminal reconnection
+          // shows the conversation even for SDK-only agents.
+          managed.displayHistory.push(event.content);
+          if (managed.displayHistory.length > MAX_OUTPUT_HISTORY) {
+            managed.displayHistory = managed.displayHistory.slice(-OUTPUT_TRIM_TO);
+          }
+          this.sessionStore.appendOutput(id, event.content);
+          this.touch(id);
+          for (const cb of managed.rawCallbacks) cb(event.content, id);
+        }
+
+        for (const cb of managed.eventCallbacks) cb(event, id);
       }));
     } catch (err) {
       // startSession threw (e.g. spawn failed / backend server never came
@@ -863,8 +871,7 @@ export class AgentManager {
     }
 
     const row = this.sessionStore.getSession(id);
-    const providerSessionId =
-      managed.providerSessionId ?? row?.provider_session_id ?? undefined;
+    const providerSessionId = managed.providerSessionId ?? row?.provider_session_id ?? undefined;
 
     const config: AgentConfig = {
       type: managed.process.type,
@@ -920,13 +927,15 @@ export class AgentManager {
    * Persistent session directory (live + past), paged, newest-activity first.
    * Live agents' current status/title win over the stored row.
    */
-  listSessions(query: {
-    limit?: number;
-    offset?: number;
-    includeArchived?: boolean;
-    archivedOnly?: boolean;
-    projectPath?: string;
-  } = {}): { sessions: SessionSummary[]; total: number; hasMore: boolean } {
+  listSessions(
+    query: {
+      limit?: number;
+      offset?: number;
+      includeArchived?: boolean;
+      archivedOnly?: boolean;
+      projectPath?: string;
+    } = {},
+  ): { sessions: SessionSummary[]; total: number; hasMore: boolean } {
     const result = this.sessionStore.list(query);
     for (const summary of result.sessions) {
       const managed = this.agents.get(summary.id);
@@ -987,6 +996,24 @@ export class AgentManager {
     return managed?.process;
   }
 
+  setPermissionMode(id: string, mode: PermissionMode): void {
+    const managed = this.agents.get(id);
+    if (!managed) return;
+    managed.process.permissionMode = mode;
+    if (
+      managed.sdkAdapter &&
+      'setPermissionMode' in managed.sdkAdapter &&
+      typeof (managed.sdkAdapter as { setPermissionMode?: (m: PermissionMode) => void })
+        .setPermissionMode === 'function'
+    ) {
+      (managed.sdkAdapter as { setPermissionMode: (m: PermissionMode) => void }).setPermissionMode(
+        mode,
+      );
+    }
+    this.touch(id, true);
+    this.notifyChanged();
+  }
+
   getState(id: string): AgentState | undefined {
     return this.agents.get(id)?.state;
   }
@@ -1040,7 +1067,22 @@ export class AgentManager {
           'Image attachments are only supported in SDK chat sessions — this one runs over a terminal',
         );
       }
-      const transformed = managed.adapter?.transformInput(content) ?? (content + '\n');
+      const event: ParsedEvent = {
+        type: 'chat_message',
+        role: 'user',
+        content,
+        timestamp: Date.now(),
+      };
+      managed.eventHistory.push(event);
+      if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
+        managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
+      }
+      this.sessionStore.appendEvent(id, event);
+      for (const cb of managed.eventCallbacks) {
+        cb(event, id);
+      }
+
+      const transformed = managed.adapter?.transformInput(content) ?? content + '\n';
       managed.pty.write(transformed);
     } else {
       throw new Error(`Agent ${id} has no active session`);
@@ -1108,14 +1150,22 @@ export class AgentManager {
 
   async approve(id: string, reason?: string): Promise<void> {
     const managed = this.agents.get(id);
-    if (!managed?.sdkAdapter?.approve) return;
-    await managed.sdkAdapter.approve(reason);
+    if (!managed) return;
+    if (managed.sdkAdapter?.approve) {
+      await managed.sdkAdapter.approve(reason);
+    } else if (managed.pty) {
+      managed.pty.write('y\n');
+    }
   }
 
   async reject(id: string, reason?: string): Promise<void> {
     const managed = this.agents.get(id);
-    if (!managed?.sdkAdapter?.reject) return;
-    await managed.sdkAdapter.reject(reason);
+    if (!managed) return;
+    if (managed.sdkAdapter?.reject) {
+      await managed.sdkAdapter.reject(reason);
+    } else if (managed.pty) {
+      managed.pty.write('n\n');
+    }
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -1272,14 +1322,17 @@ export class AgentManager {
   setReasoningEffort(id: string, effort: ReasoningEffort): void {
     const adapter = this.getAdapterWithModels(id);
     if (adapter && 'selectedReasoningEffort' in adapter) {
-      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort = effort;
+      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort =
+        effort;
     }
   }
 
   setThinkingConfig(id: string, config: ThinkingConfig): void {
     const adapter = this.getAdapterWithModels(id);
     if (adapter && 'setThinkingConfig' in adapter) {
-      (adapter as unknown as { setThinkingConfig: (c: ThinkingConfig) => void }).setThinkingConfig(config);
+      (adapter as unknown as { setThinkingConfig: (c: ThinkingConfig) => void }).setThinkingConfig(
+        config,
+      );
     } else if (adapter && 'selectedReasoningEffort' in adapter) {
       // Fallback: map to legacy effort if adapter doesn't support ThinkingConfig
       const effort: ReasoningEffort =
@@ -1296,7 +1349,8 @@ export class AgentManager {
                   : config.mode === 'budget' && config.budget
                     ? 'low'
                     : 'medium';
-      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort = effort;
+      (adapter as unknown as { selectedReasoningEffort: ReasoningEffort }).selectedReasoningEffort =
+        effort;
     }
   }
 
@@ -1322,7 +1376,9 @@ export class AgentManager {
     const sa = managed.sdkAdapter as unknown as Record<string, unknown>;
     if ('listGitBranches' in sa && typeof sa.listGitBranches === 'function') {
       return (
-        sa as unknown as { listGitBranches: () => Promise<{ branches: string[]; currentBranch: string }> }
+        sa as unknown as {
+          listGitBranches: () => Promise<{ branches: string[]; currentBranch: string }>;
+        }
       ).listGitBranches();
     }
     return { branches: [], currentBranch: '' };
@@ -1413,13 +1469,19 @@ export class AgentManager {
     if (managed.sdkAdapter && typeof managed.sdkAdapter === 'object') {
       const sa = managed.sdkAdapter as unknown as Record<string, unknown>;
       if ('selectedModel' in sa) {
-        return sa as unknown as { selectedModel: string | null; listModels?: () => Promise<string[]> | string[] };
+        return sa as unknown as {
+          selectedModel: string | null;
+          listModels?: () => Promise<string[]> | string[];
+        };
       }
     }
 
     const adapter = managed.adapter as Record<string, unknown> | null;
     if (adapter && 'selectedModel' in adapter) {
-      return adapter as unknown as { selectedModel: string | null; listModels?: () => Promise<string[]> | string[] };
+      return adapter as unknown as {
+        selectedModel: string | null;
+        listModels?: () => Promise<string[]> | string[];
+      };
     }
     return null;
   }

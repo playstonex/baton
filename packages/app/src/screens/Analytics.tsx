@@ -65,7 +65,12 @@ export function AnalyticsScreen() {
       <PageHeader title="Analytics" description="Agent performance metrics and health monitoring" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Health score" value={health?.score ?? '—'} suffix="/100" valueClassName={scoreColor} />
+        <MetricCard
+          label="Health score"
+          value={health?.score ?? '—'}
+          suffix="/100"
+          valueClassName={scoreColor}
+        />
         <MetricCard label="Success rate" value={health?.successRate ?? '—'} suffix="%" />
         <MetricCard label="Avg latency" value={health?.avgLatencyMs ?? '—'} suffix="ms" />
         <MetricCard
@@ -116,7 +121,9 @@ export function AnalyticsScreen() {
                         style={{ height: `${(h.toolCalls / h.totalEvents) * 100}%` }}
                       />
                     </div>
-                    <span className="mt-1 font-mono text-[9px] tabular-nums text-meta">{h.hour.slice(-5)}</span>
+                    <span className="mt-1 font-mono text-[9px] tabular-nums text-meta">
+                      {h.hour.slice(-5)}
+                    </span>
                     <div className="pointer-events-none absolute -top-16 left-1/2 z-10 -translate-x-1/2 rounded-sm border border-line bg-surface px-2.5 py-1.5 font-mono text-[10px] text-fg-2 opacity-0 shadow-[var(--shadow-popover)] transition-opacity duration-150 group-hover:opacity-100">
                       <div>{h.totalEvents} events</div>
                       <div>{h.toolCalls} tools</div>

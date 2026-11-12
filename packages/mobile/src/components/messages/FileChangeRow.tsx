@@ -33,7 +33,12 @@ function parseDiffCounts(diff: string): { added: number; removed: number } | nul
   return { added, removed };
 }
 
-export const FileChangeRow = React.memo(function FileChangeRow({ path, changeType, diff, colors: _colors }: Props) {
+export const FileChangeRow = React.memo(function FileChangeRow({
+  path,
+  changeType,
+  diff,
+  colors: _colors,
+}: Props) {
   const color = CHANGE_COLORS[changeType] ?? Colors.warning[400];
   const label = CHANGE_LABELS[changeType] ?? changeType;
   const counts = diff ? parseDiffCounts(diff) : null;
@@ -47,8 +52,7 @@ export const FileChangeRow = React.memo(function FileChangeRow({ path, changeTyp
       </Text>
       {counts && (
         <Text style={styles.counts}>
-          <Text style={{ color: Colors.success[400] }}>+{counts.added}</Text>
-          {' '}
+          <Text style={{ color: Colors.success[400] }}>+{counts.added}</Text>{' '}
           <Text style={{ color: Colors.danger[400] }}>-{counts.removed}</Text>
         </Text>
       )}

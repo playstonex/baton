@@ -330,7 +330,15 @@ export function GlassDivider({ c }: { c: ThemeColors }) {
  * Skeleton block for async list content — matches the glass surface so
  * loading states keep the layout shape instead of collapsing into a spinner.
  */
-export function GlassSkeleton({ c, height = 56, radius = 14 }: { c: ThemeColors; height?: number; radius?: number }) {
+export function GlassSkeleton({
+  c,
+  height = 56,
+  radius = 14,
+}: {
+  c: ThemeColors;
+  height?: number;
+  radius?: number;
+}) {
   return (
     <View
       style={[

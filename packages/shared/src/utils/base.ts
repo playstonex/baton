@@ -6,9 +6,11 @@ let _randomUUID: (() => string) | null = null;
 
 // Eagerly init Node.js crypto
 if (typeof process !== 'undefined' && process.versions?.node) {
-  import('node:crypto').then((mod) => {
-    _randomUUID = mod.randomUUID;
-  }).catch(() => {});
+  import('node:crypto')
+    .then((mod) => {
+      _randomUUID = mod.randomUUID;
+    })
+    .catch(() => {});
 }
 
 function randomUUID(): string {

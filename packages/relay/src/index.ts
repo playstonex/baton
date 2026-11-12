@@ -71,7 +71,11 @@ export class RelayServer {
           return Response.json(result);
         }
 
-        if (url.pathname === '/ws' || url.protocol === 'ws:' || req.headers.get('upgrade') === 'websocket') {
+        if (
+          url.pathname === '/ws' ||
+          url.protocol === 'ws:' ||
+          req.headers.get('upgrade') === 'websocket'
+        ) {
           server.upgrade(req, { data: { id: randomUUID() } });
           return new Response(null, { status: 101 });
         }
@@ -316,7 +320,12 @@ export class RelayServer {
 
       for (const client of this.clients.values()) {
         if (client.hostId === host.hostId && client.ws.readyState === OPEN) {
-          if (host.encryptionEnabled && client.encryptionEnabled && host.sharedKey && client.sharedKey) {
+          if (
+            host.encryptionEnabled &&
+            client.encryptionEnabled &&
+            host.sharedKey &&
+            client.sharedKey
+          ) {
             const encrypted = this.encryptPayload(msg, host.sharedKey);
             client.ws.send(JSON.stringify({ type: 'encrypted', payload: encrypted }));
           } else {
@@ -333,7 +342,12 @@ export class RelayServer {
       const hostConn = this.hosts.get(client.hostId);
 
       if (hostConn?.ws.readyState === OPEN) {
-        if (client.encryptionEnabled && hostConn.encryptionEnabled && client.sharedKey && hostConn.sharedKey) {
+        if (
+          client.encryptionEnabled &&
+          hostConn.encryptionEnabled &&
+          client.sharedKey &&
+          hostConn.sharedKey
+        ) {
           const encrypted = this.encryptPayload(msg, client.sharedKey);
           hostConn.ws.send(JSON.stringify({ type: 'encrypted', payload: encrypted }));
         } else {

@@ -2,8 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { ForgeRegistry } from '../forge/registry.js';
 import type { ForgeService } from '../forge/service.js';
 import { parseRepoRef, createDefaultForgeRegistry } from '../forge/index.js';
-import { GitHubForgeService, githubAdapter, type GhRunner, type GhResult } from '../forge/github/service.js';
-import { GitLabForgeService, gitlabAdapter, type GlabRunner, type GlabResult } from '../forge/gitlab/service.js';
+import {
+  GitHubForgeService,
+  githubAdapter,
+  type GhRunner,
+  type GhResult,
+} from '../forge/github/service.js';
+import {
+  GitLabForgeService,
+  gitlabAdapter,
+  type GlabRunner,
+  type GlabResult,
+} from '../forge/gitlab/service.js';
 import { GiteaForgeService, type TeaRunner, type TeaResult } from '../forge/gitea/service.js';
 import { checkoutPullRequest, type GitRunner, type GitRunResult } from '../forge/checkout.js';
 import type { ForgeRepoRef, PullRequestCheckoutTarget } from '@baton/shared';
@@ -27,15 +37,24 @@ const stubService = (kind: string): ForgeService =>
 describe('ForgeRegistry.matchHost', () => {
   it('returns the single matching forge', () => {
     const r = new ForgeRegistry();
-    r.register('github', { createService: () => stubService('github'), matchesHost: (h) => h === 'github.com' });
-    r.register('gitlab', { createService: () => stubService('gitlab'), matchesHost: (h) => h === 'gitlab.com' });
+    r.register('github', {
+      createService: () => stubService('github'),
+      matchesHost: (h) => h === 'github.com',
+    });
+    r.register('gitlab', {
+      createService: () => stubService('gitlab'),
+      matchesHost: (h) => h === 'gitlab.com',
+    });
     expect(r.matchHost('github.com')).toBe('github');
     expect(r.matchHost('gitlab.com')).toBe('gitlab');
   });
 
   it('returns null when no adapter matches', () => {
     const r = new ForgeRegistry();
-    r.register('github', { createService: () => stubService('github'), matchesHost: (h) => h === 'github.com' });
+    r.register('github', {
+      createService: () => stubService('github'),
+      matchesHost: (h) => h === 'github.com',
+    });
     expect(r.matchHost('example.com')).toBeNull();
   });
 
@@ -333,7 +352,7 @@ describe('checkoutPullRequest', () => {
 
   it('throws with git stderr when the fetch fails', async () => {
     const { run } = makeGitRunner({
-      fetch: { stdout: '', stderr: 'couldn\'t find remote ref', exitCode: 1 },
+      fetch: { stdout: '', stderr: "couldn't find remote ref", exitCode: 1 },
     });
     await expect(checkoutPullRequest('/tmp/x', sameRepoTarget, run)).rejects.toThrow('remote ref');
   });
@@ -341,7 +360,8 @@ describe('checkoutPullRequest', () => {
 
 // ── GitLab (glab) ──
 function makeGlabRunner(map: Record<string, GlabResult>): GlabRunner {
-  return async (args) => map[args.slice(0, 2).join(' ')] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
+  return async (args) =>
+    map[args.slice(0, 2).join(' ')] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
 }
 
 describe('GitLabForgeService', () => {
@@ -414,7 +434,8 @@ describe('gitlabAdapter', () => {
 
 // ── Gitea (tea) ──
 function makeTeaRunner(map: Record<string, TeaResult>): TeaRunner {
-  return async (args) => map[args.slice(0, 2).join(' ')] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
+  return async (args) =>
+    map[args.slice(0, 2).join(' ')] ?? { stdout: '', stderr: 'no stub', exitCode: 1 };
 }
 
 describe('GiteaForgeService', () => {

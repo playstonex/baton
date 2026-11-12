@@ -28,6 +28,13 @@ let msgCounter = 0;
  * the lifetime of a long agent session. */
 const MAX_MESSAGES = 800;
 
+const ANSI_ESCAPE =
+  /\u001B\[[0-9;?]*[ -/]*[@-~]|\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)|\u001B[@-_Z\\-_]|\r(?!\n)|\u0008/g;
+
+function stripAnsiCodes(text: string): string {
+  return text.replace(ANSI_ESCAPE, '');
+}
+
 function push(messages: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
   const combined = [...messages, ...next];
   return combined.length > MAX_MESSAGES ? combined.slice(-MAX_MESSAGES) : combined;
@@ -62,25 +69,32 @@ export const useChatStore = create<ChatState>()((set) => ({
         }
         return {
           messages: push(state.messages, [
-            { id, role: event.role, content: event.content, timestamp: ts, eventType: 'chat_message' },
+            {
+              id,
+              role: event.role,
+              content: event.content,
+              timestamp: ts,
+              eventType: 'chat_message',
+            },
           ]),
         };
       }
 
       if (event.type === 'raw_output') {
-        if (!event.content?.trim()) return state;
+        const cleanContent = stripAnsiCodes(event.content);
+        if (!cleanContent.trim()) return state;
         const messages = [...state.messages];
         const last = messages[messages.length - 1];
         if (last?.eventType === 'raw_output') {
           messages[messages.length - 1] = {
             ...last,
-            content: last.content + event.content,
+            content: last.content + cleanContent,
           };
         } else {
           messages.push({
             id: `msg-${++msgCounter}`,
             role: 'assistant',
-            content: event.content,
+            content: cleanContent,
             timestamp: ts,
             eventType: 'raw_output',
           });
@@ -90,20 +104,108 @@ export const useChatStore = create<ChatState>()((set) => ({
         };
       }
 
-      if (event.type === 'waiting_approval') {
+      if (event.type === 'waiting_approval' || event.type === 'permission_request') {
         const meta = (event as ParsedEvent & { meta?: Record<string, unknown> }).meta;
-        const toolName = (meta?.toolName ?? 'unknown') as string;
-        const detail = (meta?.detail ?? '') as string;
+        const toolName =
+          event.type === 'permission_request'
+            ? event.tool || event.action || 'action'
+            : ((meta?.toolName ?? 'action') as string);
+        const detail =
+          event.type === 'permission_request'
+            ? event.description || ''
+            : ((meta?.detail ?? '') as string);
         return {
           pendingApproval: true,
           approvalDetail: { toolName, detail },
-          messages: push(state.messages, [{
-            id,
-            role: 'system' as const,
-            content: `Approval required: ${toolName}${detail ? ` — ${detail}` : ''}`,
-            timestamp: ts,
-            eventType: 'waiting_approval',
-          }]),
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system' as const,
+              content: `Approval required: ${toolName}${detail ? ` — ${detail}` : ''}`,
+              timestamp: ts,
+              eventType: 'waiting_approval',
+            },
+          ]),
+        };
+      }
+
+      if (event.type === 'permission_response') {
+        return {
+          pendingApproval: false,
+          approvalDetail: null,
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system' as const,
+              content: event.approved ? 'Action approved' : 'Action rejected',
+              timestamp: ts,
+              eventType: 'permission_response',
+            },
+          ]),
+        };
+      }
+
+      if (event.type === 'user_input_prompt') {
+        const questions = event.questions ?? [];
+        const content = questions
+          .map((q) => `${q.header ? `[${q.header}] ` : ''}${q.question}`)
+          .join('\n');
+        return {
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'assistant' as const,
+              content: content || 'Question from agent',
+              timestamp: ts,
+              eventType: 'user_input_prompt',
+            },
+          ]),
+        };
+      }
+
+      if (event.type === 'tool_call_start') {
+        const hint = event.description || event.title || '';
+        return {
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system' as const,
+              content: `${event.tool}${hint ? ` — ${hint}` : ''}`,
+              timestamp: ts,
+              eventType: 'tool_call_start',
+              meta: event.args as Record<string, unknown>,
+            },
+          ]),
+        };
+      }
+
+      if (event.type === 'plan') {
+        const summary =
+          event.explanation || event.steps?.map((s) => s.step).join('\n') || 'Plan updated';
+        return {
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system' as const,
+              content: summary,
+              timestamp: ts,
+              eventType: 'plan',
+            },
+          ]),
+        };
+      }
+
+      if (event.type === 'diff') {
+        return {
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system' as const,
+              content: `Diff: ${event.path || 'changes'}`,
+              timestamp: ts,
+              eventType: 'diff',
+            },
+          ]),
         };
       }
 
@@ -113,33 +215,62 @@ export const useChatStore = create<ChatState>()((set) => ({
           return state;
         }
         return {
-          messages: push(state.messages, [{ id, role: 'system', content: 'Thinking...', timestamp: ts, eventType: 'thinking' }]),
+          messages: push(state.messages, [
+            { id, role: 'system', content: 'Thinking...', timestamp: ts, eventType: 'thinking' },
+          ]),
         };
       }
 
       if (event.type === 'tool_use') {
         const fileHint = event.args?.filePath ? ` → ${event.args.filePath}` : '';
         return {
-          messages: push(state.messages, [{ id, role: 'system', content: `${event.tool}${fileHint}`, timestamp: ts, eventType: 'tool_use', meta: event.args as Record<string, unknown> }]),
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system',
+              content: `${event.tool}${fileHint}`,
+              timestamp: ts,
+              eventType: 'tool_use',
+              meta: event.args as Record<string, unknown>,
+            },
+          ]),
         };
       }
 
       if (event.type === 'file_change') {
         const icons: Record<string, string> = { create: '+', modify: '~', delete: '-' };
         return {
-          messages: push(state.messages, [{ id, role: 'system', content: `${icons[event.changeType] ?? '~'} ${event.changeType} ${event.path}`, timestamp: ts, eventType: 'file_change' }]),
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system',
+              content: `${icons[event.changeType] ?? '~'} ${event.changeType} ${event.path}`,
+              timestamp: ts,
+              eventType: 'file_change',
+            },
+          ]),
         };
       }
 
       if (event.type === 'command_exec') {
         return {
-          messages: push(state.messages, [{ id, role: 'system', content: `$ ${event.command}`, timestamp: ts, eventType: 'command_exec' }]),
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system',
+              content: `$ ${event.command}`,
+              timestamp: ts,
+              eventType: 'command_exec',
+            },
+          ]),
         };
       }
 
       if (event.type === 'error') {
         return {
-          messages: push(state.messages, [{ id, role: 'system', content: `${event.message}`, timestamp: ts, eventType: 'error' }]),
+          messages: push(state.messages, [
+            { id, role: 'system', content: `${event.message}`, timestamp: ts, eventType: 'error' },
+          ]),
         };
       }
 
@@ -149,17 +280,25 @@ export const useChatStore = create<ChatState>()((set) => ({
   addUserMessage: (content) =>
     set((state) => ({
       messages: push(state.messages, [
-        { id: `msg-${++msgCounter}`, role: 'user', content, timestamp: Date.now(), eventType: 'chat_message' },
+        {
+          id: `msg-${++msgCounter}`,
+          role: 'user',
+          content,
+          timestamp: Date.now(),
+          eventType: 'chat_message',
+        },
       ]),
     })),
 
-  setStatus: (status) => set((state) => ({
-    agentStatus: status,
-    pendingApproval: status === 'waiting_input' ? state.pendingApproval : false,
-    approvalDetail: status === 'waiting_input' ? state.approvalDetail : null,
-  })),
+  setStatus: (status) =>
+    set((state) => ({
+      agentStatus: status,
+      pendingApproval: status === 'waiting_input' ? state.pendingApproval : false,
+      approvalDetail: status === 'waiting_input' ? state.approvalDetail : null,
+    })),
 
   resolveApproval: () => set({ pendingApproval: false, approvalDetail: null }),
 
-  clear: () => set({ messages: [], agentStatus: 'unknown', pendingApproval: false, approvalDetail: null }),
+  clear: () =>
+    set({ messages: [], agentStatus: 'unknown', pendingApproval: false, approvalDetail: null }),
 }));

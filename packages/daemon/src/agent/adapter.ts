@@ -29,7 +29,10 @@ export function resumeArgs(
 /** Best-effort UUID extraction for provider session ids in TUI output. */
 export function extractUuid(clean: string, label?: string): string | null {
   const pattern = label
-    ? new RegExp(`${label}[^0-9a-f]{0,8}([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`, 'i')
+    ? new RegExp(
+        `${label}[^0-9a-f]{0,8}([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`,
+        'i',
+      )
     : /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
   return clean.match(pattern)?.[1] ?? null;
 }

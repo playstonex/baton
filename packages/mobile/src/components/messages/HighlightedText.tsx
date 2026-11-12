@@ -36,7 +36,10 @@ export function findMatchRanges(query: string, text: string): MatchRange[] {
 }
 
 /** Split text into marked/unmarked segments; bad ranges are clamped/skipped. */
-export function toHighlightSegments(text: string, ranges: readonly MatchRange[]): HighlightSegment[] {
+export function toHighlightSegments(
+  text: string,
+  ranges: readonly MatchRange[],
+): HighlightSegment[] {
   const segments: HighlightSegment[] = [];
   let cursor = 0;
   for (const range of ranges) {

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt, generateNonce } from '@baton/shared/crypto';
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  generateNonce,
+} from '@baton/shared/crypto';
 
 function encryptPayload(msg: Record<string, unknown>, sharedKey: Uint8Array): string {
   const plaintext = new TextEncoder().encode(JSON.stringify(msg));
@@ -37,7 +43,10 @@ describe('Relay E2EE', () => {
 
     let equal = true;
     for (let i = 0; i < 32; i++) {
-      if (hostShared[i] !== clientShared[i]) { equal = false; break; }
+      if (hostShared[i] !== clientShared[i]) {
+        equal = false;
+        break;
+      }
     }
     expect(equal).toBe(true);
   });
@@ -47,7 +56,11 @@ describe('Relay E2EE', () => {
     const client = generateKeyPair();
     const sharedKey = deriveSharedKey(client.publicKey, host.secretKey);
 
-    const original = { type: 'parsed_event', sessionId: 'abc-123', event: { type: 'tool_use', tool: 'Read' } };
+    const original = {
+      type: 'parsed_event',
+      sessionId: 'abc-123',
+      event: { type: 'tool_use', tool: 'Read' },
+    };
     const encrypted = encryptPayload(original, sharedKey);
 
     const relayForwarded = { type: 'encrypted', payload: encrypted };
@@ -85,7 +98,11 @@ describe('Relay E2EE', () => {
 
 describe('Daemon WebSocket Protocol', () => {
   it('formats DaemonMessage correctly', () => {
-    const msg = { type: 'parsed_event' as const, sessionId: 'ses-001', event: { type: 'status_change' as const, status: 'running' as const, timestamp: Date.now() } };
+    const msg = {
+      type: 'parsed_event' as const,
+      sessionId: 'ses-001',
+      event: { type: 'status_change' as const, status: 'running' as const, timestamp: Date.now() },
+    };
     const json = JSON.stringify(msg);
     const parsed = JSON.parse(json);
 
@@ -104,7 +121,11 @@ describe('Daemon WebSocket Protocol', () => {
   });
 
   it('handles control messages', () => {
-    const msg = { type: 'control' as const, action: 'attach_session' as const, sessionId: 'ses-001' };
+    const msg = {
+      type: 'control' as const,
+      action: 'attach_session' as const,
+      sessionId: 'ses-001',
+    };
     const json = JSON.stringify(msg);
     const parsed = JSON.parse(json);
 
@@ -125,7 +146,10 @@ describe('CLI Client', () => {
   });
 
   it('StartAgentRequest defaults mode to pty', () => {
-    const body: { agentType: string; projectPath: string; mode?: string } = { agentType: 'claude-code', projectPath: '/tmp/test' };
+    const body: { agentType: string; projectPath: string; mode?: string } = {
+      agentType: 'claude-code',
+      projectPath: '/tmp/test',
+    };
     const mode = body.mode ?? 'pty';
     expect(mode).toBe('pty');
   });

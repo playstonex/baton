@@ -15,9 +15,15 @@ export interface ForgeService {
   /** Which forge this service implements, e.g. 'github'. */
   readonly kind: string;
 
-  listPullRequests(repo: ForgeRepoRef, opts?: { state?: string; limit?: number }): Promise<PullRequestSummary[]>;
+  listPullRequests(
+    repo: ForgeRepoRef,
+    opts?: { state?: string; limit?: number },
+  ): Promise<PullRequestSummary[]>;
 
-  listIssues(repo: ForgeRepoRef, opts?: { state?: string; limit?: number }): Promise<IssueSummary[]>;
+  listIssues(
+    repo: ForgeRepoRef,
+    opts?: { state?: string; limit?: number },
+  ): Promise<IssueSummary[]>;
 
   getChecks(repo: ForgeRepoRef, prNumber: number): Promise<PullRequestCheck[]>;
 

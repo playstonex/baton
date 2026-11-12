@@ -14,9 +14,7 @@ export const useAgentStore = create<AgentState>((set) => ({
   setAgents: (agents) => set({ agents }),
   updateAgentStatus: (id, status, detail) =>
     set((state) => ({
-      agents: state.agents.map((a) =>
-        a.id === id ? { ...a, status, stateDetail: detail } : a,
-      ),
+      agents: state.agents.map((a) => (a.id === id ? { ...a, status, stateDetail: detail } : a)),
     })),
   addAgent: (agent) => set((state) => ({ agents: [...state.agents, agent] })),
   removeAgent: (id) => set((state) => ({ agents: state.agents.filter((a) => a.id !== id) })),

@@ -37,12 +37,7 @@ export interface IssueSummary {
   authorLogin?: string | null;
 }
 
-export type PullRequestCheckStatus =
-  | 'pending'
-  | 'success'
-  | 'failure'
-  | 'cancelled'
-  | 'skipped';
+export type PullRequestCheckStatus = 'pending' | 'success' | 'failure' | 'cancelled' | 'skipped';
 
 export interface PullRequestCheck {
   name: string;

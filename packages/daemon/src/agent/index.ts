@@ -5,6 +5,7 @@ export { CodexAdapter } from './codex.js';
 export { CodexSdkAdapter, codexSdkAdapter } from './codex-sdk.js';
 export { KiroAdapter } from './kiro.js';
 export { AntigravityAdapter } from './antigravity.js';
+export { AntigravitySdkAdapter, antigravitySdkAdapter } from './antigravity-sdk.js';
 export { PiAdapter } from './pi.js';
 export { OpenCodeAdapter } from './opencode.js';
 export { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
@@ -18,6 +19,7 @@ import { CodexAdapter } from './codex.js';
 import { CodexSdkAdapter, codexSdkAdapter } from './codex-sdk.js';
 import { KiroAdapter } from './kiro.js';
 import { AntigravityAdapter } from './antigravity.js';
+import { AntigravitySdkAdapter, antigravitySdkAdapter } from './antigravity-sdk.js';
 import { PiAdapter } from './pi.js';
 import { OpenCodeAdapter } from './opencode.js';
 import { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
@@ -52,7 +54,7 @@ for (const [type, ctor] of builtinAdapters) {
 // carries per-session state (child process, sessionId, pending callbacks),
 // so a shared singleton would make two concurrent same-type sessions clobber
 // each other. The exported singletons below remain only as cheap
-// availability probes for mode:'auto'. Kiro/Antigravity/Pi are PTY-only —
+// availability probes for mode:'auto'. Kiro/Pi are PTY-only —
 // their CLIs have no structured-IO mode we speak.
 const sdkAdapterFactories: Partial<Record<AgentType, () => SdkAgentAdapter>> = {
   'claude-code-sdk': () => new ClaudeSdkAdapter(),
@@ -60,6 +62,7 @@ const sdkAdapterFactories: Partial<Record<AgentType, () => SdkAgentAdapter>> = {
   'codex-sdk': () => new CodexSdkAdapter(),
   codex: () => new CodexSdkAdapter(),
   opencode: () => new OpenCodeSdkAdapter(),
+  antigravity: () => new AntigravitySdkAdapter(),
 };
 
 export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseAgentAdapter {
@@ -70,9 +73,14 @@ export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseA
   if (mode === 'auto') {
     // Availability probes use the cheap long-lived singletons; the actual
     // adapter handed back is a fresh per-session instance.
-    if (type === 'claude-code' && claudeSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
-    if (type === 'codex' && codexSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
-    if (type === 'opencode' && opencodeSdkAdapter.isSdkAvailable()) return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if (type === 'claude-code' && claudeSdkAdapter.isSdkAvailable())
+      return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if (type === 'codex' && codexSdkAdapter.isSdkAvailable())
+      return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if (type === 'opencode' && opencodeSdkAdapter.isSdkAvailable())
+      return createSdkAdapter(type) as unknown as BaseAgentAdapter;
+    if (type === 'antigravity' && antigravitySdkAdapter.isSdkAvailable())
+      return createSdkAdapter(type) as unknown as BaseAgentAdapter;
   }
   // Registry first (covers built-ins + third-party plugins); fall back to the
   // default provider so a bad type never crashes a spawn request.
@@ -91,6 +99,7 @@ export function isSdkMode(type: AgentType): boolean {
     type === 'codex-sdk' ||
     type === 'codex' ||
     type === 'opencode' ||
+    type === 'antigravity' ||
     type === 'acp'
   );
 }

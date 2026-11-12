@@ -62,7 +62,16 @@ export async function* convertAnthropicStreamToResponses(
           if (evt.type === 'message_start' && evt.message?.usage) {
             totalInputTokens = evt.message.usage.input_tokens ?? 0;
           }
-          yield { type: 'response.created', response: { id: responseId, object: 'response', created_at: createdAt, status: 'in_progress', model } };
+          yield {
+            type: 'response.created',
+            response: {
+              id: responseId,
+              object: 'response',
+              created_at: createdAt,
+              status: 'in_progress',
+              model,
+            },
+          };
         }
 
         switch (evt.type) {
@@ -86,7 +95,13 @@ export async function* convertAnthropicStreamToResponses(
               yield {
                 type: 'response.output_item.added',
                 output_index: evt.index,
-                item: { type: 'function_call', status: 'in_progress', call_id: cb.id, name: cb.name, arguments: '' },
+                item: {
+                  type: 'function_call',
+                  status: 'in_progress',
+                  call_id: cb.id,
+                  name: cb.name,
+                  arguments: '',
+                },
               };
             }
             break;
@@ -95,9 +110,18 @@ export async function* convertAnthropicStreamToResponses(
           case 'content_block_delta': {
             const d = evt.delta;
             if (d.type === 'text_delta') {
-              yield { type: 'response.output_text.delta', output_index: evt.index, content_index: 0, delta: d.text };
+              yield {
+                type: 'response.output_text.delta',
+                output_index: evt.index,
+                content_index: 0,
+                delta: d.text,
+              };
             } else if (d.type === 'input_json_delta') {
-              yield { type: 'response.function_call_arguments.delta', output_index: evt.index, delta: d.partial_json };
+              yield {
+                type: 'response.function_call_arguments.delta',
+                output_index: evt.index,
+                delta: d.partial_json,
+              };
             }
             break;
           }
@@ -107,10 +131,27 @@ export async function* convertAnthropicStreamToResponses(
             blocks.delete(evt.index);
             if (meta?.kind === 'text') {
               yield { type: 'response.output_text.done', output_index: evt.index, text: '' };
-              yield { type: 'response.output_item.done', output_index: evt.index, item: { type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: '' }] } };
+              yield {
+                type: 'response.output_item.done',
+                output_index: evt.index,
+                item: {
+                  type: 'message',
+                  status: 'completed',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: '' }],
+                },
+              };
             } else if (meta?.kind === 'tool_use') {
-              yield { type: 'response.function_call_arguments.done', output_index: evt.index, arguments: '' };
-              yield { type: 'response.output_item.done', output_index: evt.index, item: { type: 'function_call', status: 'completed' } };
+              yield {
+                type: 'response.function_call_arguments.done',
+                output_index: evt.index,
+                arguments: '',
+              };
+              yield {
+                type: 'response.output_item.done',
+                output_index: evt.index,
+                item: { type: 'function_call', status: 'completed' },
+              };
             }
             break;
           }

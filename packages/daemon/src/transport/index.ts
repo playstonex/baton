@@ -10,7 +10,8 @@ import type {
 import { parseClientMessage } from '@baton/shared/protocol';
 import { SeqBuffer } from '@baton/shared/protocol';
 import { createWelcome, DEFAULT_SERVER_FEATURES } from '@baton/shared/protocol';
-import type { AccessMode } from '@baton/shared';
+import type { AccessMode, PermissionMode } from '@baton/shared';
+import { AgentStreamCoalescer } from '../agent/coalescer.js';
 
 type BunWebSocket = import('bun').ServerWebSocket<{ clientId: string }>;
 
@@ -655,6 +656,15 @@ export class Transport {
         } as DaemonMessage);
         break;
       }
+
+      case 'set_permission_mode': {
+        if (!msg.sessionId || !msg.payload) return;
+        const mode = (msg.payload as Record<string, unknown>).mode as PermissionMode | undefined;
+        if (mode) {
+          this.agentManager.setPermissionMode(msg.sessionId, mode);
+        }
+        break;
+      }
     }
   }
 
@@ -746,10 +756,12 @@ export class Transport {
       case 'reject_input': {
         try {
           if (msg.type === 'terminal_input') this.agentManager.write(msg.sessionId, msg.data);
-          else if (msg.type === 'chat_input') this.agentManager.chatWrite(msg.sessionId, msg.content);
+          else if (msg.type === 'chat_input')
+            this.agentManager.chatWrite(msg.sessionId, msg.content);
           else if (msg.type === 'steer_input') this.agentManager.steer(msg.sessionId, msg.content);
           else if (msg.type === 'cancel_turn') void this.agentManager.cancelTurn(msg.sessionId);
-          else if (msg.type === 'approve_input') void this.agentManager.approve(msg.sessionId, msg.reason);
+          else if (msg.type === 'approve_input')
+            void this.agentManager.approve(msg.sessionId, msg.reason);
           else void this.agentManager.reject(msg.sessionId, msg.reason);
         } catch (err) {
           reply({
@@ -876,9 +888,15 @@ export class Transport {
       this.emitSequenced(sid, msg);
     });
 
+    const coalescer = new AgentStreamCoalescer({
+      onFlush: (coalescedEvent) => {
+        const msg: DaemonMessage = { type: 'parsed_event', sessionId, event: coalescedEvent };
+        this.emitSequenced(sessionId, msg);
+      },
+    });
+
     const unsubEvent = this.agentManager.onEvent(sessionId, (event: ParsedEvent, sid) => {
-      const msg: DaemonMessage = { type: 'parsed_event', sessionId: sid, event };
-      this.emitSequenced(sid, msg);
+      coalescer.push(event);
 
       if (event.type === 'status_change') {
         // State was already synced before the event callbacks fired, so the
@@ -898,7 +916,13 @@ export class Transport {
       }
     });
 
-    this.sessionUnsubs.set(sessionId, { unsubRaw, unsubEvent });
+    this.sessionUnsubs.set(sessionId, {
+      unsubRaw,
+      unsubEvent: () => {
+        coalescer.destroy();
+        unsubEvent();
+      },
+    });
   }
 
   /**

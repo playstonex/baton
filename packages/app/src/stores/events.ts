@@ -22,10 +22,7 @@ export const useEventsStore = create<EventsState>()((set) => ({
         event.type === 'file_change'
           ? [...state.fileChanges, event].slice(-500)
           : state.fileChanges,
-      toolUses:
-        event.type === 'tool_use'
-          ? [...state.toolUses, event].slice(-500)
-          : state.toolUses,
+      toolUses: event.type === 'tool_use' ? [...state.toolUses, event].slice(-500) : state.toolUses,
     })),
   clearEvents: () => set({ events: [], fileChanges: [], toolUses: [] }),
 }));

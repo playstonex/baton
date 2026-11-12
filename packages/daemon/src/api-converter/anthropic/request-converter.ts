@@ -38,7 +38,9 @@ export function convertResponsesToAnthropic(req: ResponsesApiRequest): MessagesR
   // types (web_search, namespace, …) lack a name and would produce malformed
   // tool entries. Filter to function tools only.
   if (req.tools && req.tools.length > 0) {
-    const functionTools = req.tools.filter((t) => t.type === 'function' && typeof t.name === 'string');
+    const functionTools = req.tools.filter(
+      (t) => t.type === 'function' && typeof t.name === 'string',
+    );
     if (functionTools.length > 0) {
       result.tools = functionTools.map(convertTool);
     }
@@ -68,7 +70,12 @@ function convertInput(
     const mapped = convertInputItem(item);
     for (const msg of mapped) {
       const last = messages[messages.length - 1];
-      if (last && last.role === msg.role && Array.isArray(last.content) && Array.isArray(msg.content)) {
+      if (
+        last &&
+        last.role === msg.role &&
+        Array.isArray(last.content) &&
+        Array.isArray(msg.content)
+      ) {
         // Merge into the previous message of the same role.
         (last.content as AnthropicContentBlock[]).push(...(msg.content as AnthropicContentBlock[]));
       } else {
@@ -153,7 +160,9 @@ function safeParseJson(s: string): unknown {
 }
 
 /** Flatten a Responses tool into Anthropic's input_schema shape. */
-function convertTool(tool: ResponsesApiRequest['tools'] extends (infer T)[] | undefined ? T : never): AnthropicTool {
+function convertTool(
+  tool: ResponsesApiRequest['tools'] extends (infer T)[] | undefined ? T : never,
+): AnthropicTool {
   return {
     name: tool.name,
     description: tool.description,
@@ -162,9 +171,7 @@ function convertTool(tool: ResponsesApiRequest['tools'] extends (infer T)[] | un
 }
 
 /** Map Responses tool_choice to Anthropic tool_choice. */
-function convertToolChoice(
-  choice: ResponsesApiRequest['tool_choice'],
-): AnthropicToolChoice {
+function convertToolChoice(choice: ResponsesApiRequest['tool_choice']): AnthropicToolChoice {
   if (typeof choice === 'string') {
     if (choice === 'none') return { type: 'none' };
     if (choice === 'required') return { type: 'any' };

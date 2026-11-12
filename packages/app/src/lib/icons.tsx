@@ -38,9 +38,7 @@ export const IconPipelines = createIcon(
   </>,
 );
 
-export const IconAnalytics = createIcon(
-  <path d="M2 14V7M6 14V4M10 14V9M14 14V2" />,
-);
+export const IconAnalytics = createIcon(<path d="M2 14V7M6 14V4M10 14V9M14 14V2" />);
 
 export const IconOrchestration = createIcon(
   <>
@@ -67,9 +65,7 @@ export const IconApiProviders = createIcon(
 );
 
 /* ─── Theme ─── */
-export const IconMoon = createIcon(
-  <path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z" />,
-);
+export const IconMoon = createIcon(<path d="M14 8.5A5.5 5.5 0 0 1 7.5 2 6 6 0 1 0 14 8.5Z" />);
 
 export const IconSun = createIcon(
   <>
@@ -79,25 +75,15 @@ export const IconSun = createIcon(
 );
 
 /* ─── Common Actions ─── */
-export const IconChevronLeft = createIcon(
-  <path d="M10 12L6 8l4-4" />,
-);
+export const IconChevronLeft = createIcon(<path d="M10 12L6 8l4-4" />);
 
-export const IconChevronRight = createIcon(
-  <path d="M6 4l4 4-4 4" />,
-);
+export const IconChevronRight = createIcon(<path d="M6 4l4 4-4 4" />);
 
-export const IconArrowRight = createIcon(
-  <path d="M3 8h10M10 5l3 3-3 3" />,
-);
+export const IconArrowRight = createIcon(<path d="M3 8h10M10 5l3 3-3 3" />);
 
-export const IconPlus = createIcon(
-  <path d="M8 3v10M3 8h10" />,
-);
+export const IconPlus = createIcon(<path d="M8 3v10M3 8h10" />);
 
-export const IconX = createIcon(
-  <path d="M4 4l8 8M12 4l-8 8" />,
-);
+export const IconX = createIcon(<path d="M4 4l8 8M12 4l-8 8" />);
 
 export const IconMenu = createIcon(
   <>
@@ -107,6 +93,10 @@ export const IconMenu = createIcon(
   </>,
 );
 
+export const IconChat = createIcon(
+  <path d="M14 10.5a2 2 0 0 1-2 2H5l-3 3V3.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v7z" />,
+);
+
 export const IconTerminal = createIcon(
   <>
     <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
@@ -114,9 +104,7 @@ export const IconTerminal = createIcon(
   </>,
 );
 
-export const IconHome = createIcon(
-  <path d="M2 8l6-6 6 6M4 6.5V14h3V10h2v4h3V6.5" />,
-);
+export const IconHome = createIcon(<path d="M2 8l6-6 6 6M4 6.5V14h3V10h2v4h3V6.5" />);
 
 export const IconFile = createIcon(
   <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h4.172a1 1 0 0 1 .707.293l1.328 1.328a1 1 0 0 0 .707.293H12.5A1.5 1.5 0 0 1 14 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9Z" />,
@@ -155,9 +143,7 @@ export const IconSearch = createIcon(
   </>,
 );
 
-export const IconCheck = createIcon(
-  <path d="M3 8.5l3 3 7-7" />,
-);
+export const IconCheck = createIcon(<path d="M3 8.5l3 3 7-7" />);
 
 export const IconAlertCircle = createIcon(
   <>
@@ -174,13 +160,9 @@ export const IconRefreshCw = createIcon(
   </>,
 );
 
-export const IconPlay = createIcon(
-  <path d="M4 2.5v11l10-5.5L4 2.5Z" />,
-);
+export const IconPlay = createIcon(<path d="M4 2.5v11l10-5.5L4 2.5Z" />);
 
-export const IconStop = createIcon(
-  <rect x="3" y="3" width="10" height="10" rx="1.5" />,
-);
+export const IconStop = createIcon(<rect x="3" y="3" width="10" height="10" rx="1.5" />);
 
 export const IconTrash = createIcon(
   <>
@@ -203,9 +185,7 @@ export const IconMonitor = createIcon(
   </>,
 );
 
-export const IconEdit = createIcon(
-  <path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5Z" />,
-);
+export const IconEdit = createIcon(<path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5Z" />);
 
 export const IconExternalLink = createIcon(
   <>
@@ -218,9 +198,7 @@ export const IconMaximize = createIcon(
   <path d="M6 2H3a1 1 0 0 0-1 1v3M10 2h3a1 1 0 0 1 1 1v3M6 14H3a1 1 0 0 1-1-1v-3M10 14h3a1 1 0 0 0 1-1v-3" />,
 );
 
-export const IconMinimize = createIcon(
-  <path d="M5 11L2 14M2 10v4h4M11 5l3-3M14 6V2h-4" />,
-);
+export const IconMinimize = createIcon(<path d="M5 11L2 14M2 10v4h4M11 5l3-3M14 6V2h-4" />);
 
 /* ─── System ─── */
 export const IconCpu = createIcon(
@@ -246,15 +224,21 @@ export const IconDisk = createIcon(
   </>,
 );
 
+export const IconClock = createIcon(
+  <>
+    <circle cx="8" cy="8" r="6.5" />
+    <path d="M8 4.5v3.5l2.5 1.5" />
+  </>,
+);
+
 export const IconSpinner = ({ className, ...props }: IconProps) => (
-  <svg
-    className={`animate-spin ${className ?? ''}`}
-    viewBox="0 0 24 24"
-    fill="none"
-    {...props}
-  >
+  <svg className={`animate-spin ${className ?? ''}`} viewBox="0 0 24 24" fill="none" {...props}>
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+    />
   </svg>
 );
 

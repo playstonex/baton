@@ -123,8 +123,7 @@ export function validateHostProfile(profile: HostProfile): HostValidationIssue[]
 
 export function validateHostConnection(conn: HostConnection): HostValidationIssue[] {
   const issues: HostValidationIssue[] = [];
-  const push = (message: string) =>
-    issues.push({ field: `connections[${conn.id}]`, message });
+  const push = (message: string) => issues.push({ field: `connections[${conn.id}]`, message });
   switch (conn.type) {
     case 'directTcp':
       if (!conn.host.trim()) push('host must not be empty');

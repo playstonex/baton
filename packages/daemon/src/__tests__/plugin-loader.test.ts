@@ -58,7 +58,12 @@ describe('loadProviderPlugins', () => {
   });
 
   it('skips an invalid manifest (bad kind)', async () => {
-    await makePlugin(root, 'bad-kind', { name: 'bad', kind: 'theme', type: 't', entry: 'index.js' });
+    await makePlugin(root, 'bad-kind', {
+      name: 'bad',
+      kind: 'theme',
+      type: 't',
+      entry: 'index.js',
+    });
     const res = await loadProviderPlugins(root, registry);
     expect(res.loaded).toHaveLength(0);
     expect(res.failed[0].name).toBe('bad-kind');

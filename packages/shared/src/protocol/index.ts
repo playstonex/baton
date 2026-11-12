@@ -9,6 +9,7 @@ import type {
   ReasoningEffort,
   ServiceTier,
   StatusDetail,
+  PermissionMode,
 } from '../types/index.js';
 import type { HelloMessage, WelcomeMessage } from './handshake.js';
 // AccessMode is defined locally below (kept for backward compat with main).
@@ -193,6 +194,7 @@ export type ControlAction =
   | 'register_push_token'
   | 'unregister_push_token'
   | 'set_access_mode'
+  | 'set_permission_mode'
   | 'git_status'
   | 'git_commit'
   | 'git_push'
@@ -419,6 +421,7 @@ export interface StartAgentRequest {
   args?: string[];
   env?: Record<string, string>;
   mode?: AdapterMode;
+  permissionMode?: PermissionMode;
   /**
    * For agentType 'acp': which entry from $BATON_HOME/acp.json to spawn
    * (e.g. 'gemini'). Required for ACP sessions; ignored by other types.

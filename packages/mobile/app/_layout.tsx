@@ -147,6 +147,10 @@ export default function RootLayout() {
       }
     });
 
+    if (wsService.connected) {
+      setConnected(true);
+    }
+
     wsService.onError((attempt) => {
       if (attempt === 1) {
         Alert.alert(

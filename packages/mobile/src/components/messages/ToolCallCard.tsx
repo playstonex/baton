@@ -1,5 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, LayoutAnimation, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  LayoutAnimation,
+  ActivityIndicator,
+} from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
 import { FontFamily, Colors } from '../../constants/theme';
@@ -58,7 +65,10 @@ export const ToolCallCard = React.memo(function ToolCallCard({
           <Ionicons name="construct-outline" size={12} color={colors.textTertiary} />
         )}
         <Text
-          style={[styles.toolName, { color: success === false ? Colors.danger[400] : colors.textSecondary }]}
+          style={[
+            styles.toolName,
+            { color: success === false ? Colors.danger[400] : colors.textSecondary },
+          ]}
           numberOfLines={1}
           ellipsizeMode="middle"
         >

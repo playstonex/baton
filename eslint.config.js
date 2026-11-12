@@ -3,11 +3,15 @@ import tsParser from '@typescript-eslint/parser';
 
 export default [
   {
+    ignores: ['**/dist/**', '**/node_modules/**', '**/*.d.ts', 'extends/**'],
+  },
+  {
     files: ['packages/*/src/**/*.{ts,tsx}'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        project: './tsconfig.base.json',
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     plugins: {
@@ -17,8 +21,5 @@ export default [
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
     },
-  },
-  {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/*.d.ts'],
   },
 ];

@@ -218,6 +218,34 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json(await collectSystemStats(agentManager));
   });
 
+  app.get('/api/system/usage', async (c) => {
+    const { getModelUsage } = await import('./system/usage.js');
+    const force = c.req.query('force') === 'true';
+    return c.json(await getModelUsage(force));
+  });
+
+  app.get('/api/system/tailscale', async (c) => {
+    const { getTailscaleStatus } = await import('./system/tailscale.js');
+    return c.json(await getTailscaleStatus());
+  });
+
+  app.post('/api/system/tailscale/serve', async (c) => {
+    const body = await c.req
+      .json<{ enabled: boolean; servePort?: number; localPort?: number }>()
+      .catch(() => ({ enabled: true, servePort: undefined, localPort: undefined }));
+    const { enableTailscaleServe, disableTailscaleServe } = await import('./system/tailscale.js');
+    if (body.enabled) {
+      const result = await enableTailscaleServe({
+        localPort: body.localPort,
+        servePort: body.servePort,
+      });
+      return c.json(result, result.ok ? 200 : 500);
+    } else {
+      const result = await disableTailscaleServe({ servePort: body.servePort });
+      return c.json(result, result.ok ? 200 : 500);
+    }
+  });
+
   app.get('/api/analytics/health', (c) => {
     return c.json(analytics.getHealthScore());
   });
@@ -286,6 +314,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       projectPath: body.projectPath,
       args: body.args,
       env: body.env,
+      permissionMode: body.permissionMode,
     };
 
     // Generic ACP: resolve the per-provider adapter from $BATON_HOME/acp.json.
@@ -313,13 +342,24 @@ export function createDaemon(port = DEFAULT_PORT) {
         ? getAcpSdkAdapter(body.acpProvider!)
         : createSdkAdapter(body.agentType);
     const sdkUsable = !!sdkAdapter && sdkAdapter.isSdkAvailable();
-    const wantSdk =
-      (body.mode ?? 'pty') === 'sdk'
-        ? sdkUsable
-        : body.mode === 'auto' && sdkUsable;
+    const wantSdk = (body.mode ?? 'pty') === 'sdk' ? sdkUsable : body.mode === 'auto' && sdkUsable;
     let sessionId: string;
     if (wantSdk && sdkAdapter) {
-      sessionId = await agentManager.startSdk(agentConfig, sdkAdapter);
+      try {
+        sessionId = await agentManager.startSdk(agentConfig, sdkAdapter);
+      } catch (sdkErr) {
+        console.warn(`[start] SDK start failed, falling back to PTY: ${sdkErr}`);
+        const adapter = createAdapter(body.agentType, 'pty');
+        if (!adapter.detect(absPath)) {
+          return c.json(
+            {
+              error: `${body.agentType} CLI not found on this host — install it or pick another agent`,
+            },
+            400,
+          );
+        }
+        sessionId = await agentManager.start(agentConfig, adapter);
+      }
     } else if (body.agentType === 'acp') {
       const adapter = getAcpPtyAdapter(body.acpProvider!);
       if (!adapter || !adapter.detect(absPath)) {
@@ -330,10 +370,12 @@ export function createDaemon(port = DEFAULT_PORT) {
       }
       sessionId = await agentManager.start(agentConfig, adapter);
     } else {
-      const adapter = createAdapter(body.agentType, body.mode ?? 'pty');
+      const adapter = createAdapter(body.agentType, 'pty');
       if (!adapter.detect(absPath)) {
         return c.json(
-          { error: `${body.agentType} CLI not found on this host — install it or pick another agent` },
+          {
+            error: `${body.agentType} CLI not found on this host — install it or pick another agent`,
+          },
           400,
         );
       }
@@ -389,7 +431,13 @@ export function createDaemon(port = DEFAULT_PORT) {
       }
     }
 
-    return c.json({ sessionId, agentType: body.agentType, status: 'running' });
+    const proc = agentManager.get(sessionId);
+    return c.json({
+      sessionId,
+      agentType: body.agentType,
+      status: 'running',
+      mode: proc?.mode ?? (wantSdk ? 'sdk' : 'pty'),
+    });
   });
 
   function syncActiveAgents(): void {
@@ -418,7 +466,9 @@ export function createDaemon(port = DEFAULT_PORT) {
     const includeArchived = c.req.query('includeArchived') === '1';
     const archivedOnly = c.req.query('archivedOnly') === '1';
     const projectPath = c.req.query('projectPath') ?? undefined;
-    return c.json(agentManager.listSessions({ limit, offset, includeArchived, archivedOnly, projectPath }));
+    return c.json(
+      agentManager.listSessions({ limit, offset, includeArchived, archivedOnly, projectPath }),
+    );
   });
 
   // Resume a stopped session: spawns a new Baton session continuing the
@@ -432,10 +482,7 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
     const adapter = createAdapter(agent.type, 'pty');
     if (!adapter.detect(agent.projectPath)) {
-      return c.json(
-        { error: `${agent.type} CLI not found on this host — cannot resume` },
-        400,
-      );
+      return c.json({ error: `${agent.type} CLI not found on this host — cannot resume` }, 400);
     }
     try {
       const sessionId = await agentManager.resumeAgent(id, adapter);
@@ -841,7 +888,11 @@ export function createDaemon(port = DEFAULT_PORT) {
   async function resolveForge(repoParam: string | undefined) {
     if (!repoParam) return { error: 'Missing repo', status: 400 as const };
     const ref = parseRepoRef(repoParam);
-    if (!ref) return { error: 'Unrecognized repo (expected owner/name, URL, or ssh remote)', status: 400 as const };
+    if (!ref)
+      return {
+        error: 'Unrecognized repo (expected owner/name, URL, or ssh remote)',
+        status: 400 as const,
+      };
     const forge = await forgeRegistry.resolveHost(ref.host);
     if (!forge) return { error: `No forge adapter for host ${ref.host}`, status: 400 as const };
     const service = forgeRegistry.create(forge);
@@ -869,7 +920,10 @@ export function createDaemon(port = DEFAULT_PORT) {
       const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!, 10) : undefined;
       return c.json(await resolved.service.listIssues(resolved.ref, { state, limit }));
     } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : 'Forge list issues failed' }, 500);
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Forge list issues failed' },
+        500,
+      );
     }
   });
 
@@ -893,17 +947,23 @@ export function createDaemon(port = DEFAULT_PORT) {
     try {
       return c.json(await resolved.service.getCheckoutTarget(resolved.ref, prNumber));
     } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : 'Forge checkout-target failed' }, 500);
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Forge checkout-target failed' },
+        500,
+      );
     }
   });
 
   // Check out a PR into a local working tree (fork-aware). Writes to the tree,
   // so the projectPath must be an allowed path.
   app.post('/api/forge/pr/:number/checkout', async (c) => {
-    const body = await c.req.json<{ repo?: string; projectPath?: string }>().catch(() => ({}) as {
-      repo?: string;
-      projectPath?: string;
-    });
+    const body = await c.req.json<{ repo?: string; projectPath?: string }>().catch(
+      () =>
+        ({}) as {
+          repo?: string;
+          projectPath?: string;
+        },
+    );
     if (!body.projectPath) return c.json({ error: 'Missing projectPath' }, 400);
     if (!isPathAllowed(body.projectPath)) return c.json({ error: 'Path not allowed' }, 403);
     const resolved = await resolveForge(body.repo);
@@ -927,10 +987,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       );
       return c.json(all);
     } catch (err) {
-      return c.json(
-        { error: err instanceof Error ? err.message : 'Worktree list failed' },
-        500,
-      );
+      return c.json({ error: err instanceof Error ? err.message : 'Worktree list failed' }, 500);
     }
   });
 
@@ -945,27 +1002,19 @@ export function createDaemon(port = DEFAULT_PORT) {
     try {
       return c.json(await createWorktree(body.basePath, body.branch));
     } catch (err) {
-      return c.json(
-        { error: err instanceof Error ? err.message : 'Worktree create failed' },
-        500,
-      );
+      return c.json({ error: err instanceof Error ? err.message : 'Worktree create failed' }, 500);
     }
   });
 
   app.post('/api/worktree/archive', async (c) => {
-    const body = await c.req
-      .json<{ path?: string }>()
-      .catch(() => ({}) as { path?: string });
+    const body = await c.req.json<{ path?: string }>().catch(() => ({}) as { path?: string });
     if (!body.path) return c.json({ error: 'Missing path' }, 400);
     try {
       const result = await archiveWorktree(body.path);
       if (!result) return c.json({ error: 'Worktree not found or already archived' }, 404);
       return c.json(result);
     } catch (err) {
-      return c.json(
-        { error: err instanceof Error ? err.message : 'Worktree archive failed' },
-        500,
-      );
+      return c.json({ error: err instanceof Error ? err.message : 'Worktree archive failed' }, 500);
     }
   });
 
@@ -1096,8 +1145,7 @@ export function createDaemon(port = DEFAULT_PORT) {
       // Most third-party OpenAI-compatible providers only expose /chat/completions,
       // so defaulting to openai-chat avoids the common /responses 404 trap.
       apiMode: (body.apiMode ?? (upstreamFormat === 'responses' ? 'responses' : 'chat')) as
-        | 'responses'
-        | 'chat',
+        'responses' | 'chat',
       upstreamFormat,
       createdAt: new Date().toISOString(),
     };
@@ -1332,8 +1380,29 @@ export function createDaemon(port = DEFAULT_PORT) {
       // Same guard chain as revert-preview above.
       await checkpointService.revertApply(body.cwd, body.checkpointId);
       return c.json({ ok: true });
-      } catch (err) {
+    } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Revert failed' }, 500);
+    }
+  });
+
+  app.get('/api/workspace/checkpoints/diff', async (c) => {
+    const cwd = c.req.query('cwd');
+    const fromId = c.req.query('fromId');
+    const toId = c.req.query('toId');
+    if (!cwd || !fromId || !toId) {
+      return c.json({ error: 'cwd, fromId, and toId query params required' }, 400);
+    }
+    if (!isPathAllowed(resolve(cwd))) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
+    if (!isCheckpointId(fromId) || !isCheckpointId(toId)) {
+      return c.json({ error: 'Invalid checkpoint id' }, 400);
+    }
+    try {
+      const diff = await checkpointService.diff(cwd, fromId, toId);
+      return c.json({ diff });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Diff failed' }, 500);
     }
   });
 
@@ -1533,4 +1602,3 @@ export async function main() {
 if (import.meta.main) {
   void main();
 }
-

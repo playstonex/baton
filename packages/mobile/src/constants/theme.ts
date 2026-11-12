@@ -1,4 +1,4 @@
-import { StyleSheet, Platform, type TextStyle } from 'react-native';
+import { Platform, type TextStyle } from 'react-native';
 
 // ── Linear Design Tokens ──────────────────────────────────────
 // Derived from the "linear-app" design system (Open Design library):

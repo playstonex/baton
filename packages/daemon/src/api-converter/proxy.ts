@@ -70,7 +70,9 @@ export async function proxyResponses(
   // Build the upstream request body + parser for the response.
   let body: unknown = req;
   let parseUpstreamResponse: (data: unknown) => ResponsesApiResponse;
-  let parseUpstreamStream: (stream: ReadableStream<Uint8Array>) => AsyncGenerator<ResponsesStreamEvent>;
+  let parseUpstreamStream: (
+    stream: ReadableStream<Uint8Array>,
+  ) => AsyncGenerator<ResponsesStreamEvent>;
 
   if (format === 'responses') {
     parseUpstreamResponse = (d) => d as ResponsesApiResponse;
@@ -114,7 +116,9 @@ export async function proxyResponses(
         const encoder = new TextEncoder();
         try {
           for await (const evt of parseUpstreamStream(upstream)) {
-            controller.enqueue(encoder.encode(`event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`));
+            controller.enqueue(
+              encoder.encode(`event: ${evt.type}\ndata: ${JSON.stringify(evt)}\n\n`),
+            );
           }
         } catch (err) {
           controller.error(err);

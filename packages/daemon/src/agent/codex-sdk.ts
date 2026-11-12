@@ -1,4 +1,12 @@
-import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
+import type {
+  AgentConfig,
+  ParsedEvent,
+  SdkAgentAdapter,
+  ThinkingConfig,
+  ReasoningEffort,
+  AccessMode,
+  ServiceTier,
+} from '@baton/shared';
 import { execSync, execFileSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
@@ -32,7 +40,13 @@ function isResponse(msg: JsonRpcMessage): msg is JsonRpcResponse {
 }
 
 function isRequest(msg: JsonRpcMessage): msg is JsonRpcRequest {
-  return 'id' in msg && typeof msg.id === 'number' && 'method' in msg && !('result' in msg) && !('error' in msg);
+  return (
+    'id' in msg &&
+    typeof msg.id === 'number' &&
+    'method' in msg &&
+    !('result' in msg) &&
+    !('error' in msg)
+  );
 }
 
 // ── Codex SDK Adapter ──────────────────────────────────────────────
@@ -45,7 +59,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   private rpcId = 0;
   private threadId: string | null = null;
   private turnId: string | null = null;
-  private pendingResolves = new Map<number, { resolve: (value: unknown) => void; reject: (err: Error) => void }>();
+  private pendingResolves = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (err: Error) => void }
+  >();
   private pendingServerRequests = new Map<number, { method: string; threadId: string }>();
   private buffer = '';
   private onEvent: ((event: ParsedEvent) => void) | null = null;
@@ -58,7 +75,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   private rawOutputItemId: string | undefined = undefined;
   /** Track active commandExecution items by itemId so started/delta/completed
    *  all reference the same logical command instead of creating duplicates. */
-  private activeCommandsByItemId = new Map<string, { command: string; output: string; isStreaming: boolean }>();
+  private activeCommandsByItemId = new Map<
+    string,
+    { command: string; output: string; isStreaming: boolean }
+  >();
   /** Deduplicate turn/diff/updated by caching the last emitted diff content per turnId. */
   private lastEmittedDiffByTurnId = new Map<string, string>();
   selectedModel: string | null = null;
@@ -119,12 +139,15 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     this.agentTextBuffer = '';
     this.activeCommandsByItemId.clear();
     this.lastEmittedDiffByTurnId.clear();
-    if (this.rawOutputFlushTimer) { clearTimeout(this.rawOutputFlushTimer); this.rawOutputFlushTimer = null; }
+    if (this.rawOutputFlushTimer) {
+      clearTimeout(this.rawOutputFlushTimer);
+      this.rawOutputFlushTimer = null;
+    }
     this.rawOutputBuffer = '';
     this.pendingResolves.clear();
 
     this.projectPath = config.projectPath ?? process.cwd();
-    const env = { ...process.env as Record<string, string>, ...(config.env ?? {}) };
+    const env = { ...(process.env as Record<string, string>), ...(config.env ?? {}) };
 
     console.log(`[baton] codex-sdk: spawning codex app-server (cwd=${this.projectPath})`);
 
@@ -259,8 +282,8 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   async listModels(): Promise<string[]> {
     if (!this.process?.stdin?.writable) return [];
     try {
-      const result = await this.sendRequest('model/list', {}) as Record<string, unknown>;
-      const items = (result?.data ?? result?.models) as Array<Record<string, unknown>> ?? [];
+      const result = (await this.sendRequest('model/list', {})) as Record<string, unknown>;
+      const items = ((result?.data ?? result?.models) as Array<Record<string, unknown>>) ?? [];
       return items.map((m) => (m.id ?? m.name ?? '') as string).filter(Boolean);
     } catch (err) {
       console.error('[baton] codex-sdk: listModels error:', err);
@@ -273,7 +296,9 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   private handleWrite(input: string): void {
     if (!this.onEvent) return;
 
-    console.log(`[baton] codex-sdk: write() called, input="${input.slice(0, 60)}" threadId=${this.threadId} turnId=${this.turnId}`);
+    console.log(
+      `[baton] codex-sdk: write() called, input="${input.slice(0, 60)}" threadId=${this.threadId} turnId=${this.turnId}`,
+    );
 
     // Emit user message event so the UI shows what the user sent
     this.onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
@@ -289,17 +314,21 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
 
   private async startThreadAndTurn(userInput: string): Promise<void> {
     try {
-      const threadResult = await this.sendRequest('thread/start', {
+      const threadResult = (await this.sendRequest('thread/start', {
         experimentalRawEvents: false,
         persistExtendedHistory: false,
-      }) as Record<string, unknown>;
+      })) as Record<string, unknown>;
       // Response: { thread: { id: "...", ... }, model: "...", ... }
       const thread = threadResult?.thread as Record<string, unknown> | undefined;
       this.threadId = (thread?.id ?? threadResult?.threadId) as string | null;
       console.log(`[baton] codex-sdk: thread started, threadId=${this.threadId}`);
 
       if (!this.threadId) {
-        this.onEvent?.({ type: 'error', message: 'Failed to create thread', timestamp: Date.now() });
+        this.onEvent?.({
+          type: 'error',
+          message: 'Failed to create thread',
+          timestamp: Date.now(),
+        });
         return;
       }
 
@@ -336,7 +365,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
         turnParams.sandboxPolicy = { type: 'workspaceWrite', networkAccess: true };
       }
 
-      const result = await this.sendRequest('turn/start', turnParams) as Record<string, unknown>;
+      const result = (await this.sendRequest('turn/start', turnParams)) as Record<string, unknown>;
 
       // Response: { turn: { id: "...", status: "..." } }
       const turn = result?.turn as Record<string, unknown> | undefined;
@@ -353,11 +382,11 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     if (!this.threadId || !this.turnId) return;
 
     try {
-      const result = await this.sendRequest('turn/steer', {
+      const result = (await this.sendRequest('turn/steer', {
         threadId: this.threadId,
         expectedTurnId: this.turnId,
         input: [{ type: 'text', text: userInput, text_elements: [] }],
-      }) as Record<string, unknown>;
+      })) as Record<string, unknown>;
 
       // turn/steer may return a new turnId
       const newTurnId = (result?.turnId ?? result?.turn_id ?? result?.id) as string | null;
@@ -405,15 +434,17 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     console.log(`[baton] codex-sdk: server request method=${req.method} id=${req.id}`);
     const method = req.method;
     const params = (req.params ?? {}) as Record<string, unknown>;
-    const threadId = params.threadId as string ?? '';
+    const threadId = (params.threadId as string) ?? '';
 
-    if (method === 'item/fileChange/requestApproval'
-        || method === 'item/commandExecution/requestApproval'
-        || method === 'item/tool/requestUserInput'
-        || method.includes('requestApproval')) {
+    if (
+      method === 'item/fileChange/requestApproval' ||
+      method === 'item/commandExecution/requestApproval' ||
+      method === 'item/tool/requestUserInput' ||
+      method.includes('requestApproval')
+    ) {
       if (this.resolvedApprovalIds.has(req.id)) return;
       this.pendingServerRequests.set(req.id, { method, threadId });
-      this.pendingApprovalEventId = params.event as string ?? null;
+      this.pendingApprovalEventId = (params.event as string) ?? null;
       const toolName = params.toolName ?? params.name ?? method.split('/').pop() ?? 'unknown';
       const detail = params.description ?? params.message ?? params.path ?? '';
       this.onEvent?.({
@@ -455,7 +486,9 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const params = ((msg as JsonRpcNotification).params ?? {}) as Record<string, unknown>;
 
     if (method !== 'item/agentMessage/delta') {
-      console.log(`[baton] codex-sdk: notification method=${method} params=${JSON.stringify(params).slice(0, 200)}`);
+      console.log(
+        `[baton] codex-sdk: notification method=${method} params=${JSON.stringify(params).slice(0, 200)}`,
+      );
     }
 
     switch (method) {
@@ -562,7 +595,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const turnId = (turn?.id ?? params.turnId) as string | undefined;
     if (turnId) this.turnId = turnId;
     this.flushAgentText();
-    if (this.rawOutputFlushTimer) { clearTimeout(this.rawOutputFlushTimer); this.rawOutputFlushTimer = null; }
+    if (this.rawOutputFlushTimer) {
+      clearTimeout(this.rawOutputFlushTimer);
+      this.rawOutputFlushTimer = null;
+    }
     this.rawOutputBuffer = '';
     this.onEvent?.({ type: 'status_change', status: 'running', timestamp: Date.now() });
     console.log(`[baton] codex-sdk: turn/started, turnId=${turnId}`);
@@ -639,7 +675,12 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const delta = (params.delta ?? params.text ?? params.summary ?? '') as string;
     const itemId = this.extractItemId(params);
     if (delta) {
-      this.onEvent?.({ type: 'thinking', content: delta, timestamp: Date.now(), itemId: itemId || undefined });
+      this.onEvent?.({
+        type: 'thinking',
+        content: delta,
+        timestamp: Date.now(),
+        itemId: itemId || undefined,
+      });
     }
   }
 
@@ -682,7 +723,13 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const changeType = raw === 'create' ? 'create' : raw === 'delete' ? 'delete' : 'modify';
     const itemId = this.extractItemId(params);
     if (path) {
-      this.onEvent?.({ type: 'file_change', path, changeType, timestamp: Date.now(), itemId: itemId || undefined });
+      this.onEvent?.({
+        type: 'file_change',
+        path,
+        changeType,
+        timestamp: Date.now(),
+        itemId: itemId || undefined,
+      });
     }
   }
 
@@ -693,7 +740,9 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     const itemId = (item.id ?? '') as string;
     if (itemType === 'fileChange') {
       this.pendingApprovalEventId = itemId || null;
-      console.log(`[baton] codex-sdk: tracking fileChange for approval, eventId=${this.pendingApprovalEventId}`);
+      console.log(
+        `[baton] codex-sdk: tracking fileChange for approval, eventId=${this.pendingApprovalEventId}`,
+      );
     }
     if (itemType === 'commandExecution' && itemId) {
       const command = (item.command ?? '') as string;
@@ -733,7 +782,13 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
           const raw = (change.changeType ?? change.type ?? 'modify') as string;
           const changeType = raw === 'create' ? 'create' : raw === 'delete' ? 'delete' : 'modify';
           if (path) {
-            this.onEvent?.({ type: 'file_change', path, changeType, timestamp: Date.now(), itemId: itemId || undefined });
+            this.onEvent?.({
+              type: 'file_change',
+              path,
+              changeType,
+              timestamp: Date.now(),
+              itemId: itemId || undefined,
+            });
           }
         }
       }
@@ -771,7 +826,8 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   private handleTokenUsage(params: Record<string, unknown>): void {
-    const usage = params.usage as Record<string, unknown> | undefined ?? params as Record<string, unknown>;
+    const usage =
+      (params.usage as Record<string, unknown> | undefined) ?? (params as Record<string, unknown>);
     const promptTokens = (usage.promptTokens ?? usage.prompt_tokens ?? 0) as number;
     const completionTokens = (usage.completionTokens ?? usage.completion_tokens ?? 0) as number;
     this.onEvent?.({
@@ -796,7 +852,13 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
       this.lastEmittedDiffByTurnId.set(dedupeKey, diff);
     }
 
-    this.onEvent?.({ type: 'diff', diff, path: path || undefined, timestamp: Date.now(), itemId: itemId || undefined });
+    this.onEvent?.({
+      type: 'diff',
+      diff,
+      path: path || undefined,
+      timestamp: Date.now(),
+      itemId: itemId || undefined,
+    });
   }
 
   private handleCommandTerminalInteraction(params: Record<string, unknown>): void {
@@ -899,7 +961,8 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
       id: String(q.id ?? ''),
       header: String(q.header ?? ''),
       question: String(q.question ?? ''),
-      options: (q.options as Array<{ label: string; description: string }> | undefined) ?? undefined,
+      options:
+        (q.options as Array<{ label: string; description: string }> | undefined) ?? undefined,
     }));
     if (questions.length > 0) {
       this.onEvent?.({ type: 'user_input_prompt', questions, timestamp: Date.now() });
@@ -938,7 +1001,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   private isGitRepo(): boolean {
     try {
       execSync('git rev-parse --is-inside-work-tree', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 3000, stdio: 'pipe',
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 3000,
+        stdio: 'pipe',
       });
       return true;
     } catch {
@@ -954,7 +1020,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
         encoding: 'utf-8',
         timeout: 5000,
       });
-      const branches = raw.split('\n').map((b) => b.trim()).filter(Boolean);
+      const branches = raw
+        .split('\n')
+        .map((b) => b.trim())
+        .filter(Boolean);
       let currentBranch = '';
       try {
         currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
@@ -962,7 +1031,9 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
           encoding: 'utf-8',
           timeout: 5000,
         }).trim();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return { branches, currentBranch };
     } catch {
       return { branches: [], currentBranch: '' };
@@ -973,18 +1044,26 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     if (!this.isGitRepo()) return '';
     try {
       return execSync('git status --short', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 5000,
       }).trim();
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
 
   async gitDiff(): Promise<string> {
     if (!this.isGitRepo()) return '';
     try {
       return execSync('git diff --stat', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
       }).trim();
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
 
   async gitLog(count: number = 10): Promise<string> {
@@ -993,9 +1072,13 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
       // Arg-array exec: count sanitized to a positive integer.
       const n = Math.max(1, Math.floor(Number(count) || 1));
       return execFileSync('git', ['log', '--oneline', `-${n}`], {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 5000,
       }).trim();
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
 
   async gitCheckout(branch: string): Promise<{ success: boolean; error?: string }> {
@@ -1003,7 +1086,9 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     try {
       // Arg-array exec — branch comes from the client and must never touch a shell.
       execFileSync('git', ['checkout', branch], {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
       });
       return { success: true };
     } catch (err) {
@@ -1013,7 +1098,11 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
 
   async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
     try {
-      execFileSync('git', ['add', '-A'], { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      execFileSync('git', ['add', '-A'], {
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
       // Message flows via stdin (-F -), never into argv — no quoting or
       // option-position concerns at all.
       execFileSync('git', ['commit', '-F', '-'], {
@@ -1050,11 +1139,16 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
     if (!isSafeGitRef(name)) return { success: false, error: 'Invalid branch name' };
     try {
       execFileSync('git', ['checkout', '-b', name], {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
       });
       return { success: true };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Branch creation failed' };
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Branch creation failed',
+      };
     }
   }
 

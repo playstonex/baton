@@ -58,7 +58,9 @@ export const gitService = {
   },
 
   log(projectPath: string, count = 25): Promise<GitLogResult> {
-    return apiFetch<GitLogResult>(`/api/git/log?path=${encodeURIComponent(projectPath)}&count=${count}`);
+    return apiFetch<GitLogResult>(
+      `/api/git/log?path=${encodeURIComponent(projectPath)}&count=${count}`,
+    );
   },
 
   stash(projectPath: string): Promise<{ success: boolean }> {
@@ -76,7 +78,9 @@ export const gitService = {
   },
 
   remoteUrl(projectPath: string): Promise<GitRemoteUrlResult> {
-    return apiFetch<GitRemoteUrlResult>(`/api/git/remote-url?path=${encodeURIComponent(projectPath)}`);
+    return apiFetch<GitRemoteUrlResult>(
+      `/api/git/remote-url?path=${encodeURIComponent(projectPath)}`,
+    );
   },
 
   diff(projectPath: string, file?: string, staged?: boolean): Promise<GitDiffResult> {

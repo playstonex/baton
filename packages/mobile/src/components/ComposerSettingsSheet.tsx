@@ -11,14 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import {
-  Colors,
-  FontFamily,
-  Glass,
-  Radius,
-  Spacing,
-  Typography,
-} from '../constants/theme';
+import { Colors, FontFamily, Glass, Radius, Spacing, Typography } from '../constants/theme';
 import type { ThemeColors } from './messages';
 
 export type ThinkingMode = 'none' | 'auto' | 'level';
@@ -70,9 +63,7 @@ function Segmented<T extends string>({
       style={[
         styles.segmented,
         {
-          backgroundColor: colors.isDark
-            ? Glass.opacity.dark.subtle
-            : Glass.opacity.light.subtle,
+          backgroundColor: colors.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
         },
       ]}
     >
@@ -84,10 +75,7 @@ function Segmented<T extends string>({
             onPress={() => onChange(opt.value)}
             style={({ pressed }) => [
               styles.segment,
-              active && [
-                styles.segmentActive,
-                { backgroundColor: Colors.primary[500] },
-              ],
+              active && [styles.segmentActive, { backgroundColor: Colors.primary[500] }],
               !active && pressed && { opacity: 0.6 },
             ]}
             hitSlop={2}
@@ -98,9 +86,7 @@ function Segmented<T extends string>({
               numberOfLines={1}
               style={[
                 styles.segmentText,
-                active
-                  ? styles.segmentTextActive
-                  : { color: colors.textSecondary },
+                active ? styles.segmentTextActive : { color: colors.textSecondary },
               ]}
             >
               {opt.label}
@@ -123,9 +109,7 @@ function Group({ colors, children }: { colors: ThemeColors; children: React.Reac
       style={[
         styles.group,
         {
-          backgroundColor: colors.isDark
-            ? Glass.opacity.dark.subtle
-            : Glass.opacity.light.subtle,
+          backgroundColor: colors.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
         },
       ]}
     >
@@ -134,7 +118,7 @@ function Group({ colors, children }: { colors: ThemeColors; children: React.Reac
   );
 }
 
-function Checkmark({ colors }: { colors: ThemeColors }) {
+function Checkmark({ colors: _colors }: { colors?: ThemeColors }) {
   return <Ionicons name="checkmark" size={16} color={Colors.primary[400]} />;
 }
 
@@ -169,7 +153,11 @@ function Row({
       ) : null}
       <View style={styles.rowTextWrap}>
         <Text
-          style={[styles.rowLabel, selected && styles.rowLabelSelected, { color: colors.textPrimary }]}
+          style={[
+            styles.rowLabel,
+            selected && styles.rowLabelSelected,
+            { color: colors.textPrimary },
+          ]}
           numberOfLines={1}
         >
           {label}
@@ -198,9 +186,7 @@ function Row({
 /** Hairline separator inset to the text edge, per inset-grouped convention. */
 function Separator({ colors, inset }: { colors: ThemeColors; inset: number }) {
   return (
-    <View
-      style={[styles.separator, { backgroundColor: colors.separator, marginLeft: inset }]}
-    />
+    <View style={[styles.separator, { backgroundColor: colors.separator, marginLeft: inset }]} />
   );
 }
 
@@ -350,9 +336,7 @@ export function ComposerSettingsSheet({
                 </View>
                 {thinkingMode === 'level' && (
                   <View style={styles.configRowSub}>
-                    <Text style={[styles.configLabel, { color: colors.textSecondary }]}>
-                      Level
-                    </Text>
+                    <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Level</Text>
                     <Segmented<ThinkingLevel>
                       value={thinkingLevel}
                       onChange={(level) => onThinking('level', level)}
@@ -438,10 +422,16 @@ export function ComposerSettingsSheet({
                     >
                       <Ionicons name={tile.icon} size={14} color={Colors.primary[400]} />
                     </View>
-                    <Text style={[styles.tileLabel, { color: colors.textPrimary }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.tileLabel, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
                       {tile.label}
                     </Text>
-                    <Text style={[styles.tileSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.tileSub, { color: colors.textTertiary }]}
+                      numberOfLines={1}
+                    >
                       {tile.sub}
                     </Text>
                   </Pressable>

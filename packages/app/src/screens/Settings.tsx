@@ -129,7 +129,11 @@ export function SettingsScreen() {
               connected ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
             }`}
           >
-            {connected ? <IconCheck className="h-4 w-4" /> : <IconAlertCircle className="h-4 w-4" />}
+            {connected ? (
+              <IconCheck className="h-4 w-4" />
+            ) : (
+              <IconAlertCircle className="h-4 w-4" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-semibold text-fg">{summaryHeadline}</div>
@@ -162,19 +166,20 @@ export function SettingsScreen() {
 
         {mode === 'local' ? (
           <div className="mt-4">
-            <FieldBlock label="Daemon HTTP URL" hint="The HTTP endpoint where your Baton daemon is listening.">
+            <FieldBlock
+              label="Daemon HTTP URL"
+              hint="The HTTP endpoint where your Baton daemon is listening."
+            >
               <Input
                 value={localHttpUrl}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalHttpUrl(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setLocalHttpUrl(e.target.value)
+                }
                 className="font-mono"
               />
             </FieldBlock>
             <div className="mt-4 flex items-center justify-between gap-3">
-              {status ? (
-                <InlineNote ok={isSuccess} text={status} />
-              ) : (
-                <span />
-              )}
+              {status ? <InlineNote ok={isSuccess} text={status} /> : <span />}
               <Button variant="primary" onClick={applyLocal}>
                 {connected && wsService.mode === 'local' ? 'Reconnect' : 'Connect'}
               </Button>
@@ -182,7 +187,10 @@ export function SettingsScreen() {
           </div>
         ) : (
           <div className="mt-4 space-y-4">
-            <FieldBlock label="Relay WebSocket URL" hint="The public WebSocket address of your Baton relay server.">
+            <FieldBlock
+              label="Relay WebSocket URL"
+              hint="The public WebSocket address of your Baton relay server."
+            >
               <Input
                 placeholder="ws://relay.example.com:3230"
                 value={relayUrl}
@@ -194,18 +202,20 @@ export function SettingsScreen() {
             <FieldBlock
               label="Pairing code"
               hint={
-              <>
-                The 6-digit code displayed by{' '}
-                <code className="font-mono text-[11px] text-fg-2">baton daemon pair</code> on the
-                host.
-              </>
-            }
+                <>
+                  The 6-digit code displayed by{' '}
+                  <code className="font-mono text-[11px] text-fg-2">baton daemon pair</code> on the
+                  host.
+                </>
+              }
             >
               <div className="flex gap-2">
                 <Input
                   placeholder="000000"
                   value={pairingCode}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPairingCode(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setPairingCode(e.target.value)
+                  }
                   className="text-center font-mono tracking-[0.4em]"
                   maxLength={6}
                 />
@@ -219,9 +229,7 @@ export function SettingsScreen() {
               <div className="flex items-center gap-2.5 rounded-sm border border-success/25 bg-success-soft px-3 py-2">
                 <IconCheck className="h-3.5 w-3.5 shrink-0 text-success" />
                 <span className="text-[12.5px] font-medium text-success">Paired host</span>
-                <span className="ml-auto truncate font-mono text-[11px] text-muted">
-                  {hostId}
-                </span>
+                <span className="ml-auto truncate font-mono text-[11px] text-muted">{hostId}</span>
               </div>
             )}
 
@@ -240,7 +248,12 @@ export function SettingsScreen() {
               encryption key in one step.
             </p>
           </div>
-          <Button variant="secondary" onClick={fetchPairingQr} disabled={qrLoading} className="shrink-0">
+          <Button
+            variant="secondary"
+            onClick={fetchPairingQr}
+            disabled={qrLoading}
+            className="shrink-0"
+          >
             {qrLoading ? 'Generating…' : pairingQr ? 'Refresh QR' : 'Show QR code'}
           </Button>
         </div>
@@ -284,7 +297,10 @@ export function SettingsScreen() {
    toggle.
    ───────────────────────────────────────────── */
 const THEME_SWATCHES: Record<ThemeMode, { bg: string; chips: string[] }> = {
-  system: { bg: 'linear-gradient(90deg, #f7f8f8 50%, #131416 50%)', chips: ['#5e6ad2', '#d6d3d1', '#4a4b50'] },
+  system: {
+    bg: 'linear-gradient(90deg, #f7f8f8 50%, #131416 50%)',
+    chips: ['#5e6ad2', '#d6d3d1', '#4a4b50'],
+  },
   light: { bg: '#f7f8f8', chips: ['#5e6ad2', '#e7e5e4', '#a8a29e'] },
   dark: { bg: '#131416', chips: ['#7170ff', '#2a2b2f', '#4a4b50'] },
 };
@@ -365,9 +381,7 @@ function GroupLabel({ children }: { children: ReactNode }) {
 
 function InlineNote({ ok, text }: { ok: boolean; text: string }) {
   return (
-    <span className={`text-xs leading-relaxed ${ok ? 'text-success' : 'text-danger'}`}>
-      {text}
-    </span>
+    <span className={`text-xs leading-relaxed ${ok ? 'text-success' : 'text-danger'}`}>{text}</span>
   );
 }
 

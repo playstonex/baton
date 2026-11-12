@@ -37,7 +37,9 @@ export class OpenCodeAdapter extends BaseAgentAdapter {
       return events;
     }
 
-    const fileMatch = clean.match(/(?:read|write|edit|create|delete|update)\s+[\s`"]*([^\s`"']+\.\w+)/i);
+    const fileMatch = clean.match(
+      /(?:read|write|edit|create|delete|update)\s+[\s`"]*([^\s`"']+\.\w+)/i,
+    );
     if (fileMatch) {
       events.push({
         type: 'file_change',

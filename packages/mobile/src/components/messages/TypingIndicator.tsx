@@ -24,7 +24,11 @@ export interface ThemeColors {
   accentBg: string;
 }
 
-export const TypingIndicator = React.memo(function TypingIndicator({ colors }: { colors: ThemeColors }) {
+export const TypingIndicator = React.memo(function TypingIndicator({
+  colors,
+}: {
+  colors: ThemeColors;
+}) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -32,20 +36,14 @@ export const TypingIndicator = React.memo(function TypingIndicator({ colors }: {
   }, [progress]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: interpolate(progress.value, [0, 1], [-21, 21]) },
-    ],
+    transform: [{ translateX: interpolate(progress.value, [0, 1], [-21, 21]) }],
     opacity: interpolate(progress.value, [0, 0.5, 1], [0.04, 0.42, 0.04]),
   }));
 
   return (
     <View style={[styles.track, { backgroundColor: colors.subtle }]}>
       <Animated.View
-        style={[
-          styles.shimmer,
-          { backgroundColor: colors.textTertiary },
-          shimmerStyle,
-        ]}
+        style={[styles.shimmer, { backgroundColor: colors.textTertiary }, shimmerStyle]}
       />
     </View>
   );

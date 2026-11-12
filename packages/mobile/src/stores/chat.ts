@@ -81,8 +81,12 @@ const STREAM_THROTTLE_MS = 80;
 const ANSI_ESCAPE =
   /\u001B\[[0-9;?]*[ -/]*[@-~]|\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)|\u001B[@-_Z\\-_]|\r(?!\n)|\u0008/g;
 
+/** Clean up orphan ANSI fragments (e.g. from chunks split mid-sequence like 38;2;...m or >4;2m) */
+const ORPHAN_ANSI =
+  /(?:^|\s)(?:>?[0-9;]+[mu]|[0-9]+;[0-9;]+m|4m>4;2m>5u)(?:\s|$)/g;
+
 function stripAnsiCodes(text: string): string {
-  return text.replace(ANSI_ESCAPE, '');
+  return text.replace(ANSI_ESCAPE, '').replace(ORPHAN_ANSI, ' ');
 }
 
 function isBareShellPrompt(text: string): boolean {
@@ -181,8 +185,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   addEvent: (event) => {
     if (__DEV__ && (event.type === 'chat_message' || event.type === 'status_change')) {
-      const contentLen = 'content' in event ? (event as { content?: string }).content?.length ?? 0 : 0;
-      console.log(`[chat] addEvent type=${event.type} role=${'role' in event ? (event as { role?: string }).role : ''} contentLen=${contentLen} status=${'status' in event ? (event as { status?: string }).status : ''}`);
+      const contentLen =
+        'content' in event ? ((event as { content?: string }).content?.length ?? 0) : 0;
+      console.log(
+        `[chat] addEvent type=${event.type} role=${'role' in event ? (event as { role?: string }).role : ''} contentLen=${contentLen} status=${'status' in event ? (event as { status?: string }).status : ''}`,
+      );
     }
     if (event.type === 'raw_output') {
       const content = stripAnsiCodes(event.content);
@@ -224,9 +231,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           const msgs = pruneDuplicateMessages(
             state.messages.map((m) => {
               if (!m.isStreaming && !m.meta?.running) return m;
-              const meta = m.meta
-                ? { ...m.meta, isStreaming: false, running: false }
-                : m.meta;
+              const meta = m.meta ? { ...m.meta, isStreaming: false, running: false } : m.meta;
               return { ...m, isStreaming: false, meta };
             }),
           );
@@ -516,7 +521,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
         const icons: Record<string, string> = { create: '+', modify: '~', delete: '-' };
         const existingIdx = state.messages.findIndex(
-          (m) => m.kind === 'fileChange' && m.meta?.path === event.path && m.eventType === 'file_change',
+          (m) =>
+            m.kind === 'fileChange' && m.meta?.path === event.path && m.eventType === 'file_change',
         );
         if (existingIdx >= 0) return state;
         const newCounter = state._counter + 1;

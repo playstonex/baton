@@ -120,9 +120,7 @@ export function FilesScreen() {
                     type="button"
                     onClick={() => fetchDir(path)}
                     className={`rounded-sm px-1.5 py-0.5 font-mono text-xs transition-colors duration-150 ${
-                      isLast
-                        ? 'font-semibold text-fg'
-                        : 'text-muted hover:bg-raised hover:text-fg'
+                      isLast ? 'font-semibold text-fg' : 'text-muted hover:bg-raised hover:text-fg'
                     }`}
                   >
                     {part}
@@ -158,9 +156,7 @@ export function FilesScreen() {
               <div className="flex shrink-0 items-center justify-between border-b border-line-soft px-4 py-2.5">
                 <div className="flex items-center gap-2.5">
                   <IconFile className="h-4 w-4 text-muted" />
-                  <span className="text-xs font-medium text-fg">
-                    {selectedFile.name}
-                  </span>
+                  <span className="text-xs font-medium text-fg">{selectedFile.name}</span>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] tabular-nums text-meta">
                   {selectedFile.ext && (
@@ -218,16 +214,12 @@ function FileRow({
         <IconFile className="h-4 w-4 shrink-0 text-muted" />
       )}
       <span
-        className={`flex-1 truncate font-mono ${
-          item.isDir ? 'font-medium text-fg' : 'text-fg-2'
-        }`}
+        className={`flex-1 truncate font-mono ${item.isDir ? 'font-medium text-fg' : 'text-fg-2'}`}
       >
         {item.name}
       </span>
       {!item.isDir && (
-        <span className="shrink-0 text-[11px] tabular-nums text-meta">
-          {formatSize(item.size)}
-        </span>
+        <span className="shrink-0 text-[11px] tabular-nums text-meta">{formatSize(item.size)}</span>
       )}
       {item.isDir && <IconChevronRight className="h-3 w-3 shrink-0 text-line-strong" />}
     </button>

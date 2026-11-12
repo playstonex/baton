@@ -243,7 +243,9 @@ describe('AgentManager ↔ SessionStore integration (no runtime needed)', () => 
     // Archive hides it from the default listing; unarchive restores it.
     await manager.archive('dead-1');
     expect(manager.listSessions().sessions.find((s) => s.id === 'dead-1')).toBeUndefined();
-    expect(manager.listSessions({ includeArchived: true }).sessions.find((s) => s.id === 'dead-1')).toBeDefined();
+    expect(
+      manager.listSessions({ includeArchived: true }).sessions.find((s) => s.id === 'dead-1'),
+    ).toBeDefined();
     await manager.unarchive('dead-1');
     expect(manager.listSessions().sessions.find((s) => s.id === 'dead-1')).toBeDefined();
 
@@ -255,7 +257,9 @@ describe('AgentManager ↔ SessionStore integration (no runtime needed)', () => 
     // Delete removes it everywhere.
     await manager.delete('dead-1');
     expect(manager.get('dead-1')).toBeUndefined();
-    expect(manager.listSessions({ includeArchived: true }).sessions.find((s) => s.id === 'dead-1')).toBeUndefined();
+    expect(
+      manager.listSessions({ includeArchived: true }).sessions.find((s) => s.id === 'dead-1'),
+    ).toBeUndefined();
     store.close();
   });
 });

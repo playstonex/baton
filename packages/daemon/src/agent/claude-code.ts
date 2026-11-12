@@ -22,11 +22,23 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
+    const permArgs: string[] = [];
+    if (config.permissionMode === 'yolo' || config.permissionMode === 'bypassPermissions') {
+      permArgs.push('--dangerously-skip-permissions');
+    } else if (config.permissionMode === 'safe-yolo' || config.permissionMode === 'acceptEdits') {
+      permArgs.push('--permission-mode', 'acceptEdits');
+    } else if (config.permissionMode === 'read-only' || config.permissionMode === 'plan') {
+      permArgs.push('--permission-mode', 'plan');
+    } else if (config.permissionMode === 'default') {
+      permArgs.push('--permission-mode', 'default');
+    }
+
     return {
       command: 'claude',
       args: [
         // claude: `--resume <id>` continues an exact session, `-c` the latest.
         ...resumeArgs({ idFlag: '--resume', latest: ['-c'] }, config.resume),
+        ...permArgs,
         ...(config.args ?? []),
       ],
       env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },

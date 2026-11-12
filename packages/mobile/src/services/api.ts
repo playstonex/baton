@@ -37,4 +37,3 @@ export async function searchProjectFiles(projectPath: string, query = ''): Promi
     return [];
   }
 }
-

@@ -86,11 +86,7 @@ export function FileIconTile({ isDir, name, size = 'md' }: FileIconTileProps) {
   if (isDir) {
     return (
       <View style={[tile, styles.center, { backgroundColor: 'rgba(94,106,210,0.12)' }]}>
-        <Ionicons
-          name="folder"
-          size={size === 'md' ? 17 : 15}
-          color="#5E6AD2"
-        />
+        <Ionicons name="folder" size={size === 'md' ? 17 : 15} color="#5E6AD2" />
       </View>
     );
   }
@@ -110,10 +106,7 @@ export function FileIconTile({ isDir, name, size = 'md' }: FileIconTileProps) {
       ]}
     >
       <Text
-        style={[
-          size === 'md' ? styles.monogramMd : styles.monogramSm,
-          { color: family.color },
-        ]}
+        style={[size === 'md' ? styles.monogramMd : styles.monogramSm, { color: family.color }]}
         numberOfLines={1}
       >
         {label || 'FILE'}

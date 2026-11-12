@@ -20,15 +20,18 @@ function nextRequestId(): string {
 const PATTERNS = {
   thinking: /[●⏺◉○]\s*(?:Thinking|Analyzing|Processing)/i,
 
-  toolUse: /(?:⏺|●|▸|→)\s*(Read|Write|Edit|Create|Bash|Glob|Grep|MultiEdit|TodoRead|TodoWrite|WebFetch|Task|LS|NotebookEdit|ServerStatus|Ask|ToolUse)\b/i,
+  toolUse:
+    /(?:⏺|●|▸|→)\s*(Read|Write|Edit|Create|Bash|Glob|Grep|MultiEdit|TodoRead|TodoWrite|WebFetch|Task|LS|NotebookEdit|ServerStatus|Ask|ToolUse)\b/i,
 
-  filePath: /(?:Read|Write|Edit|Create|MultiEdit)\s+(?:file:\s*)?(`[^`]+`|["'[\s]([^\s"'`]+\.\w+))/i,
+  filePath:
+    /(?:Read|Write|Edit|Create|MultiEdit)\s+(?:file:\s*)?(`[^`]+`|["'[\s]([^\s"'`]+\.\w+))/i,
 
   bashCommand: /(?:Bash|Command)\s*\n?\s*(?:`([^`]+)`|$ (.+)$)/m,
 
   permissionRequest: /(?:Allow|approve)\s+(?:this\s+)?(?:action|tool use|command)\??/i,
 
-  permissionPromptLine: /(?:\[[YyNn]\]|\(y\/n\)|→\s*(?:Yes|No|Allow|Deny)|Always allow|Allow (?:once|always)|Don't ask again)/i,
+  permissionPromptLine:
+    /(?:\[[YyNn]\]|\(y\/n\)|→\s*(?:Yes|No|Allow|Deny)|Always allow|Allow (?:once|always)|Don't ask again)/i,
 
   waitingInput: /(?:^|>)\s*$/m,
 
@@ -236,7 +239,11 @@ export class ClaudeCodeParser {
     }
   }
 
-  private endTurn(events: ParsedEvent[], now: number, status: 'completed' | 'failed' | 'cancelled'): void {
+  private endTurn(
+    events: ParsedEvent[],
+    now: number,
+    status: 'completed' | 'failed' | 'cancelled',
+  ): void {
     if (this.state.inTurn) {
       events.push({
         type: 'turn_boundary',

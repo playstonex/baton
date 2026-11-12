@@ -154,9 +154,7 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div
-      className={`inline-flex rounded-sm border border-line-soft bg-raised p-0.5 ${className}`}
-    >
+    <div className={`inline-flex rounded-sm border border-line-soft bg-raised p-0.5 ${className}`}>
       {options.map((opt) => {
         const active = value === opt.key;
         return (
@@ -192,7 +190,9 @@ export function PageHeader({
     <div className="mb-8 flex items-start justify-between gap-4">
       <div>
         <h1 className="text-xl font-semibold tracking-[-0.02em] text-fg">{title}</h1>
-        {description && <p className="mt-1 text-[13px] leading-relaxed text-muted">{description}</p>}
+        {description && (
+          <p className="mt-1 text-[13px] leading-relaxed text-muted">{description}</p>
+        )}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
@@ -288,7 +288,9 @@ export function EmptyState({
         {icon}
       </div>
       <h4 className="text-[13px] font-semibold text-fg-2">{title}</h4>
-      {description && <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">{description}</p>}
+      {description && (
+        <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">{description}</p>
+      )}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );

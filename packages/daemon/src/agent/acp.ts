@@ -95,9 +95,7 @@ export async function loadAcpProviders(
   for (const [name, value] of Object.entries(providers)) {
     const p = value as Partial<AcpProviderProfile>;
     if (typeof p.command !== 'string' || !isSafeAcpCommand(p.command)) {
-      console.warn(
-        `[baton] acp: provider '${name}' has missing or unsafe command — skipped`,
-      );
+      console.warn(`[baton] acp: provider '${name}' has missing or unsafe command — skipped`);
       continue;
     }
     map.set(name, {
@@ -129,7 +127,10 @@ export class GenericAcpAdapter extends BaseAgentAdapter {
   private msgIdCounter = 0;
   private lineBuffer = '';
 
-  constructor(providerName: string, private readonly profile: AcpProviderProfile) {
+  constructor(
+    providerName: string,
+    private readonly profile: AcpProviderProfile,
+  ) {
     super();
     this.name = `${profile.label ?? providerName} (ACP)`;
   }
@@ -415,10 +416,7 @@ export class GenericAcpSdkAdapter implements SdkAgentAdapter {
         },
         onServerRequest: (id, method, params) => {
           this.pendingRequests.set(id, method);
-          if (
-            method === 'session/request_permission' ||
-            method === 'request_permission'
-          ) {
+          if (method === 'session/request_permission' || method === 'request_permission') {
             this.onEvent?.({ type: 'waiting_approval', timestamp: Date.now() });
             this.onEvent?.({
               type: 'permission_request',

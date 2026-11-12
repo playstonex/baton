@@ -132,9 +132,7 @@ export class ScheduleService {
 
   private async runSchedule(schedule: ScheduleConfig): Promise<void> {
     try {
-      const adapter = createAdapter(
-        schedule.agentType as AgentType,
-      );
+      const adapter = createAdapter(schedule.agentType as AgentType);
       const sessionId = await this.agentManager.start(
         {
           type: schedule.agentType as AgentType,

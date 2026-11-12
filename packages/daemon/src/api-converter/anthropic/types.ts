@@ -33,8 +33,7 @@ export type AnthropicContentBlock =
   | { type: 'tool_result'; tool_use_id: string; content: string | AnthropicContentBlock[] };
 
 export type AnthropicAssistantContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: unknown };
+  { type: 'text'; text: string } | { type: 'tool_use'; id: string; name: string; input: unknown };
 
 export interface AnthropicTool {
   name: string;
@@ -43,10 +42,7 @@ export interface AnthropicTool {
 }
 
 export type AnthropicToolChoice =
-  | { type: 'auto' }
-  | { type: 'any' }
-  | { type: 'tool'; name: string }
-  | { type: 'none' };
+  { type: 'auto' } | { type: 'any' } | { type: 'tool'; name: string } | { type: 'none' };
 
 export interface MessagesResponse {
   id: string;
@@ -71,7 +67,11 @@ export type AnthropicStreamEvent =
   | { type: 'content_block_start'; index: number; content_block: AnthropicAssistantContentBlock }
   | { type: 'content_block_delta'; index: number; delta: AnthropicDelta }
   | { type: 'content_block_stop'; index: number }
-  | { type: 'message_delta'; delta: { stop_reason: string | null; stop_sequence: string | null }; usage?: { output_tokens: number } }
+  | {
+      type: 'message_delta';
+      delta: { stop_reason: string | null; stop_sequence: string | null };
+      usage?: { output_tokens: number };
+    }
   | { type: 'message_stop' };
 
 export type AnthropicDelta =

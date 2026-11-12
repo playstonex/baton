@@ -81,7 +81,7 @@ describe('createSdkAdapter factory semantics', () => {
   // concurrent same-type sessions would clobber each other.
   it('returns a fresh instance per call for every SDK-capable type', async () => {
     const { createSdkAdapter } = await import('../agent/index.js');
-    const types = ['claude-code', 'codex', 'opencode'] as const;
+    const types = ['claude-code', 'codex', 'opencode', 'antigravity'] as const;
     for (const t of types) {
       const a = createSdkAdapter(t);
       const b = createSdkAdapter(t);
@@ -93,12 +93,11 @@ describe('createSdkAdapter factory semantics', () => {
   it('returns null for PTY-only types', async () => {
     const { createSdkAdapter } = await import('../agent/index.js');
     expect(createSdkAdapter('acp')).toBeNull(); // acp resolves via its own per-provider factory
-    // Kiro/Antigravity/Pi are PTY-only — the kiro ACP path died with the
+    // Kiro/Pi are PTY-only — the kiro ACP path died with the
     // CLI's `acp` subcommand removal.
     expect(createSdkAdapter('kiro')).toBeNull();
     expect(createSdkAdapter('kiro-cli')).toBeNull();
     expect(createSdkAdapter('kiro-cli-acp')).toBeNull();
-    expect(createSdkAdapter('antigravity')).toBeNull();
     expect(createSdkAdapter('pi')).toBeNull();
   });
 });
@@ -167,9 +166,9 @@ describe('session resume argv', () => {
   it('extracts provider session ids from cleaned output', async () => {
     const { AntigravityAdapter } = await import('../agent/antigravity.js');
     const agy = new AntigravityAdapter();
-    expect(
-      agy.extractSessionId('Conversation 3f2504e0-4f89-11d3-9a0c-0305e82c3301 started'),
-    ).toBe('3f2504e0-4f89-11d3-9a0c-0305e82c3301');
+    expect(agy.extractSessionId('Conversation 3f2504e0-4f89-11d3-9a0c-0305e82c3301 started')).toBe(
+      '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+    );
     expect(agy.extractSessionId('no ids here')).toBeNull();
   });
 });
@@ -202,8 +201,12 @@ describe('KiroAdapter (unified entry)', () => {
     expect(
       adapter.parseOutput('Allow this action? [y/n/t]').some((e) => e.type === 'status_change'),
     ).toBe(true);
-    expect(adapter.parseOutput('▸ Credits: 0.24 • Time: 3s').some((e) => e.type === 'status_change')).toBe(true);
-    expect(adapter.parseOutput('read src/main.ts').some((e) => e.type === 'file_change')).toBe(true);
+    expect(
+      adapter.parseOutput('▸ Credits: 0.24 • Time: 3s').some((e) => e.type === 'status_change'),
+    ).toBe(true);
+    expect(adapter.parseOutput('read src/main.ts').some((e) => e.type === 'file_change')).toBe(
+      true,
+    );
   });
 });
 
@@ -225,9 +228,15 @@ describe('AntigravityAdapter', () => {
   it('parses thinking and shell output', async () => {
     const { AntigravityAdapter } = await import('../agent/antigravity.js');
     const adapter = new AntigravityAdapter();
-    expect(adapter.parseOutput('Reasoning about the task').some((e) => e.type === 'thinking')).toBe(true);
-    expect(adapter.parseOutput('Running command: npm test').some((e) => e.type === 'command_exec')).toBe(true);
-    expect(adapter.parseOutput('something happened').some((e) => e.type === 'raw_output')).toBe(true);
+    expect(adapter.parseOutput('Reasoning about the task').some((e) => e.type === 'thinking')).toBe(
+      true,
+    );
+    expect(
+      adapter.parseOutput('Running command: npm test').some((e) => e.type === 'command_exec'),
+    ).toBe(true);
+    expect(adapter.parseOutput('something happened').some((e) => e.type === 'raw_output')).toBe(
+      true,
+    );
   });
 });
 
@@ -251,6 +260,8 @@ describe('PiAdapter', () => {
     const adapter = new PiAdapter();
     const events = adapter.parseOutput('› bash(npm install)');
     expect(events.some((e) => e.type === 'tool_use')).toBe(true);
-    expect(adapter.parseOutput('edited src/app.ts').some((e) => e.type === 'file_change')).toBe(true);
+    expect(adapter.parseOutput('edited src/app.ts').some((e) => e.type === 'file_change')).toBe(
+      true,
+    );
   });
 });

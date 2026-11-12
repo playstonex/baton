@@ -129,9 +129,7 @@ export async function syncProvidersToCodex(
   // Rebuild the model_providers table entirely from Baton's source of truth.
   const { table, defaultSelection, skipped } = buildModelProviders(config, port);
   if (skipped.length > 0) {
-    console.warn(
-      `[baton] codex-sync: skipped reserved provider ids: ${skipped.join(', ')}`,
-    );
+    console.warn(`[baton] codex-sync: skipped reserved provider ids: ${skipped.join(', ')}`);
   }
 
   existing.model_providers = table;

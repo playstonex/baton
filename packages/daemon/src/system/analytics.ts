@@ -72,9 +72,7 @@ export class AnalyticsService {
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS idx_request_logs_timestamp ON request_logs(timestamp)`,
     );
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_request_logs_session ON request_logs(session_id)`,
-    );
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_request_logs_session ON request_logs(session_id)`);
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS idx_request_logs_event_type ON request_logs(event_type)`,
     );
@@ -174,18 +172,22 @@ export class AnalyticsService {
 
     const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
-    const row = this.db.prepare(
-      `SELECT
+    const row = this.db
+      .prepare(
+        `SELECT
          COUNT(*) as total,
          SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
          AVG(CASE WHEN duration_ms IS NOT NULL THEN duration_ms END) as avg_latency
        FROM request_logs
        WHERE event_type = 'tool_call_end' AND timestamp > ?`,
-    ).get(dayAgo) as { total: number; success_count: number; avg_latency: number | null } | null;
+      )
+      .get(dayAgo) as { total: number; success_count: number; avg_latency: number | null } | null;
 
-    const errors = this.db.prepare(
-      `SELECT COUNT(*) as count FROM request_logs WHERE event_type = 'error' AND timestamp > ?`,
-    ).get(dayAgo) as { count: number } | null;
+    const errors = this.db
+      .prepare(
+        `SELECT COUNT(*) as count FROM request_logs WHERE event_type = 'error' AND timestamp > ?`,
+      )
+      .get(dayAgo) as { count: number } | null;
 
     const total = row?.total ?? 0;
     const successes = row?.success_count ?? 0;
@@ -196,7 +198,10 @@ export class AnalyticsService {
     const errorPenalty = Math.min(errorCount / 10, 1) * 30;
     const latencyPenalty = Math.min(avgLatency / 30000, 1) * 30;
     const successBonus = successRate * 40;
-    const score = Math.max(0, Math.min(100, successBonus + (30 - errorPenalty) + (30 - latencyPenalty)));
+    const score = Math.max(
+      0,
+      Math.min(100, successBonus + (30 - errorPenalty) + (30 - latencyPenalty)),
+    );
 
     return {
       score: Math.round(score * 10) / 10,
@@ -211,7 +216,9 @@ export class AnalyticsService {
     this.flush();
     const start = Date.now() - hours * 60 * 60 * 1000;
 
-    return this.db.prepare(`
+    return this.db
+      .prepare(
+        `
       SELECT
         strftime('%Y-%m-%d %H:00', timestamp / 1000, 'unixepoch') as hour,
         COUNT(*) as totalEvents,
@@ -222,7 +229,9 @@ export class AnalyticsService {
       WHERE timestamp > ?
       GROUP BY hour
       ORDER BY hour ASC
-    `).all(start) as HourlyStats[];
+    `,
+      )
+      .all(start) as HourlyStats[];
   }
 
   getSessionStats(sessionId: string): {
@@ -234,23 +243,29 @@ export class AnalyticsService {
   } {
     this.flush();
 
-    const row = this.db.prepare(
-      `SELECT
+    const row = this.db
+      .prepare(
+        `SELECT
          COUNT(*) as total,
          SUM(CASE WHEN event_type IN ('tool_use', 'tool_call_start') THEN 1 ELSE 0 END) as tools,
          SUM(CASE WHEN event_type = 'error' THEN 1 ELSE 0 END) as errors,
          AVG(CASE WHEN duration_ms IS NOT NULL THEN duration_ms END) as avg_dur
        FROM request_logs WHERE session_id = ?`,
-    ).get(sessionId) as { total: number; tools: number; errors: number; avg_dur: number | null };
+      )
+      .get(sessionId) as { total: number; tools: number; errors: number; avg_dur: number | null };
 
-    const topTools = this.db.prepare(`
+    const topTools = this.db
+      .prepare(
+        `
       SELECT tool, COUNT(*) as count
       FROM request_logs
       WHERE session_id = ? AND tool IS NOT NULL
       GROUP BY tool
       ORDER BY count DESC
       LIMIT 10
-    `).all(sessionId) as { tool: string; count: number }[];
+    `,
+      )
+      .all(sessionId) as { tool: string; count: number }[];
 
     return {
       totalEvents: row.total,
@@ -263,9 +278,9 @@ export class AnalyticsService {
 
   getRecentEvents(limit = 100): RequestLog[] {
     this.flush();
-    return this.db.prepare(
-      `SELECT * FROM request_logs ORDER BY timestamp DESC LIMIT ?`,
-    ).all(limit) as RequestLog[];
+    return this.db
+      .prepare(`SELECT * FROM request_logs ORDER BY timestamp DESC LIMIT ?`)
+      .all(limit) as RequestLog[];
   }
 
   close(): void {

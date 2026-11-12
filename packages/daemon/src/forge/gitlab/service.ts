@@ -108,7 +108,9 @@ export class GitLabForgeService implements ForgeService {
       body: r.description ?? null,
       baseRefName: r.target_branch,
       headRefName: r.source_branch,
-      labels: (r.labels ?? []).map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter(Boolean),
+      labels: (r.labels ?? [])
+        .map((l) => (typeof l === 'string' ? l : (l.name ?? '')))
+        .filter(Boolean),
       updatedAt: r.updated_at,
       authorLogin: r.author?.username ?? null,
       isDraft: r.draft ?? r.work_in_progress ?? false,
@@ -148,7 +150,9 @@ export class GitLabForgeService implements ForgeService {
       url: r.web_url,
       state: normState(r.state),
       body: r.description ?? null,
-      labels: (r.labels ?? []).map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter(Boolean),
+      labels: (r.labels ?? [])
+        .map((l) => (typeof l === 'string' ? l : (l.name ?? '')))
+        .filter(Boolean),
       updatedAt: r.updated_at,
       authorLogin: r.author?.username ?? null,
     }));

@@ -38,11 +38,21 @@ export class AntigravityAdapter extends BaseAgentAdapter {
     return extractUuid(clean, 'conversation');
   }
 
+  override transformInput(content: string): string {
+    return content + '\n';
+  }
+
   parseOutput(raw: string): ParsedEvent[] {
     const events: ParsedEvent[] = [];
     const now = Date.now();
     const clean = stripAnsi(raw);
     if (!clean) return events;
+
+    // TUI prompt waiting markers
+    if (/\? for shortcuts|ask a question|>\s*$/i.test(clean.trim())) {
+      events.push({ type: 'status_change', status: 'idle', timestamp: now });
+      return events;
+    }
 
     if (/thinking|reasoning|analyzing/i.test(clean)) {
       events.push({ type: 'thinking', content: clean, timestamp: now });

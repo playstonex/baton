@@ -65,10 +65,7 @@ describe('AgentManager SDK status lifecycle', () => {
   it('mirrors adapter status changes into the canonical process status', async () => {
     const adapter = new FakeSdkAdapter();
     const manager = new Manager();
-    const id = await manager.startSdk(
-      { type: 'claude-code', projectPath: '/tmp/proj' },
-      adapter,
-    );
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
 
     expect(manager.get(id)?.status).toBe('running');
     expect(manager.get(id)?.mode).toBe('sdk');
@@ -87,10 +84,7 @@ describe('AgentManager SDK status lifecycle', () => {
   it('lets a late adapter event flip an idle session back to running', async () => {
     const adapter = new FakeSdkAdapter();
     const manager = new Manager();
-    const id = await manager.startSdk(
-      { type: 'claude-code', projectPath: '/tmp/proj' },
-      adapter,
-    );
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
 
     adapter.send('idle');
     adapter.send('running');
@@ -100,10 +94,7 @@ describe('AgentManager SDK status lifecycle', () => {
   it('never resurrects a stopped session from adapter events', async () => {
     const adapter = new FakeSdkAdapter();
     const manager = new Manager();
-    const id = await manager.startSdk(
-      { type: 'claude-code', projectPath: '/tmp/proj' },
-      adapter,
-    );
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
 
     adapter.send('stopped');
     expect(manager.get(id)?.status).toBe('stopped');
@@ -116,10 +107,7 @@ describe('AgentManager SDK status lifecycle', () => {
   it('rejects input to an adapter-declared dead session', async () => {
     const adapter = new FakeSdkAdapter();
     const manager = new Manager();
-    const id = await manager.startSdk(
-      { type: 'claude-code', projectPath: '/tmp/proj' },
-      adapter,
-    );
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
 
     adapter.send('stopped');
     expect(() => manager.chatWrite(id, 'hello')).toThrow();
@@ -128,10 +116,7 @@ describe('AgentManager SDK status lifecycle', () => {
   it('stop() transitions an SDK session to stopped instead of leaving it running', async () => {
     const adapter = new FakeSdkAdapter();
     const manager = new Manager();
-    const id = await manager.startSdk(
-      { type: 'claude-code', projectPath: '/tmp/proj' },
-      adapter,
-    );
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
 
     await manager.stop(id);
 
@@ -144,10 +129,7 @@ describe('AgentManager SDK status lifecycle', () => {
   it('stop() is idempotent', async () => {
     const adapter = new FakeSdkAdapter();
     const manager = new Manager();
-    const id = await manager.startSdk(
-      { type: 'claude-code', projectPath: '/tmp/proj' },
-      adapter,
-    );
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
 
     await manager.stop(id);
     await expect(manager.stop(id)).resolves.toBeUndefined();

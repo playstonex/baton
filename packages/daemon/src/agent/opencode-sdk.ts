@@ -1,4 +1,12 @@
-import type { AgentConfig, ParsedEvent, SdkAgentAdapter, ThinkingConfig, ReasoningEffort, AccessMode, ServiceTier } from '@baton/shared';
+import type {
+  AgentConfig,
+  ParsedEvent,
+  SdkAgentAdapter,
+  ThinkingConfig,
+  ReasoningEffort,
+  AccessMode,
+  ServiceTier,
+} from '@baton/shared';
 import { execSync, execFileSync, spawn } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
 
@@ -139,7 +147,9 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         await (this.isV2
           ? this.httpPost(`/session/${this.sessionId}/interrupt`, {})
           : this.httpPost(`/session/${this.sessionId}/abort`, {}));
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       this.stopServer();
     };
 
@@ -152,7 +162,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       this.serverProcess = spawn('opencode', args, {
         cwd: this.projectPath,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env as Record<string, string> },
+        env: { ...(process.env as Record<string, string>) },
       });
 
       let resolved = false;
@@ -301,7 +311,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         }
 
         const messages = Array.isArray(result)
-          ? result as OcMessage[]
+          ? (result as OcMessage[])
           : (result as { messages?: OcMessage[] }).messages;
         if (!messages) return;
         if (messages.length <= lastMessageCount) return;
@@ -334,7 +344,6 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     for (const part of parts) {
       const ptype = part.type ?? '';
 
-
       if (ptype === 'text' && part.text) {
         onEvent({
           type: 'raw_output',
@@ -356,13 +365,13 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         const input = state.input ?? {};
         const output = state.output ?? '';
 
-
         if (toolName === 'bash' || toolName === 'Bash') {
           onEvent({
             type: 'command_exec',
             command: (input.command as string) ?? '',
             output,
-            exitCode: (state.metadata?.exit as number) ?? (state.status === 'completed' ? 0 : undefined),
+            exitCode:
+              (state.metadata?.exit as number) ?? (state.status === 'completed' ? 0 : undefined),
             isStreaming: state.status !== 'completed',
             timestamp: Date.now(),
           });
@@ -370,7 +379,8 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
           const filePath =
             (input.filePath as string) ??
             (input.file_path as string) ??
-            (input.path as string) ?? '';
+            (input.path as string) ??
+            '';
           if (filePath && (toolName === 'write' || toolName === 'edit')) {
             onEvent({
               type: 'file_change',
@@ -487,7 +497,8 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
           const filePath =
             (input.filePath as string) ??
             (input.file_path as string) ??
-            (input.path as string) ?? '';
+            (input.path as string) ??
+            '';
           if (filePath) {
             onEvent({
               type: 'file_change',
@@ -517,9 +528,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
             type: 'command_exec',
             command: (input.command as string) ?? '',
             output,
-            exitCode:
-              (state?.metadata?.exit as number) ??
-              (status === 'completed' ? 0 : undefined),
+            exitCode: (state?.metadata?.exit as number) ?? (status === 'completed' ? 0 : undefined),
             isStreaming: false,
             timestamp: Date.now(),
           });
@@ -562,21 +571,24 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         );
         const request = Array.isArray(list) ? list[0] : undefined;
         if (request?.id) {
-          await this.httpPost(
-            `/session/${this.sessionId}/permission/${request.id}/reply`,
-            { decision },
-          );
+          await this.httpPost(`/session/${this.sessionId}/permission/${request.id}/reply`, {
+            decision,
+          });
         }
         return;
       }
 
-      const permissions = await this.httpGet('/permission/') as Array<{ requestID: string }> | null;
+      const permissions = (await this.httpGet('/permission/')) as Array<{
+        requestID: string;
+      }> | null;
       if (permissions && permissions.length > 0) {
         await this.httpPost(`/permission/${permissions[0].requestID}/reply`, {
           outcome: decision === 'once' ? 'approve' : 'reject',
         });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   async listModels(): Promise<string[]> {
@@ -585,7 +597,10 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         encoding: 'utf-8',
         timeout: 15000,
       });
-      return raw.split('\n').map((l) => l.trim()).filter(Boolean);
+      return raw
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
     } catch {
       return [];
     }
@@ -594,7 +609,10 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   private isGitRepo(): boolean {
     try {
       execSync('git rev-parse --is-inside-work-tree', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 3000, stdio: 'pipe',
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 3000,
+        stdio: 'pipe',
       });
       return true;
     } catch {
@@ -606,15 +624,24 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     if (!this.isGitRepo()) return { branches: [], currentBranch: '' };
     try {
       const raw = execSync('git branch --list --format="%(refname:short)"', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 5000,
       });
-      const branches = raw.split('\n').map((b) => b.trim()).filter(Boolean);
+      const branches = raw
+        .split('\n')
+        .map((b) => b.trim())
+        .filter(Boolean);
       let currentBranch = '';
       try {
         currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
-          cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+          cwd: this.projectPath,
+          encoding: 'utf-8',
+          timeout: 5000,
         }).trim();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return { branches, currentBranch };
     } catch {
       return { branches: [], currentBranch: '' };
@@ -625,18 +652,26 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     if (!this.isGitRepo()) return '';
     try {
       return execSync('git status --short', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 5000,
       }).trim();
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
 
   async gitDiff(): Promise<string> {
     if (!this.isGitRepo()) return '';
     try {
       return execSync('git diff --stat', {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
       }).trim();
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
 
   async gitLog(count: number = 10): Promise<string> {
@@ -645,9 +680,13 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       // Arg-array exec: count sanitized to a positive integer.
       const n = Math.max(1, Math.floor(Number(count) || 1));
       return execFileSync('git', ['log', '--oneline', `-${n}`], {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 5000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 5000,
       }).trim();
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
 
   async gitCheckout(branch: string): Promise<{ success: boolean; error?: string }> {
@@ -655,7 +694,9 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     try {
       // Arg-array exec — branch comes from the client and must never touch a shell.
       execFileSync('git', ['checkout', branch], {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
       });
       return { success: true };
     } catch (err) {
@@ -665,7 +706,11 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
   async gitCommit(message: string): Promise<{ success: boolean; error?: string }> {
     try {
-      execFileSync('git', ['add', '-A'], { cwd: this.projectPath, encoding: 'utf-8', timeout: 10000 });
+      execFileSync('git', ['add', '-A'], {
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
+      });
       // Message flows via stdin (-F -), never into argv — no quoting or
       // option-position concerns at all.
       execFileSync('git', ['commit', '-F', '-'], {
@@ -702,11 +747,16 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     if (!isSafeGitRef(name)) return { success: false, error: 'Invalid branch name' };
     try {
       execFileSync('git', ['checkout', '-b', name], {
-        cwd: this.projectPath, encoding: 'utf-8', timeout: 10000,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        timeout: 10000,
       });
       return { success: true };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Branch creation failed' };
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Branch creation failed',
+      };
     }
   }
 

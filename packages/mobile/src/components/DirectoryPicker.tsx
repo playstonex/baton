@@ -92,7 +92,10 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
   // FlatList never fire (verified on simulator).
   if (!visible) return null;
   return (
-    <View style={[styles.modal, { backgroundColor: c.bg, paddingTop: insets.top }]} pointerEvents="box-none">
+    <View
+      style={[styles.modal, { backgroundColor: c.bg, paddingTop: insets.top }]}
+      pointerEvents="box-none"
+    >
       <View style={[styles.header, { borderBottomColor: c.cardBorder }]}>
         <Pressable onPress={onClose} style={styles.headerBtn} hitSlop={8}>
           <Text style={[styles.headerBtnText, { color: c.textSecondary }]}>Cancel</Text>
@@ -105,44 +108,49 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
         </Pressable>
       </View>
 
-        <Pressable
-          onPress={goUp}
-          style={[styles.row, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}
+      <Pressable
+        onPress={goUp}
+        style={[styles.row, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}
+      >
+        <View
+          style={[
+            styles.upTile,
+            { backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' },
+          ]}
         >
-          <View style={[styles.upTile, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
-            <Ionicons name="arrow-up" size={14} color={c.textSecondary} />
-          </View>
-          <Text style={[styles.rowName, { color: c.textSecondary }]}>..</Text>
-        </Pressable>
+          <Ionicons name="arrow-up" size={14} color={c.textSecondary} />
+        </View>
+        <Text style={[styles.rowName, { color: c.textSecondary }]}>..</Text>
+      </Pressable>
 
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="small" color={c.textSecondary} />
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="small" color={c.textSecondary} />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={[styles.errorText, { color: '#dc2626' }]}>{error}</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable onPress={() => loadDir(currentPath)} style={styles.retryBtn}>
+              <Text style={[styles.retryText, { color: '#2383e2' }]}>Retry</Text>
+            </Pressable>
+            <Pressable onPress={() => loadDir('/')} style={styles.retryBtn}>
+              <Text style={[styles.retryText, { color: '#2383e2' }]}>Go to /</Text>
+            </Pressable>
           </View>
-        ) : error ? (
-          <View style={styles.center}>
-            <Text style={[styles.errorText, { color: '#dc2626' }]}>{error}</Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Pressable onPress={() => loadDir(currentPath)} style={styles.retryBtn}>
-                <Text style={[styles.retryText, { color: '#2383e2' }]}>Retry</Text>
-              </Pressable>
-              <Pressable onPress={() => loadDir('/')} style={styles.retryBtn}>
-                <Text style={[styles.retryText, { color: '#2383e2' }]}>Go to /</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <FlatList
-            data={dirs}
-            keyExtractor={(item) => item.path}
-            renderItem={renderItem}
-            contentContainerStyle={dirs.length === 0 ? styles.emptyList : undefined}
-            ListEmptyComponent={
-              <Text style={[styles.emptyText, { color: c.textTertiary }]}>No folders</Text>
-            }
-          />
-        )}
-      </View>
+        </View>
+      ) : (
+        <FlatList
+          data={dirs}
+          keyExtractor={(item) => item.path}
+          renderItem={renderItem}
+          contentContainerStyle={dirs.length === 0 ? styles.emptyList : undefined}
+          ListEmptyComponent={
+            <Text style={[styles.emptyText, { color: c.textTertiary }]}>No folders</Text>
+          }
+        />
+      )}
+    </View>
   );
 }
 
@@ -165,7 +173,13 @@ const styles = StyleSheet.create({
   },
   headerBtn: { paddingVertical: 4 },
   headerBtnText: { fontSize: 16, fontWeight: '500' },
-  headerTitle: { flex: 1, fontSize: 14, fontWeight: '500', textAlign: 'center', marginHorizontal: 8 },
+  headerTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginHorizontal: 8,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

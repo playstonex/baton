@@ -13,16 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { BlurView } from 'expo-blur';
-import type {
-  GitStatusResult,
-  GitDiffResult,
-  GitFileDiff,
-  GitDiffLine,
-} from '@baton/shared';
+import type { GitStatusResult, GitDiffResult, GitFileDiff, GitDiffLine } from '@baton/shared';
 import { gitService } from '../services/git';
 import { useThemeColors } from '../hooks/useThemeColors';
-import { FontFamily, Typography, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
+import { FontFamily, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
 
 export interface AllFilesDiffViewProps {
   visible: boolean;
@@ -192,9 +186,7 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
           style={[
             styles.statsBar,
             {
-              backgroundColor: c.isDark
-                ? Glass.opacity.dark.subtle
-                : Glass.opacity.light.subtle,
+              backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
               borderBottomColor: c.separator,
             },
           ]}
@@ -222,7 +214,11 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
             {totalFiles > 0 && (
               <Pressable onPress={toggleAll} style={styles.toggleAllBtn} hitSlop={6}>
                 <Ionicons
-                  name={expandedFiles.size === totalFiles ? 'chevron-collapse-outline' : 'chevron-expand-outline'}
+                  name={
+                    expandedFiles.size === totalFiles
+                      ? 'chevron-collapse-outline'
+                      : 'chevron-expand-outline'
+                  }
                   size={15}
                   color={c.textSecondary}
                 />
@@ -267,9 +263,7 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
             <View style={[styles.cleanIconWrap, { backgroundColor: Colors.success[400] + '18' }]}>
               <Ionicons name="checkmark-done-circle" size={48} color={Colors.success[400]} />
             </View>
-            <Text style={[styles.cleanTitle, { color: c.textPrimary }]}>
-              Working Tree Clean
-            </Text>
+            <Text style={[styles.cleanTitle, { color: c.textPrimary }]}>Working Tree Clean</Text>
             <Text style={[styles.cleanSub, { color: c.textTertiary }]}>
               No modified, staged, or untracked changes in this workspace.
             </Text>
@@ -309,9 +303,7 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
                   backgroundColor: c.isDark
                     ? Glass.opacity.dark.elevated
                     : Glass.opacity.light.surface,
-                  borderColor: c.isDark
-                    ? Glass.opacity.dark.border
-                    : Glass.opacity.light.border,
+                  borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
                 },
               ]}
               onPress={() => {}}
@@ -329,9 +321,7 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
                   styles.commitInput,
                   {
                     color: c.textPrimary,
-                    borderColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
+                    borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
                     backgroundColor: c.isDark
                       ? Glass.opacity.dark.subtle
                       : Glass.opacity.light.subtle,
@@ -413,18 +403,18 @@ function FileAccordionItem({
     <View style={[styles.fileCard, { borderBottomColor: c.separator }]}>
       <Pressable
         onPress={onToggle}
-          style={({ pressed }) => [
-            styles.fileHeader,
-            {
-              backgroundColor: pressed
-                ? c.isDark
-                  ? Glass.opacity.dark.subtle
-                  : Glass.opacity.light.subtle
-                : c.isDark
-                  ? Glass.opacity.dark.border
-                  : c.card,
-            },
-          ]}
+        style={({ pressed }) => [
+          styles.fileHeader,
+          {
+            backgroundColor: pressed
+              ? c.isDark
+                ? Glass.opacity.dark.subtle
+                : Glass.opacity.light.subtle
+              : c.isDark
+                ? Glass.opacity.dark.border
+                : c.card,
+          },
+        ]}
       >
         <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
           <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLetter}</Text>
@@ -461,14 +451,14 @@ function FileAccordionItem({
           style={[
             styles.fileDiffBody,
             {
-              backgroundColor: c.isDark
-                ? Glass.opacity.dark.subtle
-                : Glass.opacity.light.subtle,
+              backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
             },
           ]}
         >
           {file.hunks.length === 0 ? (
-            <Text style={[styles.emptyHunk, { color: c.textTertiary }]}>No diff contents available</Text>
+            <Text style={[styles.emptyHunk, { color: c.textTertiary }]}>
+              No diff contents available
+            </Text>
           ) : (
             file.hunks.map((hunk, hi) => (
               <View key={hi} style={styles.hunkGroup}>
@@ -502,17 +492,9 @@ function DiffRow({ line, colors: c }: { line: GitDiffLine; colors: any }) {
   const isAdd = line.type === 'add';
   const isDel = line.type === 'remove';
 
-  const bg = isAdd
-    ? Colors.success[400] + '1F'
-    : isDel
-      ? Colors.danger[400] + '1F'
-      : 'transparent';
+  const bg = isAdd ? Colors.success[400] + '1F' : isDel ? Colors.danger[400] + '1F' : 'transparent';
 
-  const textColor = isAdd
-    ? Colors.success[400]
-    : isDel
-      ? Colors.danger[400]
-      : c.textSecondary;
+  const textColor = isAdd ? Colors.success[400] : isDel ? Colors.danger[400] : c.textSecondary;
 
   const prefix = isAdd ? '+' : isDel ? '−' : ' ';
 
@@ -520,12 +502,8 @@ function DiffRow({ line, colors: c }: { line: GitDiffLine; colors: any }) {
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 1 }}>
       <View style={[styles.diffRow, { backgroundColor: bg }]}>
         <View style={styles.lineNums}>
-          <Text style={[styles.lineNumText, { color: c.textTertiary }]}>
-            {line.oldLine ?? ' '}
-          </Text>
-          <Text style={[styles.lineNumText, { color: c.textTertiary }]}>
-            {line.newLine ?? ' '}
-          </Text>
+          <Text style={[styles.lineNumText, { color: c.textTertiary }]}>{line.oldLine ?? ' '}</Text>
+          <Text style={[styles.lineNumText, { color: c.textTertiary }]}>{line.newLine ?? ' '}</Text>
         </View>
 
         <Text style={[styles.diffPrefix, { color: textColor }]}>{prefix}</Text>

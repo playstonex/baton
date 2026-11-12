@@ -23,7 +23,9 @@ class NotificationService {
 
   onNotification(handler: NotificationHandler): () => void {
     this.handlers.add(handler);
-    return () => { this.handlers.delete(handler); };
+    return () => {
+      this.handlers.delete(handler);
+    };
   }
 
   notify(notification: Omit<PushNotification, 'timestamp'>): void {
@@ -39,15 +41,30 @@ class NotificationService {
   }
 
   notifyAgentCompleted(sessionId: string, agentType: string): void {
-    this.notify({ type: 'agent_completed', title: 'Agent Completed', body: `${agentType} session finished`, sessionId });
+    this.notify({
+      type: 'agent_completed',
+      title: 'Agent Completed',
+      body: `${agentType} session finished`,
+      sessionId,
+    });
   }
 
   notifyAgentError(sessionId: string, error: string): void {
-    this.notify({ type: 'agent_error', title: 'Agent Error', body: error.slice(0, 100), sessionId });
+    this.notify({
+      type: 'agent_error',
+      title: 'Agent Error',
+      body: error.slice(0, 100),
+      sessionId,
+    });
   }
 
   notifyAgentWaitingInput(sessionId: string): void {
-    this.notify({ type: 'agent_waiting_input', title: 'Input Required', body: 'Agent is waiting for your input', sessionId });
+    this.notify({
+      type: 'agent_waiting_input',
+      title: 'Input Required',
+      body: 'Agent is waiting for your input',
+      sessionId,
+    });
   }
 }
 

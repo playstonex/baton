@@ -84,8 +84,11 @@ export function QrScannerModal({ visible, onClose, onScan }: QrScannerModalProps
             <Text style={[Typography.title2, { color: '#fff', textAlign: 'center' }]}>
               Camera Access Required
             </Text>
-            <Text style={[Typography.body, { color: '#8e8e93', textAlign: 'center', marginTop: 8 }]}>
-              Allow Baton to use your camera to scan pairing QR codes from your terminal or web dashboard.
+            <Text
+              style={[Typography.body, { color: '#8e8e93', textAlign: 'center', marginTop: 8 }]}
+            >
+              Allow Baton to use your camera to scan pairing QR codes from your terminal or web
+              dashboard.
             </Text>
             <View style={{ marginTop: Spacing.xl, width: '100%', gap: Spacing.md }}>
               <GlassButton
@@ -94,12 +97,7 @@ export function QrScannerModal({ visible, onClose, onScan }: QrScannerModalProps
                 variant="primary"
                 onPress={requestPermission}
               />
-              <GlassButton
-                c={c}
-                label="Cancel"
-                variant="secondary"
-                onPress={onClose}
-              />
+              <GlassButton c={c} label="Cancel" variant="secondary" onPress={onClose} />
             </View>
           </View>
         ) : (
@@ -131,9 +129,7 @@ export function QrScannerModal({ visible, onClose, onScan }: QrScannerModalProps
                 <View style={styles.maskSide} />
               </View>
               <View style={styles.maskBottom}>
-                <Text style={styles.hintText}>
-                  Point camera at terminal or web pairing QR code
-                </Text>
+                <Text style={styles.hintText}>Point camera at terminal or web pairing QR code</Text>
               </View>
             </View>
           </>

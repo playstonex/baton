@@ -1,13 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  Modal,
-  StyleSheet,
-  Dimensions,
-  ScrollView,
-} from 'react-native';
+import { View, Text, Pressable, Modal, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Colors, CornerRadius, Glass, Shadows } from '../../constants/theme';
 import type { ThemeColors } from './TypingIndicator';
@@ -68,7 +60,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
       return { containerStyle: styles.cardCentered, maxHeight: undefined };
     }
     const { width: screenW, height: screenH } = Dimensions.get('window');
-    const { x, y, width: aw, height: ah } = anchor;
+    const { x, y, height: ah } = anchor;
 
     let left = x;
     if (left + CARD_WIDTH > screenW - SCREEN_MARGIN) {
@@ -123,9 +115,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
             ]}
             pointerEvents="none"
           />
-          {title && (
-            <Text style={[styles.title, { color: colors.textTertiary }]}>{title}</Text>
-          )}
+          {title && <Text style={[styles.title, { color: colors.textTertiary }]}>{title}</Text>}
 
           <ScrollView style={maxHeight ? { maxHeight } : undefined}>
             {options.map((opt, i) => {

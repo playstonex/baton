@@ -104,7 +104,11 @@ export const useRecentStore = create<RecentState>()((set, get) => ({
       const existing = byId.get(session.id);
       // Server data wins on merge, but keep a locally-set chatMode when the
       // server row doesn't carry one.
-      byId.set(session.id, { ...existing, ...session, chatMode: session.chatMode ?? existing?.chatMode });
+      byId.set(session.id, {
+        ...existing,
+        ...session,
+        chatMode: session.chatMode ?? existing?.chatMode,
+      });
     }
     const sessions = [...byId.values()]
       .sort((a, b) => b.lastActivity - a.lastActivity)

@@ -79,7 +79,12 @@ export interface AgentSnapshot {
   cols: number;
   rows: number;
   mode?: 'pty' | 'sdk';
+  permissionMode?: PermissionMode;
 }
+
+/** 7-level Permission Modes (ported from Happy) */
+export type PermissionMode =
+  'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'read-only' | 'safe-yolo' | 'yolo';
 
 export interface AgentConfig {
   type: AgentType;
@@ -89,6 +94,7 @@ export interface AgentConfig {
   env?: Record<string, string>;
   cols?: number;
   rows?: number;
+  permissionMode?: PermissionMode;
   /**
    * Resume a previous provider-side conversation. When `providerSessionId`
    * is known the adapter passes the provider's exact resume flag; without

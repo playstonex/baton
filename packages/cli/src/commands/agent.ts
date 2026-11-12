@@ -76,7 +76,7 @@ async function agentRun(args: string[]): Promise<void> {
     ? args[args.indexOf('--provider') + 1]
     : 'claude-code';
   const mode = args.includes('--mode')
-    ? args[args.indexOf('--mode') + 1] as 'pty' | 'sdk' | 'auto'
+    ? (args[args.indexOf('--mode') + 1] as 'pty' | 'sdk' | 'auto')
     : undefined;
   const promptIdx = args.indexOf('--prompt');
   const prompt = promptIdx >= 0 ? args[promptIdx + 1] : undefined;
@@ -86,7 +86,12 @@ async function agentRun(args: string[]): Promise<void> {
       '/api/agents/start',
       {
         method: 'POST',
-        body: JSON.stringify({ agentType: provider, projectPath, mode, ...(prompt ? { prompt } : {}) }),
+        body: JSON.stringify({
+          agentType: provider,
+          projectPath,
+          mode,
+          ...(prompt ? { prompt } : {}),
+        }),
       },
     );
     console.log(`Agent started: ${data.sessionId} (${provider}, ${mode ?? 'pty'})`);

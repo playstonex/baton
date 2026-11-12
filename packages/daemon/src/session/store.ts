@@ -152,9 +152,7 @@ export class SessionStore {
     this.stmtOutputTail = this.db.prepare(
       `SELECT chunk FROM (SELECT seq, chunk FROM output WHERE session_id = ? ORDER BY seq DESC LIMIT ?) ORDER BY seq ASC`,
     );
-    this.stmtEventCount = this.db.prepare(
-      'SELECT COUNT(*) AS n FROM events WHERE session_id = ?',
-    );
+    this.stmtEventCount = this.db.prepare('SELECT COUNT(*) AS n FROM events WHERE session_id = ?');
     this.stmtDeleteEvents = this.db.prepare('DELETE FROM events WHERE session_id = ?');
     this.stmtDeleteOutput = this.db.prepare('DELETE FROM output WHERE session_id = ?');
   }
@@ -178,9 +176,7 @@ export class SessionStore {
         resumed_from TEXT
       )
     `);
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC)`,
-    );
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC)`);
     // CREATE TABLE IF NOT EXISTS does not extend an existing table — add
     // columns introduced after the first release with guarded ALTERs.
     const existing = new Set(
@@ -388,9 +384,9 @@ export class SessionStore {
   /** Delete sessions past the retention window. Returns pruned ids. */
   prune(): string[] {
     const cutoff = new Date(Date.now() - PRUNE_MAX_AGE_DAYS * 24 * 3600 * 1000).toISOString();
-    const stale = this.db
-      .prepare(`SELECT id FROM sessions WHERE updated_at < ?`)
-      .all(cutoff) as { id: string }[];
+    const stale = this.db.prepare(`SELECT id FROM sessions WHERE updated_at < ?`).all(cutoff) as {
+      id: string;
+    }[];
     const pruned = new Set(stale.map((r) => r.id));
 
     // Count-based cap on live (non-archived) sessions: keep the newest N.

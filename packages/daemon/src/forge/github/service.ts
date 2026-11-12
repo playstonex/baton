@@ -72,7 +72,8 @@ export class GitHubForgeService implements ForgeService {
     repo: ForgeRepoRef,
     opts?: { state?: string; limit?: number },
   ): Promise<PullRequestSummary[]> {
-    const fields = 'number,title,url,state,body,baseRefName,headRefName,labels,updatedAt,author,isDraft';
+    const fields =
+      'number,title,url,state,body,baseRefName,headRefName,labels,updatedAt,author,isDraft';
     const rows = await this.ghJson<
       Array<{
         number: number;

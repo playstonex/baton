@@ -15,9 +15,7 @@ export interface SttClip {
   contentType: string | undefined;
 }
 
-export type SttOutcome =
-  | { ok: true; text: string }
-  | { ok: false; status: number; error: string };
+export type SttOutcome = { ok: true; text: string } | { ok: false; status: number; error: string };
 
 const DEEPGRAM_KEY_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
 

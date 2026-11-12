@@ -1,4 +1,4 @@
-import type { AgentConfig, SpawnConfig, StatusDetail } from './agent.js';
+import type { AgentConfig, SpawnConfig, StatusDetail, PermissionMode } from './agent.js';
 
 // Agent types
 // 'kiro' is the canonical type (spawns `kiro-cli chat`); 'kiro-cli' and
@@ -52,9 +52,10 @@ export interface AgentProcess {
    * COMPAT(statusDetail): optional — clients must handle its absence.
    */
   stateDetail?: StatusDetail;
+  permissionMode?: PermissionMode;
 }
 
-export type { AgentConfig, SpawnConfig } from './agent.js';
+export type { AgentConfig, SpawnConfig, PermissionMode } from './agent.js';
 
 // Parsed events — core differentiation: structured understanding of Agent output
 export type ParsedEvent =
@@ -348,6 +349,56 @@ export interface Session {
   status: SessionStatus;
   startedAt: string;
   stoppedAt?: string;
+}
+
+// Model Usage & Rate-Limit Monitoring (ported from Paseo)
+export interface UsageWindow {
+  utilization: number;
+  resetsAt: string | null;
+}
+
+export interface ModelUsageReport {
+  available: boolean;
+  provider: 'claude' | 'codex' | 'other';
+  subscription?: string | null;
+  rateLimitTier?: string | null;
+  fiveHour?: UsageWindow | null;
+  sevenDay?: UsageWindow | null;
+  sevenDayOpus?: UsageWindow | null;
+  updatedAt: number;
+  reason?: string;
+}
+
+// Workspace Checkpoint & Revert (ported from T3 Code Git Plumbing)
+export interface Checkpoint {
+  id: string;
+  projectId: string;
+  label: string;
+  patch: string;
+  files: string[];
+  headSha: string;
+  createdAt: number;
+  commitSha?: string;
+  ref?: string;
+}
+
+export interface RevertPreview {
+  canApply: boolean;
+  conflicts: string[];
+  affectedFiles: string[];
+}
+
+// Tailscale Direct Connect (ported from T3 Code)
+export interface TailscaleStatusReport {
+  available: boolean;
+  online: boolean;
+  magicDnsName: string | null;
+  tailscaleIps: string[];
+  directUrl: string | null;
+  httpsServeEnabled: boolean | null;
+  serving: boolean;
+  serveUrl: string | null;
+  error?: string;
 }
 
 export * from './system.js';

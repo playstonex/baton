@@ -4,12 +4,7 @@ import type { ParsedEvent } from '@baton/shared';
 import { useEventsStore } from '../stores/events.js';
 import { wsService } from '../services/websocket.js';
 import { Card, EmptyState, StatusBadge, MetricCard, Breadcrumbs, Button } from '../lib/ui.js';
-import {
-  IconTerminal,
-  IconGitBranch,
-  IconFile,
-  IconSpinner,
-} from '../lib/icons.js';
+import { IconTerminal, IconGitBranch, IconFile, IconSpinner } from '../lib/icons.js';
 
 export function AgentDetailScreen() {
   const { sessionId } = useParams();
@@ -121,16 +116,15 @@ export function AgentDetailScreen() {
         </div>
         <Card className="max-h-[500px] overflow-auto p-0" padding={false}>
           {statusEvents.length === 0 && toolUses.length === 0 ? (
-            <EmptyState
-              icon={<IconSpinner className="h-5 w-5" />}
-              title="Waiting for events…"
-            />
+            <EmptyState icon={<IconSpinner className="h-5 w-5" />} title="Waiting for events…" />
           ) : (
             <div className="relative">
               <div className="pointer-events-none absolute bottom-0 left-[74px] top-0 w-px bg-line-soft" />
               {[...statusEvents, ...toolUses]
                 .sort((a, b) => a.timestamp - b.timestamp)
-                .map((event, i) => <EventRow key={i} event={event} />)}
+                .map((event, i) => (
+                  <EventRow key={i} event={event} />
+                ))}
             </div>
           )}
         </Card>
@@ -153,17 +147,28 @@ function FileChangeRow({ path, changeType }: { path: string; changeType: string 
 
   return (
     <div className="flex items-center gap-3 px-5 py-3 transition-colors duration-150 hover:bg-raised/50">
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[11px] font-semibold ${colorMap[changeType] ?? 'bg-raised text-muted'}`}>
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[11px] font-semibold ${colorMap[changeType] ?? 'bg-raised text-muted'}`}
+      >
         {iconMap[changeType] ?? '~'}
       </span>
       <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg-2">{path}</span>
-      <StatusBadge status={changeType === 'create' ? 'completed' : changeType === 'delete' ? 'error' : 'running'} dot={false} />
+      <StatusBadge
+        status={
+          changeType === 'create' ? 'completed' : changeType === 'delete' ? 'error' : 'running'
+        }
+        dot={false}
+      />
     </div>
   );
 }
 
 function EventRow({ event }: { event: ParsedEvent }) {
-  const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = new Date(event.timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
   const dotColors: Record<string, string> = {
     status_change: 'bg-accent-hover',
@@ -197,7 +202,9 @@ function EventRow({ event }: { event: ParsedEvent }) {
   return (
     <div className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-150 hover:bg-raised/50">
       <span className="w-14 shrink-0 font-mono text-[11px] tabular-nums text-meta">{time}</span>
-      <span className={`relative z-10 inline-flex h-2 w-2 shrink-0 rounded-full ${dotColors[event.type] ?? 'bg-meta'}`} />
+      <span
+        className={`relative z-10 inline-flex h-2 w-2 shrink-0 rounded-full ${dotColors[event.type] ?? 'bg-meta'}`}
+      />
       <span className="min-w-0 flex-1 truncate text-xs text-fg-2">{description}</span>
     </div>
   );

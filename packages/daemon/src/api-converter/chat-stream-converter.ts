@@ -63,7 +63,16 @@ export async function* convertChatStreamToResponses(
 
         if (!created) {
           created = true;
-          yield { type: 'response.created', response: { id: responseId, object: 'response', created_at: createdAt, status: 'in_progress', model } };
+          yield {
+            type: 'response.created',
+            response: {
+              id: responseId,
+              object: 'response',
+              created_at: createdAt,
+              status: 'in_progress',
+              model,
+            },
+          };
         }
 
         const delta = chunk.choices?.[0]?.delta;
@@ -85,9 +94,21 @@ export async function* convertChatStreamToResponses(
           }
           if (!textStarted) {
             textStarted = true;
-            yield { type: 'response.content_part.added', item_id: undefined, output_index: 0, content_index: 0, part: { type: 'output_text', text: '' } };
+            yield {
+              type: 'response.content_part.added',
+              item_id: undefined,
+              output_index: 0,
+              content_index: 0,
+              part: { type: 'output_text', text: '' },
+            };
           }
-          yield { type: 'response.output_text.delta', item_id: undefined, output_index: 0, content_index: 0, delta: delta.content };
+          yield {
+            type: 'response.output_text.delta',
+            item_id: undefined,
+            output_index: 0,
+            content_index: 0,
+            delta: delta.content,
+          };
           continue;
         }
 
@@ -108,7 +129,13 @@ export async function* convertChatStreamToResponses(
               yield {
                 type: 'response.output_item.added',
                 output_index: idx,
-                item: { type: 'function_call', status: 'in_progress', call_id: entry.id, name: entry.name, arguments: '' },
+                item: {
+                  type: 'function_call',
+                  status: 'in_progress',
+                  call_id: entry.id,
+                  name: entry.name,
+                  arguments: '',
+                },
               };
             }
             if (tc.function?.arguments) {
@@ -132,7 +159,16 @@ export async function* convertChatStreamToResponses(
   // Close out any open text item.
   if (textStarted) {
     yield { type: 'response.output_text.done', output_index: 0, text: '' };
-    yield { type: 'response.output_item.done', output_index: 0, item: { type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: '' }] } };
+    yield {
+      type: 'response.output_item.done',
+      output_index: 0,
+      item: {
+        type: 'message',
+        status: 'completed',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: '' }],
+      },
+    };
   }
   // Close out tool-call items. The done event must carry the full accumulated
   // arguments string, and the output_item.done item must include call_id/name.
@@ -142,7 +178,13 @@ export async function* convertChatStreamToResponses(
     yield {
       type: 'response.output_item.done',
       output_index: idx,
-      item: { type: 'function_call', status: 'completed', call_id: entry.id, name: entry.name, arguments: args },
+      item: {
+        type: 'function_call',
+        status: 'completed',
+        call_id: entry.id,
+        name: entry.name,
+        arguments: args,
+      },
     };
   }
 
@@ -155,7 +197,11 @@ export async function* convertChatStreamToResponses(
       status: 'completed',
       model,
       usage: usage
-        ? { input_tokens: usage.prompt_tokens, output_tokens: usage.completion_tokens, total_tokens: usage.total_tokens }
+        ? {
+            input_tokens: usage.prompt_tokens,
+            output_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+          }
         : undefined,
     },
   };

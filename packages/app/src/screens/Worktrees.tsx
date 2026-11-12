@@ -253,9 +253,7 @@ export function WorktreesScreen() {
 
                   {/* Agents running in this worktree */}
                   <div className="flex flex-col gap-2">
-                    <span className="text-xs font-medium text-muted">
-                      Agents
-                    </span>
+                    <span className="text-xs font-medium text-muted">Agents</span>
                     {agentsFor(active).length === 0 ? (
                       <span className="text-[13px] text-muted">
                         No agent running in this worktree yet.

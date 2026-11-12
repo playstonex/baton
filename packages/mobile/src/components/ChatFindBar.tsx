@@ -36,9 +36,7 @@ export function ChatFindBar({
       style={[
         styles.row,
         {
-          backgroundColor: colors.isDark
-            ? Glass.opacity.dark.subtle
-            : Glass.opacity.light.subtle,
+          backgroundColor: colors.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
           borderColor: colors.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
         },
       ]}

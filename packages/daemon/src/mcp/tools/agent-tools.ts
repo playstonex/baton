@@ -25,9 +25,7 @@ const agentCreate = buildTool({
   isConcurrencySafe: false,
   execute: async (params, ctx) => {
     const agentManager = ctx.agentManager as AgentManager;
-    const adapter = createAdapter(
-      params.provider as AgentType,
-    );
+    const adapter = createAdapter(params.provider as AgentType);
     const sessionId = await agentManager.start(
       {
         type: params.provider as AgentType,
@@ -45,8 +43,7 @@ const agentCreate = buildTool({
     // 500ms-poll pattern used elsewhere. COMPAT(notifyOnFinish).
     if (params.notifyOnFinish) {
       const onAgentFinished = ctx.onAgentFinished as
-        | ((sid: string, status: string) => void)
-        | undefined;
+        ((sid: string, status: string) => void) | undefined;
       const unsub = agentManager.onEvent(sessionId, (event) => {
         if (
           event.type === 'status_change' &&

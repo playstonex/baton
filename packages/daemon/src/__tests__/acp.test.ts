@@ -88,7 +88,9 @@ describe('consumeAcpLines (framing + mapping)', () => {
     h.feed('{"jsonrpc":"2.0","id":0,"resu');
     expect(h.events).toEqual([]);
     h.feed('lt":{"agentInfo":{"name":"x"}}}\n');
-    expect(h.events).toEqual([{ type: 'status_change', status: 'running', timestamp: h.events[0].timestamp }]);
+    expect(h.events).toEqual([
+      { type: 'status_change', status: 'running', timestamp: h.events[0].timestamp },
+    ]);
   });
 
   it('maps the session lifecycle and notification stream', () => {
@@ -116,7 +118,9 @@ describe('consumeAcpLines (framing + mapping)', () => {
   it('surfaces JSON-RPC errors and drops non-JSON noise', () => {
     const h = harness();
     h.feed('not json at all\n{"jsonrpc":"2.0","id":9,"error":{"message":"boom"}}\n');
-    expect(h.events).toEqual([{ type: 'error', message: 'boom', timestamp: h.events[0].timestamp }]);
+    expect(h.events).toEqual([
+      { type: 'error', message: 'boom', timestamp: h.events[0].timestamp },
+    ]);
   });
 });
 
@@ -178,7 +182,11 @@ describe('GenericAcpSdkAdapter end-to-end (stub agent)', () => {
       const terminal = await new Promise<boolean>((resolve) => {
         const t = setTimeout(() => resolve(false), 5000);
         const check = () => {
-          if (events.some((e) => e.type === 'status_change' && (e.status === 'stopped' || e.status === 'error'))) {
+          if (
+            events.some(
+              (e) => e.type === 'status_change' && (e.status === 'stopped' || e.status === 'error'),
+            )
+          ) {
             clearTimeout(t);
             resolve(true);
           } else setTimeout(check, 25);
@@ -192,17 +200,13 @@ describe('GenericAcpSdkAdapter end-to-end (stub agent)', () => {
   }, 8000);
 
   it('refreshAcpAdapters warms the per-provider lookup', () => {
-    refreshAcpAdapters(
-      new Map([['stub', { command: 'node', args: [STUB], label: 'Stub' }]]),
-    );
+    refreshAcpAdapters(new Map([['stub', { command: 'node', args: [STUB], label: 'Stub' }]]));
     expect(getAcpSdkAdapter('stub')?.name).toBe('Stub (ACP)');
     expect(getAcpSdkAdapter('missing')).toBeNull();
   });
 
   it('returns a FRESH adapter per session — concurrent sessions stay isolated', async () => {
-    refreshAcpAdapters(
-      new Map([['stub', { command: 'node', args: [STUB], label: 'Stub' }]]),
-    );
+    refreshAcpAdapters(new Map([['stub', { command: 'node', args: [STUB], label: 'Stub' }]]));
     // Two lookups must be independent objects: adapters carry per-session
     // state (process/sessionId/onEvent); sharing one would clobber the first
     // session when the second starts.
@@ -249,8 +253,12 @@ describe('GenericAcpSdkAdapter end-to-end (stub agent)', () => {
       await waitUntil(eventsA, 'echo: from session A');
       await waitUntil(eventsB, 'echo: from session B');
       // Cross-contamination check: A must not carry B's echo.
-      expect(eventsA.some((e) => e.type === 'chat_message' && e.content === 'echo: from session B')).toBe(false);
-      expect(eventsB.some((e) => e.type === 'chat_message' && e.content === 'echo: from session A')).toBe(false);
+      expect(
+        eventsA.some((e) => e.type === 'chat_message' && e.content === 'echo: from session B'),
+      ).toBe(false);
+      expect(
+        eventsB.some((e) => e.type === 'chat_message' && e.content === 'echo: from session A'),
+      ).toBe(false);
     } finally {
       await sessA.stop();
       await sessB.stop();

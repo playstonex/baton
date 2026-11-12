@@ -69,7 +69,9 @@ export function AgentQuestionCard({
               Permission Requested
             </Text>
             <View style={styles.toolPill}>
-              <Text style={[Typography.caption2, { color: Colors.warning[400], fontWeight: '700' }]}>
+              <Text
+                style={[Typography.caption2, { color: Colors.warning[400], fontWeight: '700' }]}
+              >
                 {permission.tool || 'Action'}
               </Text>
             </View>
@@ -77,7 +79,9 @@ export function AgentQuestionCard({
         </View>
 
         <Text style={[Typography.body, { color: c.textPrimary, marginVertical: Spacing.sm }]}>
-          {permission.description || permission.action || 'The agent is requesting approval to execute this command.'}
+          {permission.description ||
+            permission.action ||
+            'The agent is requesting approval to execute this command.'}
         </Text>
 
         {permission.action && permission.description !== permission.action && (
@@ -85,9 +89,7 @@ export function AgentQuestionCard({
             style={[
               styles.codeBox,
               {
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.subtle
-                  : Glass.opacity.light.subtle,
+                backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
               },
             ]}
           >
@@ -207,12 +209,7 @@ export function AgentQuestionCard({
                       {opt.label}
                     </Text>
                     {opt.description ? (
-                      <Text
-                        style={[
-                          Typography.caption2,
-                          { color: c.textSecondary, marginTop: 2 },
-                        ]}
-                      >
+                      <Text style={[Typography.caption2, { color: c.textSecondary, marginTop: 2 }]}>
                         {opt.description}
                       </Text>
                     ) : null}

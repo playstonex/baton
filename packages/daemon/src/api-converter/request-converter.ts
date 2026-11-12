@@ -68,9 +68,10 @@ export function convertRequest(req: ChatCompletionRequest): ResponsesApiRequest 
  *     top-level `instructions` field instead of a system message in input)
  *   - inputItems: the remaining messages converted to Responses input items
  */
-function convertMessages(
-  messages: ChatMessage[],
-): { instructions: string | undefined; inputItems: ResponsesInputItem[] } {
+function convertMessages(messages: ChatMessage[]): {
+  instructions: string | undefined;
+  inputItems: ResponsesInputItem[];
+} {
   let instructions: string | undefined;
   const inputItems: ResponsesInputItem[] = [];
 

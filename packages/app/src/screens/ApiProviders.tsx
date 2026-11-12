@@ -292,9 +292,7 @@ export function ApiProvidersScreen() {
         </div>
 
         <div className="mt-5">
-          <label className="mb-2 block text-xs font-medium text-muted">
-            Upstream format
-          </label>
+          <label className="mb-2 block text-xs font-medium text-muted">Upstream format</label>
           <SegmentedControl
             value={newUpstreamFormat}
             options={FORMAT_OPTIONS}
@@ -332,14 +330,15 @@ export function ApiProvidersScreen() {
         <p className="mt-5 border-t border-line-soft pt-4 text-[11px] leading-relaxed text-muted">
           Codex talks Responses-API to the local daemon, which adapts to this provider's upstream
           format and forwards to <code className="font-mono text-fg-2">Base URL</code>. On save,
-          <code className="font-mono text-fg-2"> ~/.codex/config.toml</code> is updated so this provider points
-          at <code className="font-mono text-fg-2">http://localhost:3210/proxy</code>.
+          <code className="font-mono text-fg-2"> ~/.codex/config.toml</code> is updated so this
+          provider points at{' '}
+          <code className="font-mono text-fg-2">http://localhost:3210/proxy</code>.
           <br />
           <strong className="font-medium text-fg-2">API key:</strong> put it in
           <code className="font-mono text-fg-2"> ~/.baton/.env</code> (e.g.
-          <code className="font-mono text-fg-2"> GLM_CODEX_API_KEY=sk-...</code>) — the daemon reads it from
-          there on startup, so it works even when launched from the mobile app or on reboot. Restart
-          the daemon after editing.
+          <code className="font-mono text-fg-2"> GLM_CODEX_API_KEY=sk-...</code>) — the daemon reads
+          it from there on startup, so it works even when launched from the mobile app or on reboot.
+          Restart the daemon after editing.
         </p>
       </Card>
 
@@ -383,9 +382,7 @@ export function ApiProvidersScreen() {
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-xs font-medium text-muted">
-                          Env key
-                        </label>
+                        <label className="mb-2 block text-xs font-medium text-muted">Env key</label>
                         <Input
                           value={editEnvKey}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -457,7 +454,9 @@ export function ApiProvidersScreen() {
                   <div>
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-[13px] font-semibold text-fg">{p.name}</span>
+                        <span className="font-mono text-[13px] font-semibold text-fg">
+                          {p.name}
+                        </span>
                         {p.isDefault && (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-on">
                             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-on" />
@@ -466,9 +465,7 @@ export function ApiProvidersScreen() {
                         )}
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            p.enabled
-                              ? 'bg-success-soft text-success'
-                              : 'bg-raised text-muted'
+                            p.enabled ? 'bg-success-soft text-success' : 'bg-raised text-muted'
                           }`}
                         >
                           <span
@@ -488,11 +485,7 @@ export function ApiProvidersScreen() {
                         >
                           Edit
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="error"
-                          onClick={() => deleteProvider(p.name)}
-                        >
+                        <Button size="sm" variant="error" onClick={() => deleteProvider(p.name)}>
                           Delete
                         </Button>
                       </div>

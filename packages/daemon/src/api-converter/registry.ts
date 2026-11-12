@@ -96,7 +96,7 @@ export class ApiProviderRegistry {
     return true;
   }
 
-  getDefault(): { name: string } & ApiProviderProfile | undefined {
+  getDefault(): ({ name: string } & ApiProviderProfile) | undefined {
     return this.list().find((p) => p.isDefault) ?? this.list()[0];
   }
 

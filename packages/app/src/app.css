@@ -70,8 +70,8 @@
   --color-overlay: rgba(8, 9, 10, 0.45);
 
   /* --- Typography --- */
-  --font-sans: 'Inter Variable', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
+  --font-sans:
+    'Inter Variable', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'Berkeley Mono', 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* Linear's signature weight system: 400 read · 510 navigate · 590 announce */
@@ -88,7 +88,8 @@
   --shadow-popover:
     0 0 0 1px var(--color-line), 0 8px 24px rgba(11, 13, 15, 0.08), 0 2px 8px rgba(11, 13, 15, 0.05);
   --shadow-modal:
-    0 0 0 1px var(--color-line), 0 16px 48px rgba(11, 13, 15, 0.16), 0 4px 12px rgba(11, 13, 15, 0.08);
+    0 0 0 1px var(--color-line), 0 16px 48px rgba(11, 13, 15, 0.16),
+    0 4px 12px rgba(11, 13, 15, 0.08);
 
   /* --- Motion --- */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -129,7 +130,8 @@
 
   --shadow-raised: 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-popover:
-    0 0 0 1px rgba(255, 255, 255, 0.08), 0 4px 8px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
+    0 0 0 1px rgba(255, 255, 255, 0.08), 0 4px 8px rgba(0, 0, 0, 0.3),
+    0 12px 32px rgba(0, 0, 0, 0.4);
   --shadow-modal:
     0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 16px rgba(0, 0, 0, 0.32),
     0 24px 56px rgba(0, 0, 0, 0.48);
@@ -269,4 +271,231 @@
   --terminal-fg: #e8eaed;
   --terminal-cursor: #7170ff;
   --terminal-selection: rgba(94, 106, 210, 0.35);
+}
+
+/* ============================================
+   Transitions.dev Motion System — AI & Agent States
+   Adapted from transitions.dev recipes
+   ============================================ */
+
+:root {
+  /* Thinking states */
+  --think-hold: 2400ms;
+  --think-swap: 180ms;
+  --think-gap: 50ms;
+  --think-distance: 6px;
+  --think-blur: 3px;
+  --think-shimmer: 2.4s;
+  --think-base: var(--color-muted);
+  --think-highlight: var(--color-accent);
+  --think-ease: var(--ease-standard);
+
+  /* Reasoning stream */
+  --reason-hold: 900ms;
+  --reason-step: 450ms;
+  --reason-lines: 2;
+  --reason-fade: 16px;
+  --reason-ease: var(--ease-standard);
+
+  /* Streaming text */
+  --stream-gap: 45ms;
+  --stream-fade: 200ms;
+  --stream-blur: 3px;
+  --stream-ease: var(--ease-standard);
+
+  /* Matrix loader */
+  --matrix-cycle: 1200ms;
+  --matrix-base: rgba(11, 13, 15, 0.18);
+  --matrix-active: var(--color-accent);
+  --matrix-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark {
+  --think-base: var(--color-muted);
+  --think-highlight: var(--color-accent-hover);
+  --matrix-base: rgba(255, 255, 255, 0.22);
+  --matrix-active: var(--color-accent-hover);
+}
+
+/* --- 1. Thinking States (.t-think) --- */
+.t-think {
+  position: relative;
+  display: inline-block;
+  text-align: left;
+}
+
+.t-think-sizer {
+  display: block;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.t-think-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  color: var(--think-base);
+  white-space: nowrap;
+  transform: translateY(0);
+  filter: blur(0);
+  opacity: 1;
+  transition:
+    transform var(--think-swap) var(--think-ease),
+    filter var(--think-swap) var(--think-ease),
+    opacity var(--think-swap) var(--think-ease);
+  will-change: transform, filter, opacity;
+}
+
+/* Shimmer sweeps the glyphs only */
+.t-think-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 35%,
+    var(--think-highlight) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-think-shimmer var(--think-shimmer) linear infinite;
+}
+
+@keyframes t-think-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+.t-think-text.is-exit {
+  transform: translateY(calc(var(--think-distance) * -1));
+  filter: blur(var(--think-blur));
+  opacity: 0;
+}
+
+.t-think-text.is-enter-start {
+  transition: none;
+  transform: translateY(var(--think-distance));
+  filter: blur(var(--think-blur));
+  opacity: 0;
+}
+
+/* --- 2. Reasoning Stream (.t-reason) --- */
+.t-reason {
+  position: relative;
+  overflow: hidden;
+}
+
+.t-reason-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    transparent 0,
+    black var(--reason-fade),
+    black calc(100% - var(--reason-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    transparent 0,
+    black var(--reason-fade),
+    black calc(100% - var(--reason-fade)),
+    transparent 100%
+  );
+}
+
+.t-reason-scroll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(0);
+  will-change: transform;
+}
+
+/* --- 3. Streaming Text (.t-stream) --- */
+.t-stream {
+  display: inline;
+}
+
+.t-stream-w {
+  opacity: 0;
+  filter: blur(var(--stream-blur));
+  transition:
+    opacity var(--stream-fade) var(--stream-ease),
+    filter var(--stream-fade) var(--stream-ease);
+}
+
+.t-stream-w.is-in {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* --- 4. Matrix Dot Loader (.t-matrix) --- */
+.t-matrix {
+  display: inline-grid;
+  grid-template-columns: repeat(4, 3px);
+  grid-auto-rows: 3px;
+  gap: 2px;
+}
+
+.t-matrix i {
+  display: block;
+  border-radius: 0.5px;
+  background: var(--matrix-base);
+  animation: t-matrix-pulse var(--matrix-cycle) var(--matrix-ease) infinite;
+  animation-delay: calc(var(--d, 0) * 1ms);
+}
+
+.t-matrix i.is-gap {
+  visibility: hidden;
+  animation: none;
+}
+
+@keyframes t-matrix-pulse {
+  0%,
+  45%,
+  100% {
+    background-color: var(--matrix-base);
+  }
+  15% {
+    background-color: var(--matrix-active);
+  }
+}
+
+/* Accessibility guard across all transitions */
+@media (prefers-reduced-motion: reduce) {
+  .t-think-text {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .t-think-text::before {
+    display: none !important;
+  }
+  .t-reason-scroll {
+    transition: none !important;
+    transform: none !important;
+  }
+  .t-stream-w {
+    transition: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+  .t-matrix i {
+    animation: none !important;
+    background-color: var(--matrix-active) !important;
+  }
 }

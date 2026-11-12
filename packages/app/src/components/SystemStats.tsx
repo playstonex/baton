@@ -28,8 +28,7 @@ function formatUptime(seconds: number): string {
  * its healthy color is the accent rather than a status green.
  */
 function meterColor(pct: number, kind: 'cpu' | 'capacity'): string {
-  const token =
-    pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : kind === 'cpu' ? 'accent' : 'success';
+  const token = pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : kind === 'cpu' ? 'accent' : 'success';
   return `var(--color-${token})`;
 }
 

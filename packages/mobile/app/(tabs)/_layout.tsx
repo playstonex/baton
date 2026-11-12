@@ -152,13 +152,15 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           const iconName = tabItem?.icon ?? 'ellipse';
 
           const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
+            const event = navigation?.emit
+              ? navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                })
+              : { defaultPrevented: false };
+            if (!isFocused && !event?.defaultPrevented) {
+              navigation?.navigate?.(route.name);
             }
           };
 

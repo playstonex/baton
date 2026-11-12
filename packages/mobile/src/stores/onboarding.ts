@@ -14,7 +14,7 @@ interface OnboardingState {
   resetOnboarding: () => void;
 }
 
-export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
+export const useOnboardingStore = create<OnboardingState>()((set) => ({
   hasCompletedOnboarding: false,
   currentStep: 0,
   isLoaded: false,
@@ -23,14 +23,18 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     try {
       const done = await SecureStore.getItemAsync(ONBOARDING_KEY);
       if (done === 'true') set({ hasCompletedOnboarding: true });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     try {
       const raw = await SecureStore.getItemAsync(STEP_KEY);
       if (raw) {
         const step = parseInt(raw, 10);
         if (!isNaN(step)) set({ currentStep: step });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     set({ isLoaded: true });
   },
 

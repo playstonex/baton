@@ -1,7 +1,4 @@
-import type {
-  ChatCompletionStreamChunk,
-  ResponsesStreamEvent,
-} from './types.js';
+import type { ChatCompletionStreamChunk, ResponsesStreamEvent } from './types.js';
 
 /**
  * Translate a Responses API SSE stream into a Chat Completions SSE stream.
@@ -57,8 +54,7 @@ export async function* convertStream(
         // Track response ID from created event
         if (parsed.type === 'response.created' && parsed.response) {
           responseId = (parsed.response as { id?: string }).id ?? responseId;
-          createdAt =
-            (parsed.response as { created_at?: number }).created_at ?? createdAt;
+          createdAt = (parsed.response as { created_at?: number }).created_at ?? createdAt;
         }
 
         // Text content delta
@@ -132,7 +128,8 @@ export async function* convertStream(
 
         // Function call name from output_item.added
         if (parsed.type === 'response.output_item.added') {
-          const item = (parsed as { item?: { type?: string; name?: string; call_id?: string } }).item;
+          const item = (parsed as { item?: { type?: string; name?: string; call_id?: string } })
+            .item;
           if (item?.type === 'function_call' && item.call_id) {
             currentToolCallId = item.call_id;
             yield* yieldChunk({
@@ -171,7 +168,13 @@ export async function* convertStream(
               : 'content_filter';
 
           // Extract usage from the final response if available
-          const resp = (parsed as { response?: { usage?: { input_tokens: number; output_tokens: number; total_tokens: number } } }).response;
+          const resp = (
+            parsed as {
+              response?: {
+                usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+              };
+            }
+          ).response;
 
           yield* yieldChunk({
             id: responseId,

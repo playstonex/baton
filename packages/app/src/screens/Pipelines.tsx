@@ -1,7 +1,21 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import type { AgentType } from '@baton/shared';
-import { Card, EmptyState, StatusBadge, StatusDot, SectionHeader, Button, Input } from '../lib/ui.js';
-import { IconPlus, IconX, IconPlay, IconArrowRight, IconPipelines as IconPipeline } from '../lib/icons.js';
+import {
+  Card,
+  EmptyState,
+  StatusBadge,
+  StatusDot,
+  SectionHeader,
+  Button,
+  Input,
+} from '../lib/ui.js';
+import {
+  IconPlus,
+  IconX,
+  IconPlay,
+  IconArrowRight,
+  IconPipelines as IconPipeline,
+} from '../lib/icons.js';
 
 interface PipelineStep {
   id: string;
@@ -62,7 +76,10 @@ export function PipelinesScreen() {
   }, [fetchPipelines]);
 
   function addStep() {
-    setNewSteps([...newSteps, { id: crypto.randomUUID(), agentType: 'claude-code', projectPath: '' }]);
+    setNewSteps([
+      ...newSteps,
+      { id: crypto.randomUUID(), agentType: 'claude-code', projectPath: '' },
+    ]);
   }
 
   function updateStep(index: number, patch: Partial<PipelineStep>) {
@@ -82,7 +99,10 @@ export function PipelinesScreen() {
       const res = await fetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), steps: newSteps.filter((s) => s.projectPath.trim()) }),
+        body: JSON.stringify({
+          name: newName.trim(),
+          steps: newSteps.filter((s) => s.projectPath.trim()),
+        }),
       });
       if (res.ok) {
         const pipeline = (await res.json()) as Pipeline;
@@ -273,8 +293,7 @@ const PipelineCard = memo(function PipelineCard({
               {i > 0 && <IconArrowRight className="h-3 w-3 text-line-strong" />}
               <div
                 className={`flex items-center gap-2.5 rounded-sm border px-3 py-2 ${
-                  STEP_STATUS_STYLES[result?.status ?? ''] ??
-                  'border-line bg-field'
+                  STEP_STATUS_STYLES[result?.status ?? ''] ?? 'border-line bg-field'
                 }`}
               >
                 <StatusDot status={result?.status ?? 'pending'} />

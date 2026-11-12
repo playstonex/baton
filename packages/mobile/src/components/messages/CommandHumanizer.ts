@@ -49,7 +49,9 @@ function splitToolAndArgs(command: string): [string, string] {
   const spaceIdx = command.indexOf(' ');
   if (spaceIdx === -1) return [command.toLowerCase(), ''];
   const rawTool = command.slice(0, spaceIdx);
-  const tool = rawTool.includes('/') ? rawTool.slice(rawTool.lastIndexOf('/') + 1).toLowerCase() : rawTool.toLowerCase();
+  const tool = rawTool.includes('/')
+    ? rawTool.slice(rawTool.lastIndexOf('/') + 1).toLowerCase()
+    : rawTool.toLowerCase();
   return [tool, command.slice(spaceIdx + 1)];
 }
 

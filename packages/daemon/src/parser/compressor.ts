@@ -32,7 +32,10 @@ export class ContextCompressor {
     const originalCount = events.length;
     const keepCount = Math.floor(this.compactionThreshold * 0.3);
 
-    const toolCalls: Record<string, { count: number; successCount: number; totalDuration: number }> = {};
+    const toolCalls: Record<
+      string,
+      { count: number; successCount: number; totalDuration: number }
+    > = {};
     let errorCount = 0;
     let turnCount = 0;
 
@@ -41,7 +44,8 @@ export class ContextCompressor {
     for (const event of toCompress) {
       switch (event.type) {
         case 'tool_use':
-          if (!toolCalls[event.tool]) toolCalls[event.tool] = { count: 0, successCount: 0, totalDuration: 0 };
+          if (!toolCalls[event.tool])
+            toolCalls[event.tool] = { count: 0, successCount: 0, totalDuration: 0 };
           toolCalls[event.tool].count++;
           break;
         case 'tool_call_end':

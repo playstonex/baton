@@ -22,14 +22,10 @@ export const PlanCard = React.memo(function PlanCard({ explanation, steps, color
     <View style={[styles.container, { backgroundColor: colors.subtle }]}>
       <View style={styles.header}>
         <Ionicons name="list-outline" size={14} color={colors.textSecondary} />
-        <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>
-          Plan
-        </Text>
+        <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>Plan</Text>
       </View>
       {explanation ? (
-        <Text style={[styles.explanation, { color: colors.textPrimary }]}>
-          {explanation}
-        </Text>
+        <Text style={[styles.explanation, { color: colors.textPrimary }]}>{explanation}</Text>
       ) : null}
       {steps && steps.length > 0 && (
         <View style={styles.steps}>
@@ -38,9 +34,7 @@ export const PlanCard = React.memo(function PlanCard({ explanation, steps, color
             return (
               <View key={i} style={styles.step}>
                 <View style={[styles.stepIndicator, { borderColor: sc }]}>
-                  {s.status === 'completed' && (
-                    <Ionicons name="checkmark" size={10} color={sc} />
-                  )}
+                  {s.status === 'completed' && <Ionicons name="checkmark" size={10} color={sc} />}
                 </View>
                 <Text
                   style={[

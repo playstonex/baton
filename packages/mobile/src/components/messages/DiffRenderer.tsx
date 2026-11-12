@@ -11,8 +11,16 @@ interface DiffLine {
 }
 
 const LINE_COLORS: Record<DiffLineKind, { text: string; bg: string; indicator: string }> = {
-  addition: { text: Colors.success[400], bg: Colors.success[400] + '1F', indicator: Colors.success[400] },
-  deletion: { text: Colors.danger[400], bg: Colors.danger[400] + '1F', indicator: Colors.danger[400] },
+  addition: {
+    text: Colors.success[400],
+    bg: Colors.success[400] + '1F',
+    indicator: Colors.success[400],
+  },
+  deletion: {
+    text: Colors.danger[400],
+    bg: Colors.danger[400] + '1F',
+    indicator: Colors.danger[400],
+  },
   hunk: { text: 'tertiary', bg: 'transparent', indicator: 'transparent' },
   meta: { text: 'transparent', bg: 'transparent', indicator: 'transparent' },
   neutral: { text: 'inherit', bg: 'transparent', indicator: 'transparent' },
@@ -20,7 +28,13 @@ const LINE_COLORS: Record<DiffLineKind, { text: string; bg: string; indicator: s
 
 function classifyLine(line: string): DiffLineKind {
   if (line.startsWith('@@')) return 'hunk';
-  if (line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('---') || line.startsWith('+++')) return 'meta';
+  if (
+    line.startsWith('diff ') ||
+    line.startsWith('index ') ||
+    line.startsWith('---') ||
+    line.startsWith('+++')
+  )
+    return 'meta';
   if (line.startsWith('+')) return 'addition';
   if (line.startsWith('-')) return 'deletion';
   return 'neutral';
@@ -38,7 +52,9 @@ interface Props {
 
 export const DiffRenderer = React.memo(function DiffRenderer({ diff, colors, maxLines }: Props) {
   const lines = parseDiff(diff);
-  const visibleLines = maxLines ? lines.filter((l) => l.kind !== 'meta').slice(0, maxLines) : lines.filter((l) => l.kind !== 'meta');
+  const visibleLines = maxLines
+    ? lines.filter((l) => l.kind !== 'meta').slice(0, maxLines)
+    : lines.filter((l) => l.kind !== 'meta');
   const hiddenCount = maxLines ? lines.filter((l) => l.kind !== 'meta').length - maxLines : 0;
 
   return (
@@ -47,7 +63,13 @@ export const DiffRenderer = React.memo(function DiffRenderer({ diff, colors, max
         const lc = LINE_COLORS[line.kind];
         if (line.kind === 'meta') return null;
         return (
-          <View key={i} style={[styles.lineRow, { backgroundColor: lc.bg === 'transparent' ? undefined : lc.bg }]}>
+          <View
+            key={i}
+            style={[
+              styles.lineRow,
+              { backgroundColor: lc.bg === 'transparent' ? undefined : lc.bg },
+            ]}
+          >
             <View style={[styles.indicator, { backgroundColor: lc.indicator }]} />
             <Text
               style={[

@@ -5,7 +5,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { wsService } from '../services/websocket.js';
 import { StatusBadge, StatusDot, Button } from '../lib/ui.js';
-import { IconFile, IconGitBranch, IconActivity, IconStop } from '../lib/icons.js';
+import { IconFile, IconGitBranch, IconActivity, IconStop, IconChat } from '../lib/icons.js';
+import { UsagePill } from '../components/UsagePill.js';
+import { ThinkingStates, MatrixLoader } from '../components/index.js';
 import '@xterm/xterm/css/xterm.css';
 
 // Terminal ANSI colors — Linear palette (achromatic + indigo-violet accent).
@@ -256,6 +258,19 @@ export function TerminalScreen() {
           <StatusDot status={status} />
           <span className="text-[13px] font-medium text-fg">Agent</span>
           <span className="font-mono text-xs text-meta">{sessionId?.slice(0, 8)}</span>
+          {(status === 'thinking' || status === 'executing' || status === 'running') && (
+            <div className="hidden items-center gap-2 border-l border-line-soft pl-2.5 sm:flex">
+              <MatrixLoader variant="scan" />
+              <ThinkingStates
+                states={
+                  status === 'thinking'
+                    ? ['Thinking…', 'Evaluating context', 'Synthesizing steps']
+                    : ['Executing command…', 'Streaming output', 'Monitoring process']
+                }
+                className="font-mono text-xs text-meta"
+              />
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {sessionOwner && (
@@ -282,6 +297,11 @@ export function TerminalScreen() {
           <StatusBadge status={connected ? 'connected' : 'disconnected'} dot={false} />
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <UsagePill />
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/chat/${sessionId}`)}>
+            <IconChat className="mr-1.5 h-3.5 w-3.5" />
+            Chat
+          </Button>
           <Button size="sm" variant="secondary" onClick={() => navigate(`/files/${sessionId}`)}>
             <IconFile className="mr-1.5 h-3.5 w-3.5" />
             Files

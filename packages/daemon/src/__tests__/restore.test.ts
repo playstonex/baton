@@ -77,7 +77,9 @@ describe('AgentManager.restore — history cap + list exclusion', () => {
     // The OLDEST must have been pruned from disk (file gone → get still works
     // from memory, so check the file directly).
     const oldestPath = join(agentsDir, 'h0', 'cp-old-0.json');
-    expect(await readdir(join(agentsDir, 'h0')).then((f) => f.includes('cp-old-0.json'))).toBe(false);
+    expect(await readdir(join(agentsDir, 'h0')).then((f) => f.includes('cp-old-0.json'))).toBe(
+      false,
+    );
     void oldestPath;
   });
 });

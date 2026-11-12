@@ -1,6 +1,14 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import { wsService } from '../services/websocket.js';
-import { Card, EmptyState, StatusBadge, StatusDot, LoadingSpinner, Button, PageHeader } from '../lib/ui.js';
+import {
+  Card,
+  EmptyState,
+  StatusBadge,
+  StatusDot,
+  LoadingSpinner,
+  Button,
+  PageHeader,
+} from '../lib/ui.js';
 import { IconArrowRight, IconPlay } from '../lib/icons.js';
 import { usePolling } from '../lib/hooks.js';
 
@@ -113,8 +121,7 @@ const PipelineCard = memo(function PipelineCard({
             {idx > 0 && <IconArrowRight className="h-3 w-3 text-line-strong" />}
             <div
               className={`flex items-center gap-2.5 rounded-sm border px-3 py-2 ${
-                STEP_STATUS_STYLES[step.status] ??
-                'border-line bg-field'
+                STEP_STATUS_STYLES[step.status] ?? 'border-line bg-field'
               }`}
             >
               <StatusDot status={step.status} />

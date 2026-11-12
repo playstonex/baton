@@ -43,7 +43,11 @@ export async function doctorCommand(): Promise<void> {
 async function checkDaemonHealth(): Promise<CheckResult> {
   try {
     const data = await apiFetch<{ status: string; version: string }>(`/api/health`);
-    return { name: 'Daemon HTTP', pass: true, detail: `${DAEMON_URL} — v${data.version} (${data.status})` };
+    return {
+      name: 'Daemon HTTP',
+      pass: true,
+      detail: `${DAEMON_URL} — v${data.version} (${data.status})`,
+    };
   } catch {
     return { name: 'Daemon HTTP', pass: false, detail: `Not reachable at ${DAEMON_URL}` };
   }
@@ -76,7 +80,11 @@ function checkBun(): CheckResult {
   try {
     const version = execSync('bun --version', { encoding: 'utf-8' }).trim();
     const major = parseInt(version.split('.')[0], 10);
-    return { name: 'Bun', pass: major >= 1, detail: `v${version}${major < 1 ? ' (requires >= 1.0)' : ''}` };
+    return {
+      name: 'Bun',
+      pass: major >= 1,
+      detail: `v${version}${major < 1 ? ' (requires >= 1.0)' : ''}`,
+    };
   } catch {
     return { name: 'Bun', pass: false, detail: 'Not installed' };
   }
@@ -86,7 +94,11 @@ function checkNode(): CheckResult {
   try {
     const version = execSync('node --version', { encoding: 'utf-8' }).trim();
     const major = parseInt(version.replace(/^v/, '').split('.')[0], 10);
-    return { name: 'Node.js', pass: major >= 22, detail: `${version}${major < 22 ? ' (requires >= 22)' : ''}` };
+    return {
+      name: 'Node.js',
+      pass: major >= 22,
+      detail: `${version}${major < 22 ? ' (requires >= 22)' : ''}`,
+    };
   } catch {
     return { name: 'Node.js', pass: false, detail: 'Not installed' };
   }
@@ -125,21 +137,18 @@ function checkProviderPlugins(): CheckResult {
   // Purely informational: pass is always true.
   const dir = join(process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`, 'plugins');
   try {
-    const entries = readdirSync(dir, { withFileTypes: true }).filter((e) =>
-      e.isDirectory(),
-    );
-    const manifests = entries
-      .map((e) => {
-        try {
-          const m = JSON.parse(readFileSync(join(dir, e.name, 'plugin.json'), 'utf-8')) as {
-            type?: string;
-            version?: string;
-          };
-          return `${e.name} (${m.type ?? '?'}${m.version ? ` v${m.version}` : ''})`;
-        } catch {
-          return `${e.name} (invalid manifest)`;
-        }
-      });
+    const entries = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory());
+    const manifests = entries.map((e) => {
+      try {
+        const m = JSON.parse(readFileSync(join(dir, e.name, 'plugin.json'), 'utf-8')) as {
+          type?: string;
+          version?: string;
+        };
+        return `${e.name} (${m.type ?? '?'}${m.version ? ` v${m.version}` : ''})`;
+      } catch {
+        return `${e.name} (invalid manifest)`;
+      }
+    });
     return {
       name: 'Provider Plugins',
       pass: true,
@@ -172,7 +181,11 @@ async function checkPtyBinary(): Promise<CheckResult> {
       continue;
     }
   }
-  return { name: 'PTY Binary', pass: false, detail: `Not found (searched ${candidates.length} paths)` };
+  return {
+    name: 'PTY Binary',
+    pass: false,
+    detail: `Not found (searched ${candidates.length} paths)`,
+  };
 }
 
 async function checkBatonHome(): Promise<CheckResult> {
@@ -216,8 +229,13 @@ function checkAgentClis(): CheckResult[] {
   }
   // Generic ACP providers from ~/.baton/acp.json count as available agents too.
   try {
-    const acpPath = join(process.env.BATON_HOME ?? join(process.env.HOME ?? '~', '.baton'), 'acp.json');
-    const acp = JSON.parse(readFileSync(acpPath, 'utf-8')) as { providers?: Record<string, { command?: string }> };
+    const acpPath = join(
+      process.env.BATON_HOME ?? join(process.env.HOME ?? '~', '.baton'),
+      'acp.json',
+    );
+    const acp = JSON.parse(readFileSync(acpPath, 'utf-8')) as {
+      providers?: Record<string, { command?: string }>;
+    };
     for (const [name, profile] of Object.entries(acp.providers ?? {})) {
       if (!profile.command) continue;
       try {

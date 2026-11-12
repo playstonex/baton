@@ -86,10 +86,7 @@ export const MarkdownText = React.memo(function MarkdownText({
           const inlineToken = tokens[i + 1];
           if (inlineToken?.type === 'inline') {
             elements.push(
-              <Text
-                key={i}
-                style={[styles.heading, { fontSize: size, color: colors.textPrimary }]}
-              >
+              <Text key={i} style={[styles.heading, { fontSize: size, color: colors.textPrimary }]}>
                 {renderInline(inlineToken.children ?? [], colors, i, hl)}
               </Text>,
             );
@@ -120,11 +117,12 @@ export const MarkdownText = React.memo(function MarkdownText({
               n += 1;
               // A list item wraps its inline content one level deeper
               // (paragraph_open → inline); find the first inline descendant.
-              const inlineToken = tokens[j + 1]?.type === 'inline'
-                ? tokens[j + 1]
-                : tokens[j + 2]?.type === 'inline'
-                  ? tokens[j + 2]
-                  : undefined;
+              const inlineToken =
+                tokens[j + 1]?.type === 'inline'
+                  ? tokens[j + 1]
+                  : tokens[j + 2]?.type === 'inline'
+                    ? tokens[j + 2]
+                    : undefined;
               if (inlineToken) {
                 items.push(
                   <View key={j} style={styles.listItem}>
@@ -154,10 +152,7 @@ export const MarkdownText = React.memo(function MarkdownText({
           const inlineToken = tokens[i + 1];
           if (inlineToken?.type === 'inline') {
             elements.push(
-              <View
-                key={i}
-                style={[styles.blockquote, { borderLeftColor: colors.textTertiary }]}
-              >
+              <View key={i} style={[styles.blockquote, { borderLeftColor: colors.textTertiary }]}>
                 <Text style={[styles.blockquoteText, { color: colors.textSecondary }]}>
                   {renderInline(inlineToken.children ?? [], colors, i, hl)}
                 </Text>
@@ -214,14 +209,7 @@ function renderInline(
               <Text key={key}>
                 {toHighlightSegments(content, ranges).map((seg, si) =>
                   seg.marked ? (
-                    <Text
-                      key={si}
-                      style={
-                        hl.active
-                          ? styles.markActive
-                          : styles.mark
-                      }
-                    >
+                    <Text key={si} style={hl.active ? styles.markActive : styles.mark}>
                       {seg.text}
                     </Text>
                   ) : (
@@ -255,7 +243,12 @@ function renderInline(
         const close = findClose(children, i, 'strong_close');
         out.push(
           <Text key={key} style={styles.strong}>
-            {renderInline(children.slice(i + 1, close === -1 ? children.length : close), colors, i, hl)}
+            {renderInline(
+              children.slice(i + 1, close === -1 ? children.length : close),
+              colors,
+              i,
+              hl,
+            )}
           </Text>,
         );
         i = close === -1 ? children.length : close + 1;
@@ -265,7 +258,12 @@ function renderInline(
         const close = findClose(children, i, 'em_close');
         out.push(
           <Text key={key} style={styles.em}>
-            {renderInline(children.slice(i + 1, close === -1 ? children.length : close), colors, i, hl)}
+            {renderInline(
+              children.slice(i + 1, close === -1 ? children.length : close),
+              colors,
+              i,
+              hl,
+            )}
           </Text>,
         );
         i = close === -1 ? children.length : close + 1;
@@ -275,7 +273,12 @@ function renderInline(
         const close = findClose(children, i, 's_close');
         out.push(
           <Text key={key} style={styles.strikethrough}>
-            {renderInline(children.slice(i + 1, close === -1 ? children.length : close), colors, i, hl)}
+            {renderInline(
+              children.slice(i + 1, close === -1 ? children.length : close),
+              colors,
+              i,
+              hl,
+            )}
           </Text>,
         );
         i = close === -1 ? children.length : close + 1;
@@ -292,7 +295,12 @@ function renderInline(
               if (href) void Linking.openURL(href).catch(() => {});
             }}
           >
-            {renderInline(children.slice(i + 1, close === -1 ? children.length : close), colors, i, hl)}
+            {renderInline(
+              children.slice(i + 1, close === -1 ? children.length : close),
+              colors,
+              i,
+              hl,
+            )}
           </Text>,
         );
         i = close === -1 ? children.length : close + 1;

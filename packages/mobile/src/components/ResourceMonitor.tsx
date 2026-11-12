@@ -47,8 +47,7 @@ export function ResourceMonitor({ connected }: { connected: boolean }) {
     try {
       const data = await apiFetch<HostStats>('/api/system/stats');
       setStats(data);
-    } catch {
-    }
+    } catch {}
   }, [connected]);
 
   useEffect(() => {
@@ -102,12 +101,16 @@ function Meter({
   const clamped = Math.min(100, Math.max(0, pct));
   return (
     <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 4,
+        }}
+      >
         <Text style={[Typography.overline, { color: c.textTertiary, fontSize: 10 }]}>{label}</Text>
-        <Text
-          style={[Typography.mono, { fontSize: 10, color: c.textTertiary }]}
-          numberOfLines={1}
-        >
+        <Text style={[Typography.mono, { fontSize: 10, color: c.textTertiary }]} numberOfLines={1}>
           {value}
         </Text>
       </View>

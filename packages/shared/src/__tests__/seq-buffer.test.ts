@@ -99,4 +99,3 @@ describe('SeqBuffer', () => {
     expect(buf.replay(0).gap).toBe(false);
   });
 });
-

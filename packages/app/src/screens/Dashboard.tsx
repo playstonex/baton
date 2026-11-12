@@ -5,7 +5,16 @@ import type { AgentProcess, AgentType, SessionSummary } from '@baton/shared';
 import { SystemStats } from '../components/SystemStats.js';
 import { wsService } from '../services/websocket.js';
 import { useAgentStore } from '../stores/connection.js';
-import { PageHeader, Card, EmptyState, StatusDot, Button, Input, SectionHeader, SegmentedControl } from '../lib/ui.js';
+import {
+  PageHeader,
+  Card,
+  EmptyState,
+  StatusDot,
+  Button,
+  Input,
+  SectionHeader,
+  SegmentedControl,
+} from '../lib/ui.js';
 import {
   IconAlertCircle,
   IconArchive,
@@ -266,7 +275,9 @@ export function DashboardScreen() {
     .filter((a) => a.status !== 'stopped')
     .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
   const liveIds = new Set(activeAgents.map((a) => a.id));
-  const pastList = pastSessions.filter((s) => !liveIds.has(s.id) && (!s.archivedAt || showArchived));
+  const pastList = pastSessions.filter(
+    (s) => !liveIds.has(s.id) && (!s.archivedAt || showArchived),
+  );
 
   const filteredPast = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -319,11 +330,7 @@ export function DashboardScreen() {
         }
       />
 
-      {!daemonOnline ? (
-        <OfflinePanel onRetry={retryConnection} />
-      ) : (
-        <SystemStats />
-      )}
+      {!daemonOnline ? <OfflinePanel onRetry={retryConnection} /> : <SystemStats />}
 
       {daemonOnline && (
         <section className="mb-7">
@@ -346,11 +353,7 @@ export function DashboardScreen() {
                   key={agent.id}
                   agent={agent}
                   onOpen={() =>
-                    navigate(
-                      agent.mode === 'sdk'
-                        ? `/chat/${agent.id}`
-                        : `/terminal/${agent.id}`,
-                    )
+                    navigate(agent.mode === 'sdk' ? `/chat/${agent.id}` : `/terminal/${agent.id}`)
                   }
                   onStop={() => stopAgent(agent.id)}
                 />
@@ -414,7 +417,9 @@ export function DashboardScreen() {
                 key={session.id}
                 session={session}
                 onOpen={() =>
-                  navigate(session.mode === 'sdk' ? `/chat/${session.id}` : `/terminal/${session.id}`)
+                  navigate(
+                    session.mode === 'sdk' ? `/chat/${session.id}` : `/terminal/${session.id}`,
+                  )
                 }
                 onResume={() => resumeSession(session)}
                 onArchive={() => archiveSession(session.id)}
@@ -648,9 +653,8 @@ function LaunchDialog({
                 />
                 <p className="mt-2 text-xs text-muted">
                   <span className="font-medium text-fg-2">Chat</span> — SDK session with rich
-                  rendering. Switch to{' '}
-                  <span className="font-medium text-fg-2">Terminal</span> for a raw PTY in the
-                  browser.
+                  rendering. Switch to <span className="font-medium text-fg-2">Terminal</span> for a
+                  raw PTY in the browser.
                 </p>
               </div>
 
@@ -719,16 +723,10 @@ function AgentCard({
           aria-hidden="true"
         />
       )}
-      <button
-        type="button"
-        onClick={onOpen}
-        className="min-w-0 flex-1 px-4 py-3 text-left"
-      >
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 px-4 py-3 text-left">
         <div className="flex items-center gap-2">
           <StatusDot status={agent.status} />
-          <span className="truncate text-[13px] font-medium text-fg">
-            {agent.title ?? label}
-          </span>
+          <span className="truncate text-[13px] font-medium text-fg">{agent.title ?? label}</span>
           {attention === 'warn' && (
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
               <span className="h-1 w-1 rounded-full bg-warn" />
@@ -846,9 +844,7 @@ function activityLine(
     }
     case 'waiting_input': {
       const prompt = detail?.prompt?.replace(/\s+/g, ' ').trim();
-      return prompt
-        ? { text: `Waiting for you: ${prompt}`, className: 'text-warn' }
-        : null;
+      return prompt ? { text: `Waiting for you: ${prompt}`, className: 'text-warn' } : null;
     }
     case 'idle': {
       if (!detail) return null;
@@ -895,16 +891,11 @@ function PastSessionRow({
   onArchive: () => void;
   onDelete: () => void;
 }) {
-  const label =
-    AGENT_OPTIONS.find((option) => option.type === session.type)?.label ?? session.type;
+  const label = AGENT_OPTIONS.find((option) => option.type === session.type)?.label ?? session.type;
 
   return (
     <div className="group flex items-center transition-colors duration-150 hover:bg-raised/50">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="min-w-0 flex-1 px-4 py-2.5 text-left"
-      >
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 px-4 py-2.5 text-left">
         <div className="flex items-center gap-2">
           <StatusDot status={session.status} />
           <span
@@ -927,7 +918,9 @@ function PastSessionRow({
         </div>
         <div className="mt-0.5 truncate font-mono text-[11.5px] text-muted">
           {label} · {session.projectPath} · {relativeTime(session.updatedAt)}
-          {session.eventCount > 0 ? ` · ${session.eventCount} event${session.eventCount === 1 ? '' : 's'}` : ''}
+          {session.eventCount > 0
+            ? ` · ${session.eventCount} event${session.eventCount === 1 ? '' : 's'}`
+            : ''}
         </div>
       </button>
 

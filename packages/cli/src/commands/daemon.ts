@@ -7,6 +7,7 @@ import {
   releasePid,
   defaultPidfile,
   DaemonAlreadyRunningError,
+  TailscaleStatusReport,
 } from '@baton/shared';
 import { apiFetch, DAEMON_URL } from '../client/api.js';
 
@@ -32,11 +33,16 @@ export async function daemonCommand(sub: string, args: string[]): Promise<void> 
     case 'pair':
       await daemonPair(json);
       break;
+    case 'tailscale':
+      await daemonTailscale(args, json);
+      break;
     default:
       if (json) {
         console.log(JSON.stringify({ ok: false, error: `unknown subcommand: ${sub}` }));
       } else {
-        console.log(`Usage: baton daemon <start|stop|restart|status|watch|pair> [--json]`);
+        console.log(
+          `Usage: baton daemon <start|stop|restart|status|watch|pair|tailscale> [--json]`,
+        );
       }
   }
 }
@@ -191,6 +197,15 @@ async function daemonStatus(json: boolean): Promise<void> {
     }
   }
 
+  let tailscale: TailscaleStatusReport | undefined;
+  if (healthOk) {
+    try {
+      tailscale = await apiFetch<TailscaleStatusReport>('/api/system/tailscale');
+    } catch {
+      // tailscale check failed
+    }
+  }
+
   const status = !pidAlive ? 'stopped' : healthOk ? 'running' : 'starting';
 
   if (json) {
@@ -203,6 +218,7 @@ async function daemonStatus(json: boolean): Promise<void> {
       relay,
       agents: agentCount,
       host: hostName,
+      tailscale: tailscale ?? null,
     });
     return;
   }
@@ -218,6 +234,112 @@ async function daemonStatus(json: boolean): Promise<void> {
   console.log(`URL:    ${DAEMON_URL}`);
   console.log(`Agents: ${agentCount}`);
   console.log(`Relay:  ${relay ? 'connected' : 'disconnected'}`);
+  if (tailscale?.online) {
+    console.log(
+      `Tailscale: Connected (${tailscale.magicDnsName ?? tailscale.tailscaleIps[0] ?? 'online'})`,
+    );
+    if (tailscale.serveUrl) {
+      console.log(`HTTPS Direct: ${tailscale.serveUrl}`);
+    }
+  }
+}
+
+async function daemonTailscale(args: string[], json: boolean): Promise<void> {
+  const action = args[0] ?? 'status';
+
+  if (action === 'status') {
+    try {
+      const data = await apiFetch<TailscaleStatusReport>('/api/system/tailscale');
+      if (json) {
+        emitJson({ ok: true, ...data });
+        return;
+      }
+      console.log('\n========= Tailscale Direct Connect =========');
+      console.log(`Available:     ${data.available ? 'Yes' : 'No (CLI not found)'}`);
+      console.log(`Online:        ${data.online ? 'Yes' : 'No'}`);
+      if (data.magicDnsName) {
+        console.log(`MagicDNS:      ${data.magicDnsName}`);
+      }
+      if (data.tailscaleIps.length > 0) {
+        console.log(`Tailnet IPs:   ${data.tailscaleIps.join(', ')}`);
+      }
+      if (data.directUrl) {
+        console.log(`Direct HTTP:   ${data.directUrl}`);
+      }
+      console.log(`HTTPS Serving: ${data.serving ? 'Active' : 'Inactive'}`);
+      if (data.serveUrl) {
+        console.log(`Direct HTTPS:  ${data.serveUrl}`);
+      }
+      if (data.error) {
+        console.log(`Notice:        ${data.error}`);
+      }
+      console.log('============================================\n');
+    } catch (err) {
+      if (json) emitJson({ ok: false, error: 'failed to query tailscale status' });
+      else console.error('Failed to query tailscale:', err instanceof Error ? err.message : err);
+    }
+    return;
+  }
+
+  if (action === 'serve' || action === 'on') {
+    try {
+      const res = await apiFetch<{ ok: boolean; serveUrl?: string; error?: string }>(
+        '/api/system/tailscale/serve',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: true }),
+        },
+      );
+      if (json) {
+        emitJson(res);
+        return;
+      }
+      if (res.ok) {
+        console.log(`✓ Tailscale HTTPS Serve enabled!`);
+        if (res.serveUrl) console.log(`  Access Baton directly at: ${res.serveUrl}`);
+      } else {
+        console.error(`✗ Failed to enable Tailscale serve: ${res.error}`);
+      }
+    } catch (err) {
+      if (json) emitJson({ ok: false, error: 'failed to enable tailscale serve' });
+      else
+        console.error(
+          'Failed to enable tailscale serve:',
+          err instanceof Error ? err.message : err,
+        );
+    }
+    return;
+  }
+
+  if (action === 'off' || action === 'stop-serve') {
+    try {
+      const res = await apiFetch<{ ok: boolean; error?: string }>('/api/system/tailscale/serve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      });
+      if (json) {
+        emitJson(res);
+        return;
+      }
+      if (res.ok) {
+        console.log(`✓ Tailscale HTTPS Serve disabled.`);
+      } else {
+        console.error(`✗ Failed to disable Tailscale serve: ${res.error}`);
+      }
+    } catch (err) {
+      if (json) emitJson({ ok: false, error: 'failed to disable tailscale serve' });
+      else
+        console.error(
+          'Failed to disable tailscale serve:',
+          err instanceof Error ? err.message : err,
+        );
+    }
+    return;
+  }
+
+  console.log('Usage: baton daemon tailscale <status|serve|off> [--json]');
 }
 
 async function daemonPair(json: boolean): Promise<void> {

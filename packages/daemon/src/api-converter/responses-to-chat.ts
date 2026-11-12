@@ -47,7 +47,9 @@ export function convertResponsesToChatRequest(req: ResponsesApiRequest): ChatCom
   // malformed function entries (`{function:{}}`) that upstreams like GLM reject
   // as "invalid parameters". Filter to function tools only.
   if (req.tools && req.tools.length > 0) {
-    const functionTools = req.tools.filter((t) => t.type === 'function' && typeof t.name === 'string');
+    const functionTools = req.tools.filter(
+      (t) => t.type === 'function' && typeof t.name === 'string',
+    );
     if (functionTools.length > 0) {
       result.tools = functionTools.map(convertTool);
     }

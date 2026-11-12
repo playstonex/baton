@@ -5,14 +5,43 @@ import MarkdownIt from 'markdown-it';
 type FileCategory = 'code' | 'markdown' | 'html' | 'text';
 
 const CODE_EXTENSIONS: Record<string, string> = {
-  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-  py: 'python', rs: 'rust', go: 'go', java: 'java', kt: 'kotlin',
-  swift: 'swift', c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp',
-  cs: 'csharp', rb: 'ruby', php: 'php', sh: 'bash', bash: 'bash',
-  zsh: 'bash', sql: 'sql', r: 'r', scala: 'scala', lua: 'lua',
-  dart: 'dart', yaml: 'yaml', yml: 'yaml', json: 'json', xml: 'xml',
-  css: 'css', scss: 'scss', less: 'less', toml: 'ini', ini: 'ini',
-  dockerfile: 'dockerfile', makefile: 'makefile', gradle: 'groovy',
+  ts: 'typescript',
+  tsx: 'typescript',
+  js: 'javascript',
+  jsx: 'javascript',
+  py: 'python',
+  rs: 'rust',
+  go: 'go',
+  java: 'java',
+  kt: 'kotlin',
+  swift: 'swift',
+  c: 'c',
+  cpp: 'cpp',
+  h: 'c',
+  hpp: 'cpp',
+  cs: 'csharp',
+  rb: 'ruby',
+  php: 'php',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  sql: 'sql',
+  r: 'r',
+  scala: 'scala',
+  lua: 'lua',
+  dart: 'dart',
+  yaml: 'yaml',
+  yml: 'yaml',
+  json: 'json',
+  xml: 'xml',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  toml: 'ini',
+  ini: 'ini',
+  dockerfile: 'dockerfile',
+  makefile: 'makefile',
+  gradle: 'groovy',
   mdx: 'markdown',
 };
 
@@ -24,7 +53,8 @@ function classifyFile(name: string): { category: FileCategory; lang?: string } {
   if (ext === 'html' || ext === 'htm') return { category: 'html' };
   if (CODE_EXTENSIONS[ext]) return { category: 'code', lang: CODE_EXTENSIONS[ext] };
   if (['dockerfile', 'makefile'].includes(base)) return { category: 'code', lang: base };
-  if (base === '.gitignore' || base === '.env' || base.startsWith('.env.')) return { category: 'code', lang: 'bash' };
+  if (base === '.gitignore' || base === '.env' || base.startsWith('.env.'))
+    return { category: 'code', lang: 'bash' };
   return { category: 'text' };
 }
 
@@ -174,10 +204,14 @@ export function FilePreview({ fileName, content }: FilePreviewProps) {
   const html = useMemo(() => {
     const { category, lang } = classifyFile(fileName);
     switch (category) {
-      case 'markdown': return buildMarkdownHtml(content);
-      case 'html': return buildHtmlPreview(content);
-      case 'code': return buildCodeHtml(content, lang ?? 'plaintext', fileName);
-      default: return buildTextHtml(content, fileName);
+      case 'markdown':
+        return buildMarkdownHtml(content);
+      case 'html':
+        return buildHtmlPreview(content);
+      case 'code':
+        return buildCodeHtml(content, lang ?? 'plaintext', fileName);
+      default:
+        return buildTextHtml(content, fileName);
     }
   }, [fileName, content]);
 

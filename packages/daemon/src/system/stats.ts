@@ -33,8 +33,7 @@ function getSessionMetrics(agentManager: AgentManager): SystemStats['sessions'] 
     try {
       totalOutputEntries += agentManager.getOutputHistory(agent.id).length;
       totalEventEntries += agentManager.getEventHistory(agent.id).length;
-    } catch {
-    }
+    } catch {}
   }
 
   // Rough estimate: ~1KB per output entry, ~0.5KB per event entry
@@ -71,12 +70,14 @@ export async function collectSystemStats(agentManager?: AgentManager): Promise<S
     hostname: os.hostname(),
     platform: process.platform,
     loadAvg,
-    sessions: agentManager ? getSessionMetrics(agentManager) : {
-      active: 0,
-      stopped: 0,
-      totalOutputEntries: 0,
-      totalEventEntries: 0,
-      estimatedMemoryMB: 0,
-    },
+    sessions: agentManager
+      ? getSessionMetrics(agentManager)
+      : {
+          active: 0,
+          stopped: 0,
+          totalOutputEntries: 0,
+          totalEventEntries: 0,
+          estimatedMemoryMB: 0,
+        },
   };
 }
