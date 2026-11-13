@@ -160,6 +160,13 @@ export const IconRefreshCw = createIcon(
   </>,
 );
 
+export const IconRotateCcw = createIcon(
+  <>
+    <path d="M2.5 2.5v4.5h4.5" />
+    <path d="M3.5 7A6 6 0 1 1 2 9.5" />
+  </>,
+);
+
 export const IconPlay = createIcon(<path d="M4 2.5v11l10-5.5L4 2.5Z" />);
 
 export const IconStop = createIcon(<rect x="3" y="3" width="10" height="10" rx="1.5" />);

@@ -12,9 +12,41 @@
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		6B662D1512D25BAF75CA4AA7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A0E89F91774378BFB358D2CA /* PrivacyInfo.xcprivacy */; };
 		8644D60C5A70ACB3CA64133E /* libPods-Baton.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 50FE656877339EE2CF5984A7 /* libPods-Baton.a */; };
+		9F35C8C20DC1353CE6CC0E1F /* libPods-BatonWidget.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BD17FADBF421C134AF7BF54B /* libPods-BatonWidget.a */; };
+		BA7000020000000000000001 /* BatonWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000001 /* BatonWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		BA7000020000000000000002 /* BatonWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000002 /* BatonWidgetBundle.swift */; };
+		BA7000020000000000000003 /* BatonLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000003 /* BatonLiveActivityWidget.swift */; };
+		BA7000020000000000000004 /* BatonActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000004 /* BatonActivityAttributes.swift */; };
+		BA7000020000000000000005 /* BatonActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000009 /* BatonActivityAttributes.swift */; };
+		BA7000020000000000000006 /* BatonLiveActivityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000007 /* BatonLiveActivityModule.swift */; };
+		BA7000020000000000000007 /* BatonLiveActivityModule.m in Sources */ = {isa = PBXBuildFile; fileRef = BA7000010000000000000008 /* BatonLiveActivityModule.m */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BA7000080000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BA7000100000000000000001;
+			remoteInfo = BatonWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BA7000070000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BA7000020000000000000001 /* BatonWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* Baton.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Baton.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -22,12 +54,24 @@
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Baton/Info.plist; sourceTree = "<group>"; };
 		4C1CDF9226D6280A4764F6EA /* Pods-Baton.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Baton.debug.xcconfig"; path = "Target Support Files/Pods-Baton/Pods-Baton.debug.xcconfig"; sourceTree = "<group>"; };
 		50FE656877339EE2CF5984A7 /* libPods-Baton.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Baton.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8ED42DD85277AB2E520925BA /* Pods-BatonWidget.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BatonWidget.release.xcconfig"; path = "Target Support Files/Pods-BatonWidget/Pods-BatonWidget.release.xcconfig"; sourceTree = "<group>"; };
 		A0E89F91774378BFB358D2CA /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Baton/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Baton/SplashScreen.storyboard; sourceTree = "<group>"; };
 		ADCD353E6CB25120544E8ACF /* Pods-Baton.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Baton.release.xcconfig"; path = "Target Support Files/Pods-Baton/Pods-Baton.release.xcconfig"; sourceTree = "<group>"; };
+		BA7000010000000000000001 /* BatonWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BatonWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA7000010000000000000002 /* BatonWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatonWidgetBundle.swift; sourceTree = "<group>"; };
+		BA7000010000000000000003 /* BatonLiveActivityWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatonLiveActivityWidget.swift; sourceTree = "<group>"; };
+		BA7000010000000000000004 /* BatonActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatonActivityAttributes.swift; sourceTree = "<group>"; };
+		BA7000010000000000000005 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BA7000010000000000000006 /* BatonWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = BatonWidget.entitlements; sourceTree = "<group>"; };
+		BA7000010000000000000007 /* BatonLiveActivityModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatonLiveActivityModule.swift; sourceTree = "<group>"; };
+		BA7000010000000000000008 /* BatonLiveActivityModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = BatonLiveActivityModule.m; sourceTree = "<group>"; };
+		BA7000010000000000000009 /* BatonActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatonActivityAttributes.swift; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		BD17FADBF421C134AF7BF54B /* libPods-BatonWidget.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-BatonWidget.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C576E26273DE15BA7B469849 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Baton/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		ED5789A85CBAA48B4DA71D58 /* Pods-BatonWidget.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BatonWidget.debug.xcconfig"; path = "Target Support Files/Pods-BatonWidget/Pods-BatonWidget.debug.xcconfig"; sourceTree = "<group>"; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Baton/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Baton-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Baton-Bridging-Header.h"; path = "Baton/Baton-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -38,6 +82,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				8644D60C5A70ACB3CA64133E /* libPods-Baton.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA7000050000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9F35C8C20DC1353CE6CC0E1F /* libPods-BatonWidget.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,6 +106,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				A0E89F91774378BFB358D2CA /* PrivacyInfo.xcprivacy */,
+				BA7000030000000000000002 /* LiveActivity */,
 			);
 			name = Baton;
 			sourceTree = "<group>";
@@ -63,6 +116,7 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				50FE656877339EE2CF5984A7 /* libPods-Baton.a */,
+				BD17FADBF421C134AF7BF54B /* libPods-BatonWidget.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -78,6 +132,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07FAE1A68108700A75B9A /* Baton */,
+				BA7000030000000000000001 /* BatonWidget */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
@@ -93,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* Baton.app */,
+				BA7000010000000000000001 /* BatonWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,8 +166,33 @@
 			children = (
 				4C1CDF9226D6280A4764F6EA /* Pods-Baton.debug.xcconfig */,
 				ADCD353E6CB25120544E8ACF /* Pods-Baton.release.xcconfig */,
+				ED5789A85CBAA48B4DA71D58 /* Pods-BatonWidget.debug.xcconfig */,
+				8ED42DD85277AB2E520925BA /* Pods-BatonWidget.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		BA7000030000000000000001 /* BatonWidget */ = {
+			isa = PBXGroup;
+			children = (
+				BA7000010000000000000002 /* BatonWidgetBundle.swift */,
+				BA7000010000000000000003 /* BatonLiveActivityWidget.swift */,
+				BA7000010000000000000004 /* BatonActivityAttributes.swift */,
+				BA7000010000000000000005 /* Info.plist */,
+				BA7000010000000000000006 /* BatonWidget.entitlements */,
+			);
+			path = BatonWidget;
+			sourceTree = "<group>";
+		};
+		BA7000030000000000000002 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				BA7000010000000000000007 /* BatonLiveActivityModule.swift */,
+				BA7000010000000000000008 /* BatonLiveActivityModule.m */,
+				BA7000010000000000000009 /* BatonActivityAttributes.swift */,
+			);
+			name = LiveActivity;
+			path = Baton/LiveActivity;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -146,15 +227,35 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				AC9503249326F764C1B7F99A /* [CP] Embed Pods Frameworks */,
+				BA7000070000000000000001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BA7000090000000000000001 /* PBXTargetDependency */,
 			);
 			name = Baton;
 			productName = Baton;
 			productReference = 13B07F961A680F5B00A75B9A /* Baton.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BA7000100000000000000001 /* BatonWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BA7000120000000000000001 /* Build configuration list for PBXNativeTarget "BatonWidget" */;
+			buildPhases = (
+				53204A7CE995D34B274A320B /* [CP] Check Pods Manifest.lock */,
+				BA7000040000000000000001 /* Sources */,
+				BA7000050000000000000001 /* Frameworks */,
+				BA7000060000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BatonWidget;
+			productName = BatonWidget;
+			productReference = BA7000010000000000000001 /* BatonWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -166,6 +267,10 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
+						ProvisioningStyle = Automatic;
+					};
+					BA7000100000000000000001 = {
+						CreatedOnToolsVersion = 14.0;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -184,6 +289,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* Baton */,
+				BA7000100000000000000001 /* BatonWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -197,6 +303,13 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				6B662D1512D25BAF75CA4AA7 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA7000060000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -266,6 +379,28 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Baton/expo-configure-project.sh\"\n";
 		};
+		53204A7CE995D34B274A320B /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-BatonWidget-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -281,7 +416,7 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/RNSVG/RNSVGFilters.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-timing/React-timing_privacy.bundle",
-				"${PODS_ROOT}/../../../../node_modules/.bun/@react-native-vector-icons+ionicons@14.0.0+cf73e2701bd751c8/node_modules/@react-native-vector-icons/ionicons/fonts/Ionicons.ttf",
+				"${PODS_ROOT}/../../../../node_modules/.pnpm/@react-native-vector-icons+ionicons@14.0.0_@react-native+assets-registry@0.86.3_expo-fo_1cc68698523555dc2380cc5cbe353734/node_modules/@react-native-vector-icons/ionicons/fonts/Ionicons.ttf",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
@@ -347,10 +482,31 @@
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				2D8E59D34EA58BD2B28F7C4B /* ExpoModulesProvider.swift in Sources */,
+				BA7000020000000000000005 /* BatonActivityAttributes.swift in Sources */,
+				BA7000020000000000000006 /* BatonLiveActivityModule.swift in Sources */,
+				BA7000020000000000000007 /* BatonLiveActivityModule.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA7000040000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA7000020000000000000002 /* BatonWidgetBundle.swift in Sources */,
+				BA7000020000000000000003 /* BatonLiveActivityWidget.swift in Sources */,
+				BA7000020000000000000004 /* BatonActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BA7000090000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BA7000100000000000000001 /* BatonWidget */;
+			targetProxy = BA7000080000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -493,7 +649,7 @@
 					"-DRCT_REMOVE_LEGACY_ARCH=1",
 				);
 				PODFILE_DIR = "$(SRCROOT)";
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../../node_modules/.bun/react-native@0.88.0+c094c6047526717b/node_modules/react-native";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../../node_modules/.pnpm/react-native@0.88.1_@babel+core@7.29.7_@react-native+metro-config@0.88.1_@babel+core@7._05eadce5f1d68d8a8a609a3b62d66ff9/node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
@@ -557,11 +713,71 @@
 					"-DRCT_REMOVE_LEGACY_ARCH=1",
 				);
 				PODFILE_DIR = "$(SRCROOT)";
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../../node_modules/.bun/react-native@0.88.0+c094c6047526717b/node_modules/react-native";
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../../node_modules/.pnpm/react-native@0.88.1_@babel+core@7.29.7_@react-native+metro-config@0.88.1_@babel+core@7._05eadce5f1d68d8a8a609a3b62d66ff9/node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				USE_HERMES = true;
 				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		BA7000110000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = ED5789A85CBAA48B4DA71D58 /* Pods-BatonWidget.debug.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = BatonWidget/BatonWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7PCD2KB89F;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BatonWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = com.playstone.baton.BatonWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BA7000110000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8ED42DD85277AB2E520925BA /* Pods-BatonWidget.release.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = BatonWidget/BatonWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7PCD2KB89F;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BatonWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
+				PRODUCT_BUNDLE_IDENTIFIER = com.playstone.baton.BatonWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -582,6 +798,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BA7000120000000000000001 /* Build configuration list for PBXNativeTarget "BatonWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA7000110000000000000001 /* Debug */,
+				BA7000110000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

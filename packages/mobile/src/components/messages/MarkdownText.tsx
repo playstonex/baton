@@ -80,22 +80,15 @@ const CodeBlock = React.memo(function CodeBlock({
         style={[
           styles.codeHeader,
           {
-            borderBottomColor: colors.isDark
-              ? 'rgba(255,255,255,0.06)'
-              : 'rgba(0,0,0,0.06)',
+            borderBottomColor: colors.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
           },
         ]}
       >
-        <Text style={[styles.codeLang, { color: colors.textTertiary }]}>
-          {cleanLang}
-        </Text>
+        <Text style={[styles.codeLang, { color: colors.textTertiary }]}>{cleanLang}</Text>
         <Pressable
           onPress={handleCopy}
           hitSlop={8}
-          style={({ pressed }) => [
-            styles.copyBtn,
-            { opacity: pressed ? 0.6 : 1 },
-          ]}
+          style={({ pressed }) => [styles.copyBtn, { opacity: pressed ? 0.6 : 1 }]}
           accessibilityLabel={copied ? 'Copied code' : 'Copy code'}
         >
           <Ionicons
@@ -138,11 +131,7 @@ const CodeBlock = React.memo(function CodeBlock({
   );
 });
 
-const StreamingCursor = React.memo(function StreamingCursor({
-  colors,
-}: {
-  colors: ThemeColors;
-}) {
+const StreamingCursor = React.memo(function StreamingCursor({ colors }: { colors: ThemeColors }) {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -251,8 +240,12 @@ export const MarkdownText = React.memo(function MarkdownText({
             '3': { size: 16.5, lineHeight: 22, marginTop: 10, marginBottom: 4 },
             '4': { size: 15, lineHeight: 20, marginTop: 8, marginBottom: 3 },
           };
-          const conf =
-            sizeMap[level] ?? { size: 15, lineHeight: 20, marginTop: 8, marginBottom: 3 };
+          const conf = sizeMap[level] ?? {
+            size: 15,
+            lineHeight: 20,
+            marginTop: 8,
+            marginBottom: 3,
+          };
           const inlineToken = tokens[i + 1];
           if (inlineToken?.type === 'inline') {
             elements.push(
@@ -303,11 +296,7 @@ export const MarkdownText = React.memo(function MarkdownText({
             elements.push(
               <View
                 key={i}
-                style={[
-                  styles.block,
-                  styles.blockquote,
-                  { borderLeftColor: colors.textTertiary },
-                ]}
+                style={[styles.block, styles.blockquote, { borderLeftColor: colors.textTertiary }]}
               >
                 <Text style={[styles.blockquoteText, { color: colors.textSecondary }]}>
                   {renderInline(inlineToken.children ?? [], colors, i, hl)}

@@ -13,24 +13,22 @@ describe('formatModelName', () => {
   });
 
   it('uses modelDetails provided by adapter over fallback', () => {
-    const details: ModelInfo[] = [
-      { id: 'custom-model-id', name: 'Custom Agent Model (Turbo)' },
-    ];
+    const details: ModelInfo[] = [{ id: 'custom-model-id', name: 'Custom Agent Model (Turbo)' }];
     expect(formatModelName('custom-model-id', { modelDetails: details })).toBe(
-      'Custom Agent Model (Turbo)'
+      'Custom Agent Model (Turbo)',
     );
     expect(formatModelName('custom-model-id', { modelDetails: details, compact: true })).toBe(
-      'Custom Agent Model'
+      'Custom Agent Model',
     );
   });
 
   it('formats provider/modelId names cleanly', () => {
-    expect(
-      formatModelName('opencode/deepseek-v4.1-flash-free', { compact: true })
-    ).toBe('DeepSeek V4.1 Flash');
-    expect(
-      formatModelName('opencode/deepseek-v4.1-flash-free')
-    ).toBe('DeepSeek V4.1 Flash (Free) (opencode)');
+    expect(formatModelName('opencode/deepseek-v4.1-flash-free', { compact: true })).toBe(
+      'DeepSeek V4.1 Flash',
+    );
+    expect(formatModelName('opencode/deepseek-v4.1-flash-free')).toBe(
+      'DeepSeek V4.1 Flash (Free) (opencode)',
+    );
   });
 
   it('handles null, undefined, or empty gracefully', () => {

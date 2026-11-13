@@ -1364,6 +1364,7 @@ export default function ChatScreen() {
       return (
         <ToolBurstRenderer
           burst={item}
+          sessionId={sessionId}
           colors={c}
           isStreaming={isStreaming}
           isExpanded={expandedBursts.has(item.id)}
@@ -2324,6 +2325,7 @@ export default function ChatScreen() {
 
 function ToolBurstRenderer({
   burst,
+  sessionId,
   colors: c,
   isStreaming,
   isExpanded,
@@ -2333,6 +2335,7 @@ function ToolBurstRenderer({
   findActiveMsgId,
 }: {
   burst: { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
+  sessionId?: string;
   colors: ThemeColors;
   isStreaming: boolean;
   isExpanded: boolean;
@@ -2354,7 +2357,12 @@ function ToolBurstRenderer({
         findActiveMsgId={findActiveMsgId}
       />
       {!isStreaming && (
-        <TurnEndActions messages={burst.messages} colors={c} onReview={onReview} />
+        <TurnEndActions
+          messages={burst.messages}
+          sessionId={sessionId}
+          colors={c}
+          onReview={onReview}
+        />
       )}
     </View>
   );
@@ -2362,33 +2370,82 @@ function ToolBurstRenderer({
 
 function TurnEndActions({
   messages,
+  sessionId,
   colors: c,
   onReview,
 }: {
   messages: ChatMessage[];
+  sessionId?: string;
   colors: ThemeColors;
   onReview: () => void;
 }) {
   const fileChanges = messages.filter((m) => m.kind === 'fileChange');
   if (fileChanges.length === 0) return null;
 
+  const checkpointMsg = messages.find((m) => m.meta?.checkpointId);
+  const checkpointId = checkpointMsg?.meta?.checkpointId as string | undefined;
+
+  const handleRollback = () => {
+    if (!sessionId || !checkpointId) return;
+    Alert.alert(
+      'Rollback to Turn Checkpoint',
+      `Revert workspace back to checkpoint ${checkpointId}? Any modifications made after this turn will be restored to this exact snapshot.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Rollback',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiFetch(`/api/agents/${sessionId}/rollback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ checkpointId }),
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              Alert.alert('Rolled Back', `Workspace successfully reverted to checkpoint ${checkpointId}.`);
+            } catch (err) {
+              Alert.alert('Rollback Failed', err instanceof Error ? err.message : String(err));
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
-    <Pressable
-      style={turnEndStyles.container}
-      onPress={onReview}
-      onLongPress={() => {
-        const summary = fileChanges.map((m) => m.content).join('\n');
-        Clipboard.setString(summary);
-      }}
-      hitSlop={4}
-    >
-      <Ionicons name="create-outline" size={12} color={c.textTertiary} />
-      <Text style={[turnEndStyles.label, { color: c.textTertiary }]}>
-        {fileChanges.length} file{fileChanges.length !== 1 ? 's' : ''} changed
-      </Text>
-      <Text style={[turnEndStyles.sep, { color: c.textTertiary }]}>{'\u00B7'}</Text>
-      <Text style={[turnEndStyles.link, { color: Colors.primary[400] }]}>Review diff</Text>
-    </Pressable>
+    <View style={[turnEndStyles.container, { flexDirection: 'row', alignItems: 'center' }]}>
+      <Pressable
+        style={{ flexDirection: 'row', alignItems: 'center' }}
+        onPress={onReview}
+        onLongPress={() => {
+          const summary = fileChanges.map((m) => m.content).join('\n');
+          Clipboard.setString(summary);
+        }}
+        hitSlop={4}
+      >
+        <Ionicons name="create-outline" size={12} color={c.textTertiary} />
+        <Text style={[turnEndStyles.label, { color: c.textTertiary, marginLeft: 4 }]}>
+          {fileChanges.length} file{fileChanges.length !== 1 ? 's' : ''} changed
+        </Text>
+        <Text style={[turnEndStyles.sep, { color: c.textTertiary }]}>{'\u00B7'}</Text>
+        <Text style={[turnEndStyles.link, { color: Colors.primary[400] }]}>Review diff</Text>
+      </Pressable>
+
+      {checkpointId && (
+        <>
+          <Text style={[turnEndStyles.sep, { color: c.textTertiary }]}>{'\u00B7'}</Text>
+          <Pressable
+            onPress={handleRollback}
+            hitSlop={6}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+          >
+            <Ionicons name="arrow-undo-outline" size={12} color={Colors.warning[400]} />
+            <Text style={[turnEndStyles.link, { color: Colors.warning[400] }]}>Rollback</Text>
+          </Pressable>
+        </>
+      )}
+    </View>
   );
 }
 

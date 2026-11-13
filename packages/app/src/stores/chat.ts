@@ -129,6 +129,26 @@ export const useChatStore = create<ChatState>()((set) => ({
         };
       }
 
+      if (event.type === 'checkpoint_created') {
+        return {
+          messages: push(state.messages, [
+            {
+              id,
+              role: 'system' as const,
+              content: `Checkpoint captured: ${event.label} (${event.files.length} file${event.files.length !== 1 ? 's' : ''})`,
+              timestamp: ts,
+              eventType: 'checkpoint_created',
+              meta: {
+                checkpointId: event.checkpointId,
+                files: event.files,
+                headSha: event.headSha,
+                label: event.label,
+              },
+            },
+          ]),
+        };
+      }
+
       if (event.type === 'permission_response') {
         return {
           pendingApproval: false,

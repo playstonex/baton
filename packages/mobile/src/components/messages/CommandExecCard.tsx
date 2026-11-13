@@ -97,11 +97,7 @@ export const CommandExecCard = React.memo(function CommandExecCard({
   colors,
 }: Props) {
   const normCommand =
-    typeof command === 'string'
-      ? command
-      : command != null
-        ? String(command)
-        : '';
+    typeof command === 'string' ? command : command != null ? String(command) : '';
   const normOutput =
     typeof output === 'string'
       ? output

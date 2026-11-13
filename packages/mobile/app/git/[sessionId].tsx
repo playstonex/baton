@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -25,8 +25,12 @@ import type {
   GitDiffResult,
   GitFileDiff,
   GitDiffLine,
+  PullRequestSummary,
+  PullRequestCheck,
 } from '@baton/shared';
 import { gitService } from '../../src/services/git';
+import { apiFetch } from '../../src/services/api';
+import { wsService } from '../../src/services/websocket';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useAgentStore } from '../../src/stores/agents';
 import { FontFamily, Typography, Spacing, CornerRadius, Colors, Glass } from '../../src/constants/theme';
@@ -37,7 +41,7 @@ import {
   GlassButton,
 } from '../../src/components/GlassKit';
 
-type Tab = 'changes' | 'history' | 'branches';
+type Tab = 'changes' | 'history' | 'branches' | 'prs';
 
 const LANE_WIDTH = 20;
 const ROW_HEIGHT = 56;
@@ -337,6 +341,7 @@ export default function GitScreen() {
             { key: 'changes', label: 'Changes', badge: dirtyCount },
             { key: 'history', label: 'History' },
             { key: 'branches', label: 'Branches', badge: branchCount },
+            { key: 'prs', label: 'PRs & CI' },
           ]}
           active={tab}
           onChange={setTab}
@@ -378,6 +383,9 @@ export default function GitScreen() {
             currentBranch={status?.branch}
             onCheckout={handleCheckout}
           />
+        )}
+        {projectPath && tab === 'prs' && (
+          <PrsTab sessionId={sessionId ?? ''} projectPath={projectPath} />
         )}
       </ScrollView>
 
@@ -1402,4 +1410,321 @@ function formatDate(dateStr: string): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
   if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)}d`;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/* ── Pull Requests & CI Tab ───────────────────────────────────────────────── */
+
+function PrsTab({
+  sessionId,
+  projectPath,
+}: {
+  sessionId: string;
+  projectPath: string;
+}) {
+  const c = useThemeColors();
+  const router = useRouter();
+  const [repo, setRepo] = useState('');
+  const [prs, setPrs] = useState<PullRequestSummary[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expandedPr, setExpandedPr] = useState<number | null>(null);
+  const [checkingOutPr, setCheckingOutPr] = useState<number | null>(null);
+
+  const loadPrs = useCallback(async (repoName: string) => {
+    const trimmed = repoName.trim();
+    if (!trimmed) return;
+    setLoading(true);
+    try {
+      const data = await apiFetch<PullRequestSummary[]>(
+        `/api/forge/prs?repo=${encodeURIComponent(trimmed)}`,
+      );
+      setPrs(data ?? []);
+    } catch (err) {
+      Alert.alert('Load PRs Failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleCheckout = async (prNumber: number) => {
+    setCheckingOutPr(prNumber);
+    try {
+      const data = await apiFetch<{ localBranch: string }>(
+        `/api/forge/pr/${prNumber}/checkout`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ repo: repo.trim(), projectPath }),
+        },
+      );
+      Alert.alert(
+        'Checked Out',
+        `Checked out PR #${prNumber} onto local branch ${data.localBranch}.`,
+      );
+    } catch (err) {
+      Alert.alert('Checkout Failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setCheckingOutPr(null);
+    }
+  };
+
+  const handleFixCI = (pr: PullRequestSummary, check: PullRequestCheck) => {
+    const prompt = `CI check "${check.name}" failed on PR #${pr.number} (${pr.title}): ${check.url ?? 'build failure'}. Please investigate the error and propose a fix.`;
+    wsService.send({
+      type: 'chat_input',
+      sessionId,
+      content: prompt,
+    });
+    router.navigate(`/chat/${sessionId}`);
+  };
+
+  return (
+    <View style={{ gap: Spacing.md }}>
+      <GlassCard c={c} style={{ padding: Spacing.md, gap: Spacing.sm }}>
+        <Text style={[Typography.caption1, { color: c.textSecondary, fontWeight: '600' }]}>
+          Remote Repository (owner/repo)
+        </Text>
+        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+          <TextInput
+            value={repo}
+            onChangeText={setRepo}
+            placeholder="e.g. owner/repo or full git URL"
+            placeholderTextColor={c.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{
+              flex: 1,
+              backgroundColor: c.elevated,
+              borderRadius: CornerRadius.medium,
+              paddingHorizontal: Spacing.md,
+              paddingVertical: 8,
+              fontFamily: FontFamily.mono,
+              fontSize: 13,
+              color: c.textPrimary,
+            }}
+          />
+          <Pressable
+            onPress={() => loadPrs(repo)}
+            disabled={loading || !repo.trim()}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? Colors.primary[600] : Colors.primary[500],
+              paddingHorizontal: 16,
+              justifyContent: 'center',
+              borderRadius: CornerRadius.medium,
+              opacity: loading || !repo.trim() ? 0.6 : 1,
+            })}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Load</Text>
+            )}
+          </Pressable>
+        </View>
+      </GlassCard>
+
+      {prs && prs.length === 0 && (
+        <EmptyCard text="No open pull requests found for this repository." />
+      )}
+
+      {prs &&
+        prs.map((pr) => (
+          <PullRequestItem
+            key={pr.number}
+            pr={pr}
+            repo={repo.trim()}
+            isExpanded={expandedPr === pr.number}
+            onToggle={() => setExpandedPr(expandedPr === pr.number ? null : pr.number)}
+            onCheckout={() => handleCheckout(pr.number)}
+            checkingOut={checkingOutPr === pr.number}
+            onFixCI={(check) => handleFixCI(pr, check)}
+          />
+        ))}
+    </View>
+  );
+}
+
+function PullRequestItem({
+  pr,
+  repo,
+  isExpanded,
+  onToggle,
+  onCheckout,
+  checkingOut,
+  onFixCI,
+}: {
+  pr: PullRequestSummary;
+  repo: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onCheckout: () => void;
+  checkingOut: boolean;
+  onFixCI: (check: PullRequestCheck) => void;
+}) {
+  const c = useThemeColors();
+  const [checks, setChecks] = useState<PullRequestCheck[] | null>(null);
+  const [loadingChecks, setLoadingChecks] = useState(false);
+
+  useEffect(() => {
+    if (isExpanded && checks === null && !loadingChecks) {
+      setLoadingChecks(true);
+      apiFetch<PullRequestCheck[]>(
+        `/api/forge/pr/${pr.number}/checks?repo=${encodeURIComponent(repo)}`,
+      )
+        .then((data) => setChecks(data ?? []))
+        .catch(() => setChecks([]))
+        .finally(() => setLoadingChecks(false));
+    }
+  }, [isExpanded, checks, loadingChecks, pr.number, repo]);
+
+  return (
+    <GlassCard c={c} style={{ padding: Spacing.md, gap: Spacing.sm }}>
+      <Pressable onPress={onToggle} style={{ gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={[Typography.headline, { color: c.textPrimary, flex: 1 }]} numberOfLines={2}>
+            #{pr.number} {pr.title}
+          </Text>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={c.textTertiary}
+          />
+        </View>
+        <Text
+          style={[
+            Typography.caption2,
+            { color: Colors.primary[400], fontFamily: FontFamily.mono },
+          ]}
+        >
+          {pr.baseRefName} ← {pr.headRefName}
+        </Text>
+        <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+          {pr.authorLogin ? `by @${pr.authorLogin} · ` : ''}Updated{' '}
+          {new Date(pr.updatedAt).toLocaleDateString()}
+        </Text>
+      </Pressable>
+
+      {isExpanded && (
+        <View
+          style={{
+            marginTop: Spacing.xs,
+            gap: Spacing.sm,
+            borderTopWidth: 1,
+            borderTopColor: c.separator,
+            paddingTop: Spacing.sm,
+          }}
+        >
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+            <Pressable
+              onPress={onCheckout}
+              disabled={checkingOut}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: c.elevated,
+                paddingVertical: 8,
+                borderRadius: CornerRadius.medium,
+              }}
+            >
+              {checkingOut ? (
+                <ActivityIndicator size="small" color={c.textPrimary} />
+              ) : (
+                <>
+                  <Ionicons name="git-pull-request-outline" size={14} color={c.textPrimary} />
+                  <Text style={[Typography.caption1, { color: c.textPrimary, fontWeight: '600' }]}>
+                    Checkout Branch
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+
+          {/* CI Checks section */}
+          <Text
+            style={[
+              Typography.caption2,
+              { color: c.textSecondary, fontWeight: '600', marginTop: 4 },
+            ]}
+          >
+            CI Checks & Actions
+          </Text>
+          {loadingChecks ? (
+            <ActivityIndicator size="small" color={c.textTertiary} />
+          ) : !checks || checks.length === 0 ? (
+            <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+              No CI checks found for this PR.
+            </Text>
+          ) : (
+            <View style={{ gap: 6 }}>
+              {checks.map((check, idx) => {
+                const isFail = check.status === 'failure' || check.status === 'cancelled';
+                const isPass = check.status === 'success';
+                const statusColor = isFail
+                  ? Colors.danger[400]
+                  : isPass
+                    ? Colors.success[400]
+                    : Colors.warning[400];
+                const iconName = isFail
+                  ? 'close-circle'
+                  : isPass
+                    ? 'checkmark-circle'
+                    : 'time';
+
+                return (
+                  <View
+                    key={idx}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: c.elevated,
+                      paddingHorizontal: Spacing.sm,
+                      paddingVertical: 6,
+                      borderRadius: CornerRadius.small,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <Ionicons name={iconName} size={14} color={statusColor} />
+                      <Text
+                        style={[Typography.caption2, { color: c.textPrimary, flex: 1 }]}
+                        numberOfLines={1}
+                      >
+                        {check.name}
+                      </Text>
+                    </View>
+                    {isFail && (
+                      <Pressable
+                        onPress={() => onFixCI(check)}
+                        style={{
+                          backgroundColor: Colors.danger[400] + '20',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 4,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
+                      >
+                        <Ionicons name="sparkles" size={11} color={Colors.danger[400]} />
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: '600',
+                            color: Colors.danger[400],
+                          }}
+                        >
+                          Ask Fix
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+    </GlassCard>
+  );
 }

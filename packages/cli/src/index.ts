@@ -6,6 +6,7 @@ import { providerCommand } from './commands/provider.js';
 import { pipelineCommand } from './commands/pipeline.js';
 import { worktreeCommand } from './commands/worktree.js';
 import { doctorCommand } from './commands/doctor.js';
+import { reviewCommand } from './commands/review.js';
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
@@ -29,6 +30,9 @@ async function main() {
       break;
     case 'doctor':
       await doctorCommand();
+      break;
+    case 'review':
+      await reviewCommand(args[1], args.slice(2));
       break;
 
     // Legacy shortcuts (backward compat)
@@ -91,6 +95,9 @@ function printHelp() {
     baton worktree ls                        List worktrees
     baton worktree create <path> --branch X  Create worktree
     baton worktree archive <path>            Archive worktree
+
+    baton review [file.md] [--repo path]     Generate standalone code review HTML report
+    baton review prompt                      Print standard agent review prompt
 
     baton doctor                              Run diagnostics
 

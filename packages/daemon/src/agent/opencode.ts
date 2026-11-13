@@ -25,7 +25,10 @@ export class OpenCodeAdapter extends BaseAgentAdapter {
         encoding: 'utf-8',
         timeout: 5000,
       });
-      const list = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+      const list = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
       return list.length > 0 ? list : DEFAULT_OPENCODE_MODELS.map((m) => m.id);
     } catch {
       return DEFAULT_OPENCODE_MODELS.map((m) => m.id);

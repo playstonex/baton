@@ -80,3 +80,7 @@ target 'Baton' do
     end
   end
 end
+
+target 'BatonWidget' do
+  # ActivityKit & WidgetKit extension target
+end

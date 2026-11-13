@@ -14,11 +14,31 @@ import { execSync, execFileSync, spawn } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
 
 export const DEFAULT_OPENCODE_MODELS: ModelInfo[] = [
-  { id: 'opencode/deepseek-v4.1-flash-free', name: 'DeepSeek v4.1 Flash (Free)', description: 'Fast, free-tier DeepSeek model' },
-  { id: 'opencode/glm-5.3-flash-free', name: 'GLM 5.3 Flash (Free)', description: 'Free-tier GLM 5.3 model' },
-  { id: 'opencode/mimo-v2.6-flash-free', name: 'MIMO v2.6 Flash (Free)', description: 'Free-tier MIMO model' },
-  { id: 'opencode/minimax-m3.1-flash-free', name: 'MiniMax M3.1 Flash (Free)', description: 'Free-tier MiniMax model' },
-  { id: 'opencode/nemotron-3.5-lightning-free', name: 'Nemotron 3.5 Lightning (Free)', description: 'Free-tier NVIDIA Nemotron model' },
+  {
+    id: 'opencode/deepseek-v4.1-flash-free',
+    name: 'DeepSeek v4.1 Flash (Free)',
+    description: 'Fast, free-tier DeepSeek model',
+  },
+  {
+    id: 'opencode/glm-5.3-flash-free',
+    name: 'GLM 5.3 Flash (Free)',
+    description: 'Free-tier GLM 5.3 model',
+  },
+  {
+    id: 'opencode/mimo-v2.6-flash-free',
+    name: 'MIMO v2.6 Flash (Free)',
+    description: 'Free-tier MIMO model',
+  },
+  {
+    id: 'opencode/minimax-m3.1-flash-free',
+    name: 'MiniMax M3.1 Flash (Free)',
+    description: 'Free-tier MiniMax model',
+  },
+  {
+    id: 'opencode/nemotron-3.5-lightning-free',
+    name: 'Nemotron 3.5 Lightning (Free)',
+    description: 'Free-tier NVIDIA Nemotron model',
+  },
   { id: 'opencode/big-pickle', name: 'Big Pickle', description: 'OpenCode Big Pickle model' },
 ];
 
@@ -169,7 +189,9 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
     const sessionBody: Record<string, unknown> = { title: `baton-${Date.now()}` };
     if (this._selectedModel) {
-      sessionBody.model = this.isV2 ? parseOpencodeModelRef(this._selectedModel) : this._selectedModel;
+      sessionBody.model = this.isV2
+        ? parseOpencodeModelRef(this._selectedModel)
+        : this._selectedModel;
     }
 
     const created = await this.httpPost('/session', sessionBody);
@@ -374,7 +396,8 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         if (this.isV2) {
           try {
             const permResult = await this.httpGet(`/session/${this.sessionId}/permission`);
-            const permList = this.unwrap<Array<{ id?: string; type?: string; description?: string }>>(permResult);
+            const permList =
+              this.unwrap<Array<{ id?: string; type?: string; description?: string }>>(permResult);
             if (Array.isArray(permList) && permList.length > 0) {
               const req = permList[0];
               if (req?.id && !this.pendingPermissionIds.has(req.id)) {
@@ -396,7 +419,11 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
                     timestamp: Date.now(),
                   });
                   onEvent({ type: 'waiting_approval', timestamp: Date.now() });
-                  onEvent({ type: 'status_change', status: 'waiting_input', timestamp: Date.now() });
+                  onEvent({
+                    type: 'status_change',
+                    status: 'waiting_input',
+                    timestamp: Date.now(),
+                  });
                 }
               }
             }

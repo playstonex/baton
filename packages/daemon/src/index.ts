@@ -1,5 +1,5 @@
 import os from 'node:os';
-import { readdir, stat, readFile } from 'node:fs/promises';
+import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join, basename, extname, resolve, sep } from 'node:path';
 import { access } from 'node:fs/promises';
 import { Hono } from 'hono';
@@ -30,6 +30,7 @@ import { PushNotificationService } from './system/push.js';
 import { ContextCompressor } from './parser/compressor.js';
 import { GitService } from './git/index.js';
 import { createDefaultForgeRegistry, parseRepoRef, checkoutPullRequest } from './forge/index.js';
+import { CODE_REVIEW_PROMPT, generateStandaloneReviewReport } from './review/index.js';
 import { listWorktrees, createWorktree, archiveWorktree } from './worktree/core.js';
 import { ApiProviderRegistry } from './api-converter/index.js';
 import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
@@ -96,6 +97,9 @@ export function isLocalOrigin(origin: string): boolean {
  */
 export const API_KEY_ENV_PATTERN = /^[A-Z][A-Z0-9_]*_API_KEY$/;
 
+export const isCheckpointId = (id: unknown): id is string =>
+  typeof id === 'string' && /^cp_[a-z0-9]+_[a-z0-9]+$/i.test(id);
+
 export function createDaemon(port = DEFAULT_PORT) {
   const app = new Hono();
   const batonHome = process.env.BATON_HOME ?? `${process.env.HOME ?? '~'}/.baton`;
@@ -113,6 +117,7 @@ export function createDaemon(port = DEFAULT_PORT) {
   const scheduler = new ScheduleService(agentManager);
   void scheduler.restore();
   const checkpointService = new WorkspaceCheckpointService();
+  agentManager.setCheckpointService(checkpointService);
   const analytics = new AnalyticsService(join(batonHome, 'analytics.db'));
   const pushService = new PushNotificationService();
   const compressor = new ContextCompressor();
@@ -571,6 +576,39 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
+  // ── Session Checkpoints & Turn-level Rollback ───────────────────────
+  app.get('/api/agents/:id/checkpoints', async (c) => {
+    const id = c.req.param('id');
+    const agent = agentManager.get(id);
+    const projectPath =
+      agent?.projectPath ?? (await agentManager.getSessionStore().getSession(id))?.project_path;
+    if (!projectPath) {
+      return c.json({ error: 'Session project path not found' }, 404);
+    }
+    const checkpoints = await checkpointService.list(projectPath);
+    return c.json(checkpoints);
+  });
+
+  app.post('/api/agents/:id/rollback', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.json<{ checkpointId: string }>().catch(() => ({ checkpointId: '' }));
+    if (!body.checkpointId || !isCheckpointId(body.checkpointId)) {
+      return c.json({ error: 'Invalid checkpoint id' }, 400);
+    }
+    const agent = agentManager.get(id);
+    const projectPath =
+      agent?.projectPath ?? (await agentManager.getSessionStore().getSession(id))?.project_path;
+    if (!projectPath) {
+      return c.json({ error: 'Session project path not found' }, 404);
+    }
+    try {
+      await agentManager.rollbackSession(id, body.checkpointId);
+      return c.json({ success: true, checkpointId: body.checkpointId });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  });
+
   // File browser API
   const IGNORE_DIRS = new Set([
     'node_modules',
@@ -716,6 +754,21 @@ export function createDaemon(port = DEFAULT_PORT) {
       });
     } catch {
       return c.json({ error: 'Cannot read file' }, 400);
+    }
+  });
+
+  app.post('/api/files/write', async (c) => {
+    const body = await c.req.json<{ path: string; content: string }>();
+    if (!body?.path) return c.json({ error: 'Missing path' }, 400);
+    const resolvedPath = resolve(body.path);
+    if (!isPathAllowed(resolvedPath)) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
+    try {
+      await writeFile(resolvedPath, body.content ?? '', 'utf-8');
+      return c.json({ ok: true, path: resolvedPath });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Cannot write file' }, 500);
     }
   });
 
@@ -1316,6 +1369,41 @@ export function createDaemon(port = DEFAULT_PORT) {
     return c.json({ ok: true });
   });
 
+  // ── Code Review Reports (Lody-style Standalone HTML Review) ──────────
+  app.get('/api/review/prompt', (c) => {
+    return c.json({ prompt: CODE_REVIEW_PROMPT });
+  });
+
+  app.post('/api/review/generate', async (c) => {
+    const body = await c.req.json<{
+      projectPath: string;
+      reviewMarkdown?: string;
+      targetRef?: string;
+      outputPath?: string;
+    }>();
+    if (!body?.projectPath) {
+      return c.json({ error: 'projectPath is required' }, 400);
+    }
+    const resolvedPath = resolve(body.projectPath);
+    if (!isPathAllowed(resolvedPath)) {
+      return c.json({ error: 'Path not allowed' }, 403);
+    }
+    try {
+      const result = await generateStandaloneReviewReport({
+        repoPath: resolvedPath,
+        reviewMarkdown: body.reviewMarkdown,
+        targetRef: body.targetRef,
+        outputPath: body.outputPath,
+      });
+      return c.json(result);
+    } catch (err) {
+      return c.json(
+        { error: err instanceof Error ? err.message : 'Review generation failed' },
+        500,
+      );
+    }
+  });
+
   // ── Workspace checkpoints (undo AI changes) ───────────────────────
   app.get('/api/workspace/checkpoints', async (c) => {
     const projectPath = c.req.query('cwd');
@@ -1341,12 +1429,7 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
-  // Checkpoint ids are `cp_<base36>_<base36>` (checkpoint.ts create) — the
-  // guard keeps client-supplied ids from escaping the checkpoints dir via
-  // path traversal before they ever reach a file path or git call.
-  const isCheckpointId = (id: unknown): id is string =>
-    typeof id === 'string' && /^cp_[a-z0-9]+_[a-z0-9]+$/i.test(id);
-
+  // Checkpoint ids are validated with isCheckpointId defined at module level
   app.post('/api/workspace/revert-preview', async (c) => {
     const body = await c.req.json<{ cwd: string; checkpointId: string }>();
     if (!body?.cwd) return c.json({ error: 'cwd required' }, 400);

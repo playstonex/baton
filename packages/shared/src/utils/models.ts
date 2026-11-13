@@ -8,7 +8,10 @@ export interface ModelInfo {
  * Standard registry of known models across agents (Antigravity, Claude Code, Codex, Kiro, OpenCode, Pi).
  * Maps raw model IDs to their official human-readable display names and compact pill labels.
  */
-export const KNOWN_MODELS: Record<string, { name: string; compactName?: string; description?: string }> = {
+export const KNOWN_MODELS: Record<
+  string,
+  { name: string; compactName?: string; description?: string }
+> = {
   // ── Antigravity (Google) ───────────────────────────────────────────
   'gemini-3.8-flash-high': {
     name: 'Gemini 3.8 Flash (High)',
@@ -113,7 +116,7 @@ export const KNOWN_MODELS: Record<string, { name: string; compactName?: string; 
     name: 'GPT-5.6 Luna',
     compactName: 'GPT-5.6 Luna',
   },
-  'o3': {
+  o3: {
     name: 'o3',
     compactName: 'o3',
   },
@@ -139,7 +142,7 @@ export const KNOWN_MODELS: Record<string, { name: string; compactName?: string; 
   },
 
   // ── Kiro / OpenCode / Other agents ──────────────────────────────────
-  'auto': {
+  auto: {
     name: 'Auto (Task Optimized)',
     compactName: 'Auto',
     description: 'Models chosen by task for optimal usage and consistent quality',
@@ -213,7 +216,9 @@ export function formatModelName(
     const [provider, modelPart] = trimmed.split('/', 2);
     const subKnown = KNOWN_MODELS[modelPart];
     if (subKnown) {
-      return options?.compact ? (subKnown.compactName ?? subKnown.name) : `${subKnown.name} (${provider})`;
+      return options?.compact
+        ? (subKnown.compactName ?? subKnown.name)
+        : `${subKnown.name} (${provider})`;
     }
     const cleanModel = modelPart
       .replace(/^anthropic\./i, '')
@@ -222,7 +227,9 @@ export function formatModelName(
       .replace(/:0$/i, '');
     const cleanKnown = KNOWN_MODELS[cleanModel];
     if (cleanKnown) {
-      return options?.compact ? (cleanKnown.compactName ?? cleanKnown.name) : `${cleanKnown.name} (${provider})`;
+      return options?.compact
+        ? (cleanKnown.compactName ?? cleanKnown.name)
+        : `${cleanKnown.name} (${provider})`;
     }
     const fallbackFormatted = formatFallbackModelName(cleanModel, options?.compact);
     return options?.compact ? fallbackFormatted : `${fallbackFormatted} (${provider})`;

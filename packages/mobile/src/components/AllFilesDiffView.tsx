@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { GitStatusResult, GitDiffResult, GitFileDiff, GitDiffLine } from '@baton/shared';
 import { gitService } from '../services/git';
+import { apiFetch } from '../services/api';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { FontFamily, Spacing, CornerRadius, Colors, Glass } from '../constants/theme';
 
@@ -43,6 +44,11 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
   const [showCommitModal, setShowCommitModal] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
   const [committing, setCommitting] = useState(false);
+
+  const [editingFile, setEditingFile] = useState<GitFileDiff | null>(null);
+  const [editorContent, setEditorContent] = useState('');
+  const [loadingContent, setLoadingContent] = useState(false);
+  const [savingContent, setSavingContent] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!projectPath || !visible) return;
@@ -73,6 +79,49 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
       loadData();
     }
   }, [visible, loadData]);
+
+  const handleOpenEdit = useCallback(
+    async (file: GitFileDiff) => {
+      setEditingFile(file);
+      setLoadingContent(true);
+      const fullPath = file.path.startsWith('/')
+        ? file.path
+        : `${projectPath.replace(/\/+$/, '')}/${file.path}`;
+      try {
+        const data = await apiFetch<{ content: string }>(
+          `/api/files/content?path=${encodeURIComponent(fullPath)}`,
+        );
+        setEditorContent(data.content ?? '');
+      } catch (err) {
+        Alert.alert('Cannot Open File', err instanceof Error ? err.message : String(err));
+        setEditingFile(null);
+      } finally {
+        setLoadingContent(false);
+      }
+    },
+    [projectPath],
+  );
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingFile) return;
+    setSavingContent(true);
+    const fullPath = editingFile.path.startsWith('/')
+      ? editingFile.path
+      : `${projectPath.replace(/\/+$/, '')}/${editingFile.path}`;
+    try {
+      await apiFetch('/api/files/write', {
+        method: 'POST',
+        body: JSON.stringify({ path: fullPath, content: editorContent }),
+      });
+      setEditingFile(null);
+      await loadData();
+      Alert.alert('Saved', 'File changes saved and diff refreshed.');
+    } catch (err) {
+      Alert.alert('Save Failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingContent(false);
+    }
+  }, [editingFile, projectPath, editorContent, loadData]);
 
   // Aggregate stats
   const totalAdd = useMemo(() => diff?.files.reduce((s, f) => s + f.additions, 0) ?? 0, [diff]);
@@ -281,6 +330,7 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
                   file={file}
                   isExpanded={isExpanded}
                   onToggle={() => toggleExpandFile(file.path)}
+                  onEdit={handleOpenEdit}
                   colors={c}
                 />
               );
@@ -363,6 +413,88 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* Lightweight Inline File Editor (Happy-style quick edits) */}
+        <Modal
+          visible={!!editingFile}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setEditingFile(null)}
+        >
+          <View style={[styles.container, { backgroundColor: c.bg }]}>
+            <View
+              style={[
+                styles.header,
+                {
+                  paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md,
+                  borderBottomColor: c.separator,
+                },
+              ]}
+            >
+              <Pressable onPress={() => setEditingFile(null)} hitSlop={8} style={styles.closeBtn}>
+                <Ionicons name="close" size={22} color={c.textPrimary} />
+              </Pressable>
+
+              <View style={styles.headerTitleWrap}>
+                <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
+                  {editingFile ? editingFile.path.split('/').pop() : 'Edit File'}
+                </Text>
+                <Text style={{ fontSize: 11, color: c.textTertiary }} numberOfLines={1}>
+                  {editingFile?.path}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={handleSaveEdit}
+                disabled={savingContent || loadingContent}
+                style={({ pressed }) => [
+                  styles.commitBtn,
+                  {
+                    backgroundColor: pressed ? Colors.primary[600] : Colors.primary[500],
+                    opacity: savingContent || loadingContent ? 0.6 : 1,
+                  },
+                ]}
+              >
+                {savingContent ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={15} color="#fff" />
+                    <Text style={styles.commitBtnText}>Save</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+
+            {loadingContent ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color={Colors.primary[500]} />
+                <Text style={[styles.loadingText, { color: c.textTertiary }]}>
+                  Loading file content...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1, padding: 12 }}>
+                <TextInput
+                  value={editorContent}
+                  onChangeText={setEditorContent}
+                  multiline
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  style={{
+                    fontFamily: FontFamily.mono,
+                    fontSize: 13,
+                    color: c.textPrimary,
+                    lineHeight: 19,
+                    minHeight: 500,
+                  }}
+                  textAlignVertical="top"
+                />
+              </ScrollView>
+            )}
+          </View>
+        </Modal>
       </View>
     </Modal>
   );
@@ -372,11 +504,13 @@ function FileAccordionItem({
   file,
   isExpanded,
   onToggle,
+  onEdit,
   colors: c,
 }: {
   file: GitFileDiff;
   isExpanded: boolean;
   onToggle: () => void;
+  onEdit?: (file: GitFileDiff) => void;
   colors: any;
 }) {
   const parts = file.path.split('/');
@@ -436,6 +570,20 @@ function FileAccordionItem({
         )}
         {file.deletions > 0 && (
           <Text style={[styles.hunkDel, { color: Colors.danger[400] }]}>−{file.deletions}</Text>
+        )}
+
+        {file.status !== 'deleted' && onEdit && (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onEdit(file);
+            }}
+            hitSlop={8}
+            style={{ paddingHorizontal: 6 }}
+            accessibilityLabel={`Edit ${filename}`}
+          >
+            <Ionicons name="create-outline" size={16} color={Colors.primary[400]} />
+          </Pressable>
         )}
 
         <Ionicons

@@ -56,10 +56,20 @@ function resolveToolIcon(toolName: string): string {
   if (lower.includes('write') || lower.includes('edit') || lower.includes('patch')) {
     return 'create-outline';
   }
-  if (lower.includes('grep') || lower.includes('search') || lower.includes('find') || lower.includes('glob')) {
+  if (
+    lower.includes('grep') ||
+    lower.includes('search') ||
+    lower.includes('find') ||
+    lower.includes('glob')
+  ) {
     return 'search-outline';
   }
-  if (lower.includes('bash') || lower.includes('shell') || lower.includes('exec') || lower.includes('terminal')) {
+  if (
+    lower.includes('bash') ||
+    lower.includes('shell') ||
+    lower.includes('exec') ||
+    lower.includes('terminal')
+  ) {
     return 'terminal-outline';
   }
   if (lower.includes('git')) {
@@ -73,7 +83,8 @@ function resolveToolVerb(toolName: string): string {
   if (lower.includes('read')) return 'Read';
   if (lower.includes('write')) return 'Wrote';
   if (lower.includes('edit')) return 'Edited';
-  if (lower.includes('search') || lower.includes('grep') || lower.includes('glob')) return 'Searched';
+  if (lower.includes('search') || lower.includes('grep') || lower.includes('glob'))
+    return 'Searched';
   if (lower.includes('bash') || lower.includes('terminal')) return 'Ran';
   return toolName.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
 }
@@ -119,7 +130,8 @@ export function normalizeActivityStep(msg: ChatMessage): NormalizedActivityStep 
   }
 
   if (msg.kind === 'toolActivity') {
-    const toolName = (msg.meta?.tool as string) ?? msg.content.replace(/^🔧\s*/, '').split(' ')[0] ?? 'tool';
+    const toolName =
+      (msg.meta?.tool as string) ?? msg.content.replace(/^🔧\s*/, '').split(' ')[0] ?? 'tool';
     const filePath = (msg.meta?.filePath ?? msg.meta?.path ?? '') as string;
     const durationMs = typeof msg.meta?.durationMs === 'number' ? msg.meta.durationMs : undefined;
     const isFailed = msg.meta?.success === false;
@@ -129,7 +141,7 @@ export function normalizeActivityStep(msg: ChatMessage): NormalizedActivityStep 
       kind: 'toolActivity',
       iconName: resolveToolIcon(toolName),
       verb: resolveToolVerb(toolName),
-      target: filePath || (msg.meta?.title as string) || (msg.content.replace(/^🔧\s*/, '')),
+      target: filePath || (msg.meta?.title as string) || msg.content.replace(/^🔧\s*/, ''),
       status: isMsgRunning ? 'running' : isFailed ? 'failed' : 'completed',
       duration: durationMs ? formatActivityDuration(durationMs) : undefined,
       rawContent: msg.content,

@@ -17,6 +17,9 @@ export type AgentType =
   | 'antigravity'
   // Pi coding agent (`pi`, @mariozechner/pi-coding-agent)
   | 'pi'
+  // Replay Dev offline simulator (ported from T3 Code)
+  | 'replay'
+  | 'replay-dev'
   | 'acp'
   | 'custom';
 
@@ -66,6 +69,7 @@ export type ParsedEvent =
   | PermissionRequestEvent
   | PermissionResponseEvent
   | TurnBoundaryEvent
+  | CheckpointCreatedEvent
   | FileChangeEvent
   | CommandExecEvent
   | ThinkingEvent
@@ -137,6 +141,21 @@ export interface TurnBoundaryEvent {
   turnId: string;
   direction: 'start' | 'end';
   status?: 'completed' | 'failed' | 'cancelled';
+  checkpointId?: string;
+  checkpointFiles?: string[];
+  checkpointLabel?: string;
+  timestamp: number;
+}
+
+/** Emitted when an automatic or manual Git plumbing checkpoint is captured */
+export interface CheckpointCreatedEvent {
+  type: 'checkpoint_created';
+  checkpointId: string;
+  turnId?: string;
+  label: string;
+  files: string[];
+  headSha: string;
+  commitSha?: string;
   timestamp: number;
 }
 
@@ -181,12 +200,13 @@ export interface RawOutputEvent {
 
 // ── Chat / SDK events (Codex-style) ────────────────────────────────
 
-export type ChatRole = 'user' | 'assistant';
+export type ChatRole = 'user' | 'assistant' | 'system';
 
 export interface ChatMessageEvent {
   type: 'chat_message';
   role: ChatRole;
   content: string;
+  meta?: Record<string, unknown>;
   timestamp: number;
 }
 

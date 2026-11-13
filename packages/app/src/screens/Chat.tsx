@@ -13,6 +13,7 @@ import {
   IconFile,
   IconGitBranch,
   IconActivity,
+  IconRotateCcw,
 } from '../lib/icons.js';
 
 const PERMISSION_CONFIG: Record<string, { label: string; desc: string; tone: string }> = {
@@ -233,6 +234,32 @@ export function ChatScreen() {
     navigate('/');
   }
 
+  async function handleRollback(checkpointId: string) {
+    if (!sessionId) return;
+    if (
+      !confirm(
+        `Rollback workspace to checkpoint ${checkpointId}? Any modifications made after this turn will be restored to this exact snapshot.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/agents/${sessionId}/rollback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkpointId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Rollback failed');
+      } else {
+        alert(`Workspace successfully rolled back to ${checkpointId}.`);
+      }
+    } catch {
+      alert('Failed to reach daemon for rollback');
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -331,9 +358,7 @@ export function ChatScreen() {
                             <span className={isCurrent ? 'text-accent font-semibold' : 'text-fg'}>
                               {displayName}
                             </span>
-                            {isCurrent && (
-                              <span className="text-[10px] text-accent">✓ Active</span>
-                            )}
+                            {isCurrent && <span className="text-[10px] text-accent">✓ Active</span>}
                           </div>
                           {detail?.description && (
                             <span className="text-[11px] text-muted line-clamp-1">
@@ -442,7 +467,7 @@ export function ChatScreen() {
         ) : (
           <div className="mx-auto max-w-3xl space-y-3 px-4 py-4">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} />
+              <MessageBubble key={msg.id} msg={msg} onRollback={handleRollback} />
             ))}
             {running && !pendingApproval && (
               <div className="flex items-center gap-2.5 rounded-md border border-accent/20 bg-accent-soft/30 px-3.5 py-2">
@@ -556,7 +581,36 @@ export function ChatScreen() {
   );
 }
 
-function MessageBubble({ msg }: { msg: { role: string; content: string; eventType?: string } }) {
+function MessageBubble({
+  msg,
+  onRollback,
+}: {
+  msg: { role: string; content: string; eventType?: string; meta?: Record<string, unknown> };
+  onRollback?: (cpId: string) => void;
+}) {
+  if (msg.eventType === 'checkpoint_created') {
+    const cpId = msg.meta?.checkpointId as string | undefined;
+    return (
+      <div className="flex justify-center my-1.5">
+        <div className="inline-flex max-w-[90%] items-center gap-2.5 rounded-md border border-line-soft bg-surface/90 px-3.5 py-1.5 text-xs text-muted shadow-xs">
+          <IconGitBranch className="h-3.5 w-3.5 text-accent" />
+          <span className="font-mono text-fg-2">{msg.content}</span>
+          {cpId && (
+            <button
+              type="button"
+              onClick={() => onRollback?.(cpId)}
+              className="inline-flex items-center gap-1 rounded bg-raised px-2 py-0.5 text-[11px] font-medium text-warn hover:bg-warn/10 transition-colors"
+              title="Rollback workspace to this turn"
+            >
+              <IconRotateCcw className="h-3 w-3" />
+              <span>Rollback</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end">

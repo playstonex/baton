@@ -1,12 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  LayoutAnimation,
-  ScrollView,
-} from 'react-native';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import * as Haptics from 'expo-haptics';
 import type { ChatMessage } from '../../stores/chat';
@@ -19,6 +12,7 @@ import {
 } from './activitySummary';
 import { HighlightedText } from './HighlightedText';
 import { DiffRenderer } from './DiffRenderer';
+import { liveActivityService } from '../../services/live-activity';
 
 export interface ActivityCapsuleProps {
   messages: ChatMessage[];
@@ -46,13 +40,17 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
     [messages, isStreaming],
   );
 
-  const steps = useMemo(
-    () => messages.map(normalizeActivityStep),
-    [messages],
-  );
+  const steps = useMemo(() => messages.map(normalizeActivityStep), [messages]);
 
   // Set of individual step IDs that are expanded to view details
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
+
+  // Keep iOS 16.1+ ActivityKit Live Activity synced with current activity summary
+  useEffect(() => {
+    if (isStreaming) {
+      void liveActivityService.update(summary);
+    }
+  }, [summary, isStreaming]);
 
   const handleToggleCapsule = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -88,11 +86,7 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
         onPress={handleToggleCapsule}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel={
-          isExpanded
-            ? `Collapse ${summary.title}`
-            : `Expand ${summary.title}`
-        }
+        accessibilityLabel={isExpanded ? `Collapse ${summary.title}` : `Expand ${summary.title}`}
       >
         {/* Status Indicator */}
         <View style={styles.statusWrap}>
@@ -121,7 +115,11 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
                 { backgroundColor: c.isDark ? 'rgba(63,185,80,0.18)' : 'rgba(26,127,55,0.12)' },
               ]}
             >
-              <Ionicons name="checkmark" size={12} color={c.isDark ? Colors.success[400] : Colors.success[600]} />
+              <Ionicons
+                name="checkmark"
+                size={12}
+                color={c.isDark ? Colors.success[400] : Colors.success[600]}
+              />
             </View>
           )}
         </View>
@@ -181,10 +179,10 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
             const isStepExpanded = expandedStepIds.has(step.id);
             const hasDetails = Boolean(
               step.command ||
-                step.output ||
-                (step.kind === 'thinking' && step.rawContent) ||
-                step.diff ||
-                step.filePath,
+              step.output ||
+              (step.kind === 'thinking' && step.rawContent) ||
+              step.diff ||
+              step.filePath,
             );
 
             return (
@@ -218,7 +216,8 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
             >
               <Ionicons name="git-compare-outline" size={13} color={Colors.primary[400]} />
               <Text style={[styles.reviewDiffLabel, { color: Colors.primary[400] }]}>
-                Review {summary.fileChangesCount} changed file{summary.fileChangesCount !== 1 ? 's' : ''}
+                Review {summary.fileChangesCount} changed file
+                {summary.fileChangesCount !== 1 ? 's' : ''}
               </Text>
               <Ionicons name="arrow-forward" size={11} color={Colors.primary[400]} />
             </Pressable>
@@ -351,9 +350,7 @@ const TimelineStepRow = React.memo(function TimelineStepRow({
         >
           {/* Thinking Detail */}
           {step.detailType === 'thinking' && (
-            <Text style={[styles.detailText, { color: c.textSecondary }]}>
-              {step.rawContent}
-            </Text>
+            <Text style={[styles.detailText, { color: c.textSecondary }]}>{step.rawContent}</Text>
           )}
 
           {/* Command Detail */}
@@ -453,9 +450,7 @@ const TimelineStepRow = React.memo(function TimelineStepRow({
               <Text style={[styles.detailPath, { color: Colors.primary[400] }]} selectable>
                 {step.filePath}
               </Text>
-              {step.diff ? (
-                <DiffRenderer diff={step.diff} colors={c} maxLines={16} />
-              ) : null}
+              {step.diff ? <DiffRenderer diff={step.diff} colors={c} maxLines={16} /> : null}
             </View>
           )}
 

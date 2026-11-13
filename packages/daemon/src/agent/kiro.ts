@@ -5,12 +5,32 @@ import { BaseAgentAdapter, resumeArgs } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 
 export const DEFAULT_KIRO_MODELS: ModelInfo[] = [
-  { id: 'auto', name: 'Auto (Task Optimized)', description: 'Models chosen by task for optimal usage' },
-  { id: 'claude-opus-5.5', name: 'Claude Opus 5.5', description: 'Claude Opus 5.5 model with 1M context' },
-  { id: 'claude-sonnet-5.5', name: 'Claude Sonnet 5.5', description: 'Claude Sonnet 5.5 model with 1M context' },
-  { id: 'claude-haiku-5.5', name: 'Claude Haiku 5.5', description: 'Claude Haiku 5.5 model with 1M context' },
+  {
+    id: 'auto',
+    name: 'Auto (Task Optimized)',
+    description: 'Models chosen by task for optimal usage',
+  },
+  {
+    id: 'claude-opus-5.5',
+    name: 'Claude Opus 5.5',
+    description: 'Claude Opus 5.5 model with 1M context',
+  },
+  {
+    id: 'claude-sonnet-5.5',
+    name: 'Claude Sonnet 5.5',
+    description: 'Claude Sonnet 5.5 model with 1M context',
+  },
+  {
+    id: 'claude-haiku-5.5',
+    name: 'Claude Haiku 5.5',
+    description: 'Claude Haiku 5.5 model with 1M context',
+  },
   { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', description: 'OpenAI GPT 5.6 Sol with 1M context' },
-  { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', description: 'OpenAI GPT 5.6 Terra with 1M context' },
+  {
+    id: 'gpt-5.6-terra',
+    name: 'GPT-5.6 Terra',
+    description: 'OpenAI GPT 5.6 Terra with 1M context',
+  },
   { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', description: 'OpenAI GPT 5.6 Luna with 1M context' },
   { id: 'grok-4.7', name: 'Grok 4.7', description: 'xAI Grok 4.7' },
   { id: 'deepseek-3.2', name: 'DeepSeek V3.2', description: 'DeepSeek V3.2 preview' },
@@ -71,7 +91,9 @@ export class KiroAdapter extends BaseAgentAdapter {
       });
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed?.models)) {
-        return (parsed.models as Array<{ model_id?: string; model_name?: string; description?: string }>)
+        return (
+          parsed.models as Array<{ model_id?: string; model_name?: string; description?: string }>
+        )
           .map((m) => ({
             id: m.model_id || m.model_name || '',
             name: formatModelName(m.model_id || m.model_name),

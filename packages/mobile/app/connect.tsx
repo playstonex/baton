@@ -72,7 +72,9 @@ export default function ConnectScreen() {
   const setActiveHost = useConnectionStore((s) => s.setActiveHost);
 
   const [mode, setMode] = useState<'local' | 'remote'>('local');
-  const [inputLocalHttp, setInputLocalHttp] = useState('');
+  const [inputLocalHttp, setInputLocalHttp] = useState(
+    __DEV__ ? 'http://127.0.0.1:3210' : '',
+  );
   const [inputLocalWs, setInputLocalWs] = useState('');
   const [inputRelayUrl, setInputRelayUrl] = useState('');
   const [inputPairingCode, setInputPairingCode] = useState('');

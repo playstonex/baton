@@ -78,6 +78,31 @@ export function GitScreen() {
     }
   }
 
+  async function handleGenerateReview() {
+    if (!projectPath) return;
+    setActionLoading('review');
+    setError(null);
+    try {
+      const res = await fetch('/api/review/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to generate review report');
+      } else {
+        const blob = new Blob([data.html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+    } catch {
+      setError('Failed to reach daemon for review generation');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleRevertCheckpoint(id: string) {
     if (!projectPath) return;
     if (
@@ -317,14 +342,25 @@ export function GitScreen() {
               {checkpoints.length}
             </span>
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setShowNewCheckpoint(!showNewCheckpoint)}
-          >
-            <IconClock className="mr-1.5 h-3.5 w-3.5" />
-            Take Snapshot
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={actionLoading === 'review'}
+              onClick={handleGenerateReview}
+            >
+              <IconFile className="mr-1.5 h-3.5 w-3.5" />
+              {actionLoading === 'review' ? 'Reviewing…' : 'Code Review (HTML)'}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowNewCheckpoint(!showNewCheckpoint)}
+            >
+              <IconClock className="mr-1.5 h-3.5 w-3.5" />
+              Take Snapshot
+            </Button>
+          </div>
         </div>
 
         {showNewCheckpoint && (

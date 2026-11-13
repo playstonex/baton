@@ -13,12 +13,36 @@ import type {
 import { execSync, spawn } from 'node:child_process';
 
 export const DEFAULT_ANTIGRAVITY_MODELS: ModelInfo[] = [
-  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', description: 'Fast, high-reasoning Gemini model' },
-  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Medium)', description: 'Balanced speed and reasoning' },
-  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', description: 'Low-latency for quick tasks' },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Thinking)', description: 'Claude Sonnet with extended thinking' },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', description: 'Claude Opus with deep reasoning' },
-  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)', description: 'Open-weights 120B model' },
+  {
+    id: 'gemini-3.8-flash-high',
+    name: 'Gemini 3.8 Flash (High)',
+    description: 'Fast, high-reasoning Gemini model',
+  },
+  {
+    id: 'gemini-3.8-flash-medium',
+    name: 'Gemini 3.8 Flash (Medium)',
+    description: 'Balanced speed and reasoning',
+  },
+  {
+    id: 'gemini-3.8-flash-low',
+    name: 'Gemini 3.8 Flash (Low)',
+    description: 'Low-latency for quick tasks',
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6 (Thinking)',
+    description: 'Claude Sonnet with extended thinking',
+  },
+  {
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6 (Thinking)',
+    description: 'Claude Opus with deep reasoning',
+  },
+  {
+    id: 'gpt-oss-120b-medium',
+    name: 'GPT-OSS 120B (Medium)',
+    description: 'Open-weights 120B model',
+  },
 ];
 
 interface JsonRpcMessage {
@@ -586,8 +610,7 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
             o.kind?.startsWith('deny') ||
             o.optionId === 'deny' ||
             o.optionId === 'cancel',
-        )?.optionId ??
-        'deny';
+        )?.optionId ?? 'deny';
       this.send({
         jsonrpc: '2.0',
         id,

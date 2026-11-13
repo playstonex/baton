@@ -15,10 +15,22 @@ import { execSync, execFileSync } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
 
 export const DEFAULT_CLAUDE_MODELS: ModelInfo[] = [
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Thinking)', description: 'Balanced speed and deep reasoning' },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', description: 'Deep reasoning for complex tasks' },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6 (Thinking)',
+    description: 'Balanced speed and deep reasoning',
+  },
+  {
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6 (Thinking)',
+    description: 'Deep reasoning for complex tasks',
+  },
   { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet', description: 'Hybrid reasoning model' },
-  { id: 'claude-3-5-sonnet-latest', name: 'Claude 3.5 Sonnet', description: 'Fast code intelligence' },
+  {
+    id: 'claude-3-5-sonnet-latest',
+    name: 'Claude 3.5 Sonnet',
+    description: 'Fast code intelligence',
+  },
   { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku', description: 'Fast and lightweight' },
 ];
 

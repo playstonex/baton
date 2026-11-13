@@ -75,7 +75,5 @@ export function useRevealedText(text: string, isStreaming?: boolean): string {
     };
   }, [text, pacingSupported, isStreaming]);
 
-  return pacingSupported
-    ? visibleRevealedText(stateRef.current, { streaming: isStreaming })
-    : text;
+  return pacingSupported ? visibleRevealedText(stateRef.current, { streaming: isStreaming }) : text;
 }

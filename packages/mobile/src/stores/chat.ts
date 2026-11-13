@@ -82,8 +82,7 @@ const ANSI_ESCAPE =
   /\u001B\[[0-9;?]*[ -/]*[@-~]|\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)|\u001B[@-_Z\\-_]|\r(?!\n)|\u0008/g;
 
 /** Clean up orphan ANSI fragments (e.g. from chunks split mid-sequence like 38;2;...m or >4;2m) */
-const ORPHAN_ANSI =
-  /(?:^|\s)(?:>?[0-9;]+[mu]|[0-9]+;[0-9;]+m|4m>4;2m>5u)(?:\s|$)/g;
+const ORPHAN_ANSI = /(?:^|\s)(?:>?[0-9;]+[mu]|[0-9]+;[0-9;]+m|4m>4;2m>5u)(?:\s|$)/g;
 
 function stripAnsiCodes(text: string): string {
   return text.replace(ANSI_ESCAPE, '').replace(ORPHAN_ANSI, ' ');
@@ -258,6 +257,32 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           };
         }
         return state;
+      }
+
+      if (event.type === 'checkpoint_created') {
+        const newCounter = state._counter + 1;
+        const id = `m-${newCounter}`;
+        return {
+          _counter: newCounter,
+          messages: [
+            ...state.messages,
+            {
+              id,
+              turnId: event.turnId || tid,
+              role: 'system' as const,
+              kind: 'fileChange' as const,
+              content: `${event.label} (${event.files.length} file${event.files.length !== 1 ? 's' : ''})`,
+              timestamp: ts,
+              eventType: 'checkpoint_created',
+              meta: {
+                checkpointId: event.checkpointId,
+                files: event.files,
+                headSha: event.headSha,
+                label: event.label,
+              },
+            },
+          ],
+        };
       }
 
       if (event.type === 'waiting_approval') {

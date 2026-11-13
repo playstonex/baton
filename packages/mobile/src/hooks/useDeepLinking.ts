@@ -3,18 +3,15 @@ import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 
 import { useThemeStore } from '../stores/theme';
+import { wsService } from '../services/websocket';
+import { parseSessionUrl, type ParsedSessionUrl } from './parseSessionUrl';
+
+export type { ParsedSessionUrl };
+export { parseSessionUrl };
 
 /**
- * Handle inbound deep links of the form `baton://session/<sessionId>`.
- *
- * Two entry points:
- *  - Cold launch: `Linking.getInitialURL()` — the URL that launched the app.
- *  - Warm launch: `Linking.addEventListener('url')` — fires while the app runs
- *    (e.g. tapping a notification that emits a baton:// URL, or another app
- *    opening a link).
- *
- * Both feed into `navigateToSession`, which routes to the chat screen for the
- * session. The scheme `baton` is registered in app.json.
+ * Handle inbound deep links of the form `baton://session/<sessionId>` or `baton://agent/<sessionId>`.
+ * Also supports action parameters like `?action=approve` and `?action=reject` from Live Activities.
  */
 export function useDeepLinking(): void {
   const router = useRouter();
@@ -29,8 +26,7 @@ export function useDeepLinking(): void {
 
     function handleUrl(url: string | null) {
       if (!url) return;
-      // Dev automation hook (simulator screenshot tours): baton://theme/light
-      // and baton://theme/dark flip the theme. Dev builds only.
+      // Dev automation hook: baton://theme/light and baton://theme/dark
       if (__DEV__ && url.startsWith('baton://theme/')) {
         const mode = url.slice('baton://theme/'.length);
         if (mode === 'light' || mode === 'dark') {
@@ -39,7 +35,22 @@ export function useDeepLinking(): void {
         return;
       }
       const parsed = parseSessionUrl(url);
-      if (parsed) navigateToSession(parsed);
+      if (parsed) {
+        if (parsed.action === 'approve') {
+          wsService.send({
+            type: 'approve_input',
+            sessionId: parsed.sessionId,
+            reason: 'Approved via Live Activity',
+          });
+        } else if (parsed.action === 'reject') {
+          wsService.send({
+            type: 'reject_input',
+            sessionId: parsed.sessionId,
+            reason: 'Rejected via Live Activity',
+          });
+        }
+        navigateToSession(parsed.sessionId);
+      }
     }
 
     // Cold launch.
@@ -57,22 +68,4 @@ export function useDeepLinking(): void {
       sub.remove();
     };
   }, [router]);
-}
-
-/**
- * Parse `baton://session/<id>` (or `baton:///session/<id>`) → sessionId.
- * Returns null for unrecognized URLs so unrelated links are ignored.
- */
-export function parseSessionUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'baton:') return null;
-    // pathname may be "/session/<id>" or "session/<id>"
-    const segments = parsed.pathname.replace(/^\/+/, '').split('/');
-    if (segments[0] !== 'session' || segments.length < 2) return null;
-    const id = segments.slice(1).join('/');
-    return id || null;
-  } catch {
-    return null;
-  }
 }

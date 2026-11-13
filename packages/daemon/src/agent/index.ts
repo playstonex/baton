@@ -9,6 +9,7 @@ export { AntigravitySdkAdapter, antigravitySdkAdapter } from './antigravity-sdk.
 export { PiAdapter } from './pi.js';
 export { OpenCodeAdapter } from './opencode.js';
 export { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
+export { ReplaySdkAdapter, REPLAY_MODELS } from './replay-sdk.js';
 export { AgentManager } from './manager.js';
 export { ProviderRegistry } from './registry.js';
 
@@ -23,6 +24,7 @@ import { AntigravitySdkAdapter, antigravitySdkAdapter } from './antigravity-sdk.
 import { PiAdapter } from './pi.js';
 import { OpenCodeAdapter } from './opencode.js';
 import { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
+import { ReplaySdkAdapter } from './replay-sdk.js';
 import type { BaseAgentAdapter } from './adapter.js';
 import { adapterRegistry, type AdapterConstructor } from './adapter-registry.js';
 
@@ -45,6 +47,8 @@ const builtinAdapters: Array<[string, AdapterConstructor]> = [
   ['antigravity', AntigravityAdapter],
   ['pi', PiAdapter],
   ['opencode', OpenCodeAdapter],
+  ['replay', ReplaySdkAdapter as unknown as AdapterConstructor],
+  ['replay-dev', ReplaySdkAdapter as unknown as AdapterConstructor],
 ];
 for (const [type, ctor] of builtinAdapters) {
   if (!adapterRegistry.has(type)) adapterRegistry.register(type, ctor);
@@ -63,9 +67,14 @@ const sdkAdapterFactories: Partial<Record<AgentType, () => SdkAgentAdapter>> = {
   codex: () => new CodexSdkAdapter(),
   opencode: () => new OpenCodeSdkAdapter(),
   antigravity: () => new AntigravitySdkAdapter(),
+  replay: () => new ReplaySdkAdapter(),
+  'replay-dev': () => new ReplaySdkAdapter(),
 };
 
 export function createAdapter(type: AgentType, mode: AdapterMode = 'pty'): BaseAgentAdapter {
+  if (type === 'replay' || type === 'replay-dev') {
+    return new ReplaySdkAdapter() as unknown as BaseAgentAdapter;
+  }
   if (mode === 'sdk') {
     const sdk = createSdkAdapter(type);
     if (sdk) return sdk as unknown as BaseAgentAdapter;
@@ -100,6 +109,8 @@ export function isSdkMode(type: AgentType): boolean {
     type === 'codex' ||
     type === 'opencode' ||
     type === 'antigravity' ||
+    type === 'replay' ||
+    type === 'replay-dev' ||
     type === 'acp'
   );
 }

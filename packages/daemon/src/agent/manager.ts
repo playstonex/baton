@@ -26,9 +26,11 @@ import { DEFAULT_CODEX_MODELS } from './codex-sdk.js';
 import { DEFAULT_KIRO_MODELS } from './kiro.js';
 import { DEFAULT_PI_MODELS } from './pi.js';
 import { DEFAULT_OPENCODE_MODELS } from './opencode-sdk.js';
+import { REPLAY_MODELS } from './replay-sdk.js';
 import { spawnPty } from '../pty/bridge.js';
 import { SessionStore, deriveTitle } from '../session/store.js';
 import { stripAnsi } from '../parser/ansi.js';
+import type { WorkspaceCheckpointService } from '../workspace/checkpoint.js';
 import { readdir, stat, readFile, access, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -90,6 +92,12 @@ interface ManagedAgent {
   lastPrompt?: string;
   /** Epoch ms of the last observed output/event — drives the idle watchdog. */
   lastOutputAt?: number;
+  /** Monotonic turn index within this session. */
+  turnIndex?: number;
+  /** ID of the most recent git plumbing checkpoint captured for this session. */
+  lastCheckpointId?: string;
+  /** Set of relative file paths touched during the current turn. */
+  turnModifiedFiles?: Set<string>;
 }
 
 const MAX_OUTPUT_HISTORY = 10000;
@@ -121,9 +129,22 @@ const WATCHDOG_TICK_MS = 30_000;
 export class AgentManager {
   private agents = new Map<string, ManagedAgent>();
   private store: SessionStore | null = null;
+  private checkpointService: WorkspaceCheckpointService | null = null;
   private lastTouch = new Map<string, number>();
   private changeListeners = new Set<() => void>();
   private notifyPending = false;
+
+  setCheckpointService(service: WorkspaceCheckpointService): void {
+    this.checkpointService = service;
+  }
+
+  getCheckpointService(): WorkspaceCheckpointService | null {
+    return this.checkpointService;
+  }
+
+  getSessionStore(): SessionStore {
+    return this.sessionStore;
+  }
 
   // ── State Machine ──────────────────────────────────────────────
 
@@ -203,6 +224,14 @@ export class AgentManager {
         : {}),
     });
     this.notifyChanged();
+
+    // Auto checkpoint on turn completion (transition to idle/waiting_input from busy states)
+    if (
+      (newStatus === 'idle' || newStatus === 'waiting_input') &&
+      (currentStatus === 'thinking' || currentStatus === 'executing' || currentStatus === 'running')
+    ) {
+      void this.maybeCaptureTurnCheckpoint(id, managed);
+    }
   }
 
   private pushTimeline(managed: ManagedAgent, type: string, summary: string): void {
@@ -225,6 +254,7 @@ export class AgentManager {
     if (!managed) return;
     if (managed.state.status === 'stopped' || managed.state.status === 'error') return;
     if (managed.state.status === status) return;
+    const prevStatus = managed.state.status;
     const at = Date.now();
     switch (status) {
       case 'stopped':
@@ -258,6 +288,14 @@ export class AgentManager {
     managed.process.status = status;
     this.touch(id, true);
     this.notifyChanged();
+
+    // Auto checkpoint on turn completion (transition to idle/waiting_input from busy states)
+    if (
+      (status === 'idle' || status === 'waiting_input') &&
+      (prevStatus === 'thinking' || prevStatus === 'executing' || prevStatus === 'running')
+    ) {
+      void this.maybeCaptureTurnCheckpoint(id, managed);
+    }
   }
 
   /**
@@ -395,6 +433,79 @@ export class AgentManager {
     managed.process.title = title;
     this.sessionStore.patchSession(id, { title });
     this.notifyChanged();
+  }
+
+  /**
+   * Automatically captures an atomic git plumbing checkpoint at the end of an agent turn.
+   * If any working tree files were created, modified, or deleted during the turn,
+   * a checkpoint ref is recorded and broadcast to clients.
+   */
+  private async maybeCaptureTurnCheckpoint(id: string, managed: ManagedAgent): Promise<void> {
+    if (!this.checkpointService || !managed.process.projectPath) return;
+    const projectPath = managed.process.projectPath;
+    const turnIndex = managed.turnIndex || 1;
+    const turnId = `turn_${turnIndex}`;
+    const label = `Turn #${turnIndex}: ${managed.lastPrompt || managed.process.title || 'Agent action'}`;
+
+    try {
+      const cp = await this.checkpointService.create(projectPath, label);
+      if (cp && cp.files && cp.files.length > 0) {
+        managed.lastCheckpointId = cp.id;
+        const event: ParsedEvent = {
+          type: 'checkpoint_created',
+          checkpointId: cp.id,
+          turnId,
+          label: cp.label,
+          files: cp.files,
+          headSha: cp.headSha,
+          commitSha: cp.commitSha,
+          timestamp: Date.now(),
+        };
+        managed.eventHistory.push(event);
+        if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
+          managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
+        }
+        this.sessionStore.appendEvent(id, event);
+        for (const cb of managed.eventCallbacks) {
+          cb(event, id);
+        }
+        console.log(
+          `[checkpoint] auto turn checkpoint captured: ${cp.id} (${cp.files.length} file(s)) for ${id}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[checkpoint] auto turn checkpoint error for ${id}:`, err);
+    }
+  }
+
+  /**
+   * Revert working tree to a previously captured checkpoint for this session.
+   */
+  async rollbackSession(id: string, checkpointId: string): Promise<void> {
+    const managed = this.agents.get(id);
+    const projectPath =
+      managed?.process.projectPath ?? (await this.sessionStore.getSession(id))?.project_path;
+    if (!projectPath) throw new Error(`Project path not found for session ${id}`);
+    if (!this.checkpointService) throw new Error('Checkpoint service not initialized');
+
+    await this.checkpointService.revertApply(projectPath, checkpointId);
+
+    const event: ParsedEvent = {
+      type: 'chat_message',
+      role: 'system',
+      content: `↺ Workspace rolled back to checkpoint ${checkpointId}.`,
+      timestamp: Date.now(),
+      meta: { rolledBackCheckpointId: checkpointId },
+    };
+    if (managed) {
+      managed.eventHistory.push(event);
+      this.sessionStore.appendEvent(id, event);
+      for (const cb of managed.eventCallbacks) {
+        cb(event, id);
+      }
+    } else {
+      this.sessionStore.appendEvent(id, event);
+    }
   }
 
   // ── Persistence ────────────────────────────────────────────────
@@ -1065,6 +1176,8 @@ export class AgentManager {
     const managed = this.agents.get(id);
     if (!managed) throw new Error(`Agent ${id} not found`);
     if (managed.state.status === 'stopped') throw new Error(`Agent ${id} is stopped`);
+    managed.turnIndex = (managed.turnIndex ?? 0) + 1;
+    if (managed.turnModifiedFiles) managed.turnModifiedFiles.clear();
     this.maybeTitle(id, content);
 
     if (managed.sdk) {
@@ -1320,6 +1433,9 @@ export class AgentManager {
         return DEFAULT_PI_MODELS;
       case 'opencode':
         return DEFAULT_OPENCODE_MODELS;
+      case 'replay':
+      case 'replay-dev':
+        return REPLAY_MODELS;
       default:
         return DEFAULT_CLAUDE_MODELS;
     }
@@ -1345,7 +1461,11 @@ export class AgentManager {
 
   async listModelDetails(id: string): Promise<ModelInfo[]> {
     const adapter = this.getAdapterWithModels(id);
-    if (adapter && 'listModelDetails' in adapter && typeof adapter.listModelDetails === 'function') {
+    if (
+      adapter &&
+      'listModelDetails' in adapter &&
+      typeof adapter.listModelDetails === 'function'
+    ) {
       try {
         const details = await Promise.resolve(adapter.listModelDetails());
         if (details && details.length > 0) return details;
