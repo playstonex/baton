@@ -14,8 +14,11 @@ echo "=== Xcode Cloud CI: Post-Clone ==="
 # -------------------------------------------------------------------
 # Environment
 # -------------------------------------------------------------------
-REPO_ROOT="${CI_PRIMARY_REPOSITORY_PATH:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+REPO_ROOT="${CI_PRIMARY_REPOSITORY_PATH:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null || cd "$(dirname "$0")/../../.." && pwd)}"
 IOS_DIR="$REPO_ROOT/packages/mobile/ios"
+
+export LANG="${LANG:-en_US.UTF-8}"
+export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 echo "Repository root: $REPO_ROOT"
 echo "iOS project dir: $IOS_DIR"
@@ -73,8 +76,11 @@ echo ""
 echo "=== Installing npm dependencies ==="
 cd "$REPO_ROOT"
 if ! pnpm install --frozen-lockfile; then
-  echo "WARNING: pnpm install --frozen-lockfile failed, retrying without frozen lockfile..."
-  pnpm install || echo "WARNING: pnpm install failed, continuing anyway..."
+  echo "WARNING: pnpm install --frozen-lockfile failed, retrying with --no-frozen-lockfile..."
+  if ! pnpm install --no-frozen-lockfile; then
+    echo "FATAL: pnpm install failed. Cannot continue." >&2
+    exit 1
+  fi
 fi
 
 # -------------------------------------------------------------------
