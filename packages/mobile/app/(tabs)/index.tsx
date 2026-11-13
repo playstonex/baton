@@ -255,6 +255,15 @@ export default function DashboardScreen() {
   const tabBarHeight = useLayoutStore((s) => s.tabBarHeight);
   const now = useNow();
 
+  useEffect(() => {
+    if (!projectPath && sessions.length > 0) {
+      const recent = sessions.find((s) => s.projectPath);
+      if (recent?.projectPath) {
+        setProjectPath(recent.projectPath);
+      }
+    }
+  }, [sessions, projectPath]);
+
   const fetchAgents = useCallback(async () => {
     try {
       const list = await apiFetch<AgentProcess[]>('/api/agents');
@@ -397,6 +406,14 @@ export default function DashboardScreen() {
     (agentType === 'acp' && agentOptions.some((o) => o.type === 'acp')
       ? agentOptions.find((o) => o.type === 'acp')!
       : AGENT_OPTIONS[0]);
+
+  /** Friendly title for the server card. */
+  const hostTitle = useMemo(() => {
+    if (activeHost?.label && !activeHost.label.startsWith('http')) {
+      return activeHost.label;
+    }
+    return activeHost?.mode === 'remote' ? 'Remote Relay' : 'Local Daemon';
+  }, [activeHost]);
 
   /** Hostname-only subtitle for the server card (no credentials in URLs). */
   const hostSubtitle = useMemo(() => {
@@ -817,7 +834,7 @@ export default function DashboardScreen() {
                       style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}
                       numberOfLines={1}
                     >
-                      {activeHost?.label ?? 'Server'}
+                      {hostTitle}
                     </Text>
                     <Text style={[Typography.caption1, { color: c.textTertiary }]} numberOfLines={1}>
                       {connected ? hostSubtitle : 'Reconnecting — sessions resume automatically'}
@@ -842,15 +859,6 @@ export default function DashboardScreen() {
               </GlassCard>
             </Pressable>
 
-            {/* New session — the one primary action */}
-            <GlassButton
-              c={c}
-              label="New Session"
-              icon="add"
-              onPress={() => setSheetOpen(true)}
-              variant="primary"
-            />
-
             {/* Search bar */}
             {showSearch && (
               <GlassSearchBar
@@ -862,7 +870,12 @@ export default function DashboardScreen() {
             )}
 
             {/* Active Sessions */}
-            <GlassSectionHeader c={c} title="Active Sessions" count={liveAgents.length} />
+            <GlassSectionHeader
+              c={c}
+              title="Active Sessions"
+              count={liveAgents.length}
+              action={{ label: '+ New', onPress: () => setSheetOpen(true) }}
+            />
             {liveAgents.length === 0 && (
               <GlassCard c={c}>
                 <View
@@ -901,47 +914,81 @@ export default function DashboardScreen() {
         }
         renderItem={({ item }) => renderAgentRow(item)}
         ListFooterComponent={
-          groups.length > 0 || pinned.length > 0 ? (
-            <View style={{ marginTop: Spacing.lg }}>
-              <GlassSectionHeader
-                c={c}
-                title="Session History"
-                count={pinned.length + groups.reduce((n, g) => n + g.sessions.length, 0)}
-              />
-              {pinned.length > 0 && (
-                <View style={{ marginBottom: Spacing.md }}>
-                  <Text style={[Typography.overline, { color: Colors.primary[500], marginBottom: Spacing.sm, paddingHorizontal: 2 }]}>
-                    Pinned
-                  </Text>
-                  {pinned.map((s) => renderSessionRow(s, true))}
-                </View>
-              )}
-              {groups.map((group) => (
-                <View key={group.project} style={{ marginBottom: Spacing.md }}>
+          <View style={{ marginTop: Spacing.lg }}>
+            {(groups.length > 0 || pinned.length > 0) && (
+              <>
+                <GlassSectionHeader
+                  c={c}
+                  title="Session History"
+                  count={pinned.length + groups.reduce((n, g) => n + g.sessions.length, 0)}
+                />
+                {pinned.length > 0 && (
+                  <View style={{ marginBottom: Spacing.md }}>
+                    <Text style={[Typography.overline, { color: Colors.primary[500], marginBottom: Spacing.sm, paddingHorizontal: 2 }]}>
+                      Pinned
+                    </Text>
+                    {pinned.map((s) => renderSessionRow(s, true))}
+                  </View>
+                )}
+                {groups.map((group) => (
+                  <View key={group.project} style={{ marginBottom: Spacing.md }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: Spacing.sm,
+                        marginBottom: Spacing.sm,
+                        paddingHorizontal: 2,
+                      }}
+                    >
+                      <Ionicons name="folder-outline" size={12} color={c.textTertiary} />
+                      <Text
+                        style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}
+                      >
+                        {group.project}
+                      </Text>
+                      <Text style={[Typography.caption2, { color: c.textTertiary }]}>
+                        {group.sessions.length}
+                      </Text>
+                    </View>
+                    {group.sessions.map((s) => renderSessionRow(s, false))}
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Quick Access to Pipelines */}
+            <Pressable
+              onPress={() => router.navigate('/(tabs)/pipelines' as any)}
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }, { marginTop: Spacing.sm, marginBottom: Spacing.md }]}
+            >
+              <GlassCard c={c} blurIntensity={Glass.blur.card - 15}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 4 }}>
                   <View
                     style={{
-                      flexDirection: 'row',
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
                       alignItems: 'center',
-                      gap: Spacing.sm,
-                      marginBottom: Spacing.sm,
-                      paddingHorizontal: 2,
+                      justifyContent: 'center',
+                      backgroundColor: c.isDark ? 'rgba(94,106,210,0.18)' : 'rgba(94,106,210,0.1)',
                     }}
                   >
-                    <Ionicons name="folder-outline" size={12} color={c.textTertiary} />
-                    <Text
-                      style={[Typography.footnote, { color: c.textSecondary, fontWeight: '600' }]}
-                    >
-                      {group.project}
+                    <Ionicons name="git-branch" size={16} color={Colors.primary[400]} />
+                  </View>
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text style={[Typography.subhead, { color: c.textPrimary, fontWeight: '600' }]}>
+                      Pipelines
                     </Text>
                     <Text style={[Typography.caption2, { color: c.textTertiary }]}>
-                      {group.sessions.length}
+                      Sequential multi-agent workflows
                     </Text>
                   </View>
-                  {group.sessions.map((s) => renderSessionRow(s, false))}
+                  <Ionicons name="chevron-forward" size={14} color={c.textTertiary} />
                 </View>
-              ))}
-            </View>
-          ) : undefined
+              </GlassCard>
+            </Pressable>
+          </View>
         }
       />
 
@@ -1354,7 +1401,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: Spacing.md,
     right: Spacing.md,
-    bottom: Spacing.md,
+    bottom: 96,
   },
   sheetBlur: {
     borderRadius: 24,

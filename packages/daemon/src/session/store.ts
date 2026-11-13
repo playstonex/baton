@@ -425,6 +425,9 @@ function toSummary(row: SessionRecord & { event_count: number }): SessionSummary
 }
 
 function capText(text: string): string {
+  if (typeof text !== 'string') {
+    text = text != null ? String(text) : '';
+  }
   if (text.length <= MAX_TEXT_BYTES) return text;
   return `${text.slice(0, MAX_TEXT_BYTES)}\n…[truncated ${text.length - MAX_TEXT_BYTES} chars]`;
 }

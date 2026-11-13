@@ -62,6 +62,7 @@ import {
 import { AgentInputAutocomplete } from '../../src/components/AgentInputAutocomplete';
 import { AllFilesDiffView } from '../../src/components/AllFilesDiffView';
 import type { ChatImage, SessionOwnershipMessage, StatusDetail } from '@baton/shared';
+import { formatModelName, type ModelInfo } from '@baton/shared/utils';
 import {
   MarkdownText,
   ThinkingBlock,
@@ -72,6 +73,7 @@ import {
   DiffRenderer,
   PlanCard,
   ToolBurstGroup,
+  ActivityCapsule,
   SubagentActionCard,
   PopoverMenu,
   HighlightedText,
@@ -85,7 +87,7 @@ type GroupedItem =
   | { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
 
 const PAGE_SIZE = 40;
-const TOOL_BURST_THRESHOLD = 3;
+const TOOL_BURST_THRESHOLD = 2;
 const SCROLL_BOTTOM_THRESHOLD = 120;
 
 const THINKING_LEVEL_SHORT: Record<string, string> = {
@@ -392,6 +394,7 @@ export default function ChatScreen() {
   }, [sessionId, sessionOwner, setSessionOwner]);
 
   const [models, setModels] = useState<string[]>([]);
+  const [modelDetails, setModelDetails] = useState<ModelInfo[]>([]);
   /** Models from the user's configured API Providers (Settings > API
    * Providers), merged ahead of the adapter's built-in list so custom models
    * are selectable. Empty when no providers configured. */
@@ -544,17 +547,17 @@ export default function ChatScreen() {
       }
     });
 
-    // Dev hydration: the daemon's WS replay doesn't cover SDK sessions, so
-    // under the dev auto-connect env pull the event log over HTTP once.
-    if (process.env.EXPO_PUBLIC_DEV_AUTOCONNECT) {
-      apiFetch<unknown[]>(`/api/agents/${sessionId}/events`)
-        .then((events) => {
+    // Hydrate event history from daemon store on mount so navigating to
+    // an active or past session immediately renders full conversation history.
+    apiFetch<unknown[]>(`/api/agents/${sessionId}/events`)
+      .then((events) => {
+        if (Array.isArray(events)) {
           for (const event of events) {
             addEvent(event as Parameters<typeof addEvent>[0]);
           }
-        })
-        .catch(() => {});
-    }
+        }
+      })
+      .catch(() => {});
 
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
@@ -572,6 +575,9 @@ export default function ChatScreen() {
     const unsubModels = wsService.on('model_list', (msg) => {
       if (msg.type === 'model_list' && msg.sessionId === sessionId) {
         setModels(msg.models);
+        if (msg.modelDetails && Array.isArray(msg.modelDetails)) {
+          setModelDetails(msg.modelDetails);
+        }
         // The daemon's "selected" is the adapter default unless this user
         // already made an explicit pick — never clobber their choice.
         if (msg.selected && !pickedModelRef.current) {
@@ -721,9 +727,13 @@ export default function ChatScreen() {
     };
 
     for (const msg of paginatedMessages) {
-      const isToolLike =
-        msg.kind === 'toolActivity' || msg.kind === 'fileChange' || msg.kind === 'commandExecution';
-      if (isToolLike) {
+      const isActivityLike =
+        msg.kind === 'toolActivity' ||
+        msg.kind === 'fileChange' ||
+        msg.kind === 'commandExecution' ||
+        msg.kind === 'thinking' ||
+        msg.kind === 'subagentAction';
+      if (isActivityLike) {
         currentBurst.push(msg);
       } else {
         flushBurst();
@@ -940,7 +950,6 @@ export default function ChatScreen() {
   }
 
   function toggleBurst(burstId: string) {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedBursts((prev) => {
       const next = new Set(prev);
       if (next.has(burstId)) {
@@ -1001,6 +1010,7 @@ export default function ChatScreen() {
     });
     setInput('');
     setAttachments([]);
+    requestAnimationFrame(() => scrollToBottom());
   }
 
   /** Re-send a failed optimistic message under a fresh ack id. */
@@ -1126,10 +1136,9 @@ export default function ChatScreen() {
     });
   }
 
-  /** Compact model id for pills — "claude-sonnet-4-5" → "sonnet-4-5". */
-  function shortModel(m: string): string {
-    const parts = m.split('-');
-    return parts.length > 2 ? parts.slice(-3).join('-') : m;
+  /** Human-readable model label with accurate agent branding. */
+  function getModelLabel(m: string, compact = false): string {
+    return formatModelName(m, { modelDetails, compact });
   }
 
   /** Composer-level model quick-switch (happy's model chip pattern). */
@@ -1146,7 +1155,7 @@ export default function ChatScreen() {
     }
     const anchor = await measureAnchor(modelPillRef);
     const options: MenuOption[] = allModels.map((m) => ({
-      label: shortModel(m),
+      label: getModelLabel(m, false),
       selected: m === selectedModel,
     }));
     options.push({ separator: true });
@@ -1663,17 +1672,22 @@ export default function ChatScreen() {
             ref={flatRef}
             data={groupedData}
             keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
-            contentContainerStyle={[styles.messageList, { paddingTop: insets.top + HEADER_HEIGHT }]}
+            contentContainerStyle={[
+              styles.messageList,
+              {
+                paddingTop: insets.top + HEADER_HEIGHT,
+                paddingBottom: insets.bottom + 140,
+              },
+            ]}
             renderItem={renderGroupedItem}
             extraData={[running, expandedBursts]}
-            maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
             onScroll={handleScroll}
             scrollEventThrottle={16}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             maxToRenderPerBatch={10}
-            windowSize={5}
-            removeClippedSubviews={true}
+            windowSize={7}
+            removeClippedSubviews={false}
             ListHeaderComponent={
               hasMore ? (
                 <Pressable
@@ -1840,228 +1854,51 @@ export default function ChatScreen() {
           />
         )}
 
-        <AttachmentStrip
-          images={attachments}
-          onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
-          colors={c}
-        />
-
-        {/* Live activity line + quick pills (happy's status-row pattern):
-         * what the agent is doing this second on the left; attach, dictate,
-         * model and thinking — the four knobs you actually change mid-chat —
-         * one tap away on the right. */}
-        <View style={styles.accessoryRow}>
-          <View style={styles.activitySlot}>
-            {voiceState !== 'idle' ? (
-              <View style={styles.activityLine}>
-                <View
-                  style={[
-                    styles.activityDot,
-                    voiceState === 'recording'
-                      ? { backgroundColor: Colors.danger[400] }
-                      : { backgroundColor: Colors.warning[400] },
-                  ]}
-                />
-                {voiceState === 'recording' ? (
-                  <Text style={[styles.activityText, { color: Colors.danger[400] }]} numberOfLines={1}>
-                    Recording — {formatElapsed(Date.now() - voiceStartRef.current)} · tap mic to stop
-                  </Text>
-                ) : (
-                  <Text style={[styles.activityText, { color: Colors.warning[400] }]} numberOfLines={1}>
-                    Transcribing…
-                  </Text>
-                )}
-              </View>
-            ) : !wsConnected ? (
-              <View style={styles.activityLine}>
-                <View style={[styles.activityDot, { backgroundColor: Colors.warning[400] }]} />
-                <Text
-                  style={[styles.activityText, { color: Colors.warning[400] }]}
-                  numberOfLines={1}
-                >
-                  Reconnecting…
-                </Text>
-              </View>
-            ) : activity ? (
-              <View style={styles.activityLine}>
-                <View style={[styles.activityDot, { backgroundColor: activityToneColor }]} />
-                <Text
-                  style={[styles.activityText, { color: activityToneColor }]}
-                  numberOfLines={1}
-                >
-                  {activity.text}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          <Pressable
-            onPress={pickAttachments}
-            style={({ pressed }) => [
-              styles.iconPill,
-              {
-                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.6 : 1,
-              },
-            ]}
-            hitSlop={4}
-            accessibilityLabel="Attach images"
-          >
-            <Ionicons
-              name="image-outline"
-              size={13}
-              color={attachments.length > 0 ? (c.isDark ? Colors.primary[300] : Colors.primary[500]) : c.textSecondary}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => void toggleVoice()}
-            style={({ pressed }) => [
-              styles.iconPill,
-              {
-                backgroundColor:
-                  voiceState === 'recording'
-                    ? 'rgba(235,77,85,0.16)'
-                    : c.isDark
-                      ? 'rgba(255,255,255,0.07)'
-                      : 'rgba(60,60,67,0.06)',
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.6 : 1,
-              },
-            ]}
-            hitSlop={4}
-            accessibilityLabel={voiceState === 'recording' ? 'Stop recording' : 'Dictate message'}
-          >
-            {voiceState === 'transcribing' ? (
-              <ActivityIndicator size="small" color={Colors.warning[400]} />
-            ) : (
-              <Ionicons
-                name={voiceState === 'recording' ? 'stop' : 'mic-outline'}
-                size={13}
-                color={
-                  voiceState === 'recording'
-                    ? Colors.danger[400]
-                    : voiceState !== 'idle'
-                      ? Colors.warning[400]
-                      : c.textSecondary
-                }
-              />
-            )}
-          </Pressable>
-          <Pressable
-            ref={modelPillRef}
-            onPress={openModelMenu}
-            style={({ pressed }) => [
-              styles.quickPill,
-              {
-                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.6 : 1,
-              },
-            ]}
-            hitSlop={4}
-            accessibilityLabel="Switch model"
-          >
-            <Ionicons name="cube-outline" size={11} color={c.textSecondary} />
-            <Text style={[styles.quickPillText, { color: c.textSecondary }]} numberOfLines={1}>
-              {selectedModel ? shortModel(selectedModel) : 'Model'}
-            </Text>
-            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-          </Pressable>
-          <Pressable
-            ref={thinkPillRef}
-            onPress={openThinkingMenu}
-            style={({ pressed }) => [
-              styles.quickPill,
-              {
-                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
-                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.6 : 1,
-              },
-            ]}
-            hitSlop={4}
-            accessibilityLabel="Thinking level"
-          >
-            <Ionicons
-              name="bulb-outline"
-              size={11}
-              color={
-                thinkingMode !== 'none'
-                  ? c.isDark
-                    ? Colors.primary[300]
-                    : Colors.primary[500]
-                  : c.textSecondary
-              }
+        {/* Live activity pill — ticks during active operations or recording */}
+        {watching && (voiceState !== 'idle' || !wsConnected || activity) && (
+          <View style={styles.activityBanner}>
+            <View
+              style={[
+                styles.activityDot,
+                voiceState === 'recording'
+                  ? { backgroundColor: Colors.danger[400] }
+                  : !wsConnected || voiceState === 'transcribing'
+                    ? { backgroundColor: Colors.warning[400] }
+                    : { backgroundColor: activityToneColor },
+              ]}
             />
             <Text
               style={[
-                styles.quickPillText,
+                styles.activityText,
                 {
                   color:
-                    thinkingMode !== 'none'
-                      ? c.isDark
-                        ? Colors.primary[300]
-                        : Colors.primary[500]
-                      : c.textSecondary,
+                    voiceState === 'recording'
+                      ? Colors.danger[400]
+                      : !wsConnected || voiceState === 'transcribing'
+                        ? Colors.warning[400]
+                        : activityToneColor,
                 },
               ]}
               numberOfLines={1}
             >
-              {thinkingBadge}
+              {voiceState === 'recording'
+                ? `Recording — ${formatElapsed(Date.now() - voiceStartRef.current)} · tap mic to stop`
+                : voiceState === 'transcribing'
+                  ? 'Transcribing…'
+                  : !wsConnected
+                    ? 'Reconnecting…'
+                    : activity?.text}
             </Text>
-          </Pressable>
-        </View>
+          </View>
+        )}
 
-        {/* Messages-grade glass capsule: tune · input · send/stop/steer. */}
-        <GlassCapsule c={c} style={styles.composerCapsule} contentStyle={styles.composerContent}>
-          <Pressable
-            onPress={() => {
-              wsService.send({ type: 'model_list_request', sessionId });
-              setSettingsOpen(true);
-            }}
-            style={({ pressed }) => [
-              styles.tuneButton,
-              {
-                backgroundColor: c.isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(60,60,67,0.07)',
-                borderColor:
-                  c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.7 : 1,
-                transform: [{ scale: pressed ? 0.9 : 1 }],
-              },
-            ]}
-            hitSlop={4}
-            accessibilityLabel="Composer settings"
-          >
-            <Ionicons
-              name="options-outline"
-              size={18}
-              color={
-                thinkingMode !== 'none'
-                  ? c.isDark
-                    ? Colors.primary[300]
-                    : Colors.primary[500]
-                  : c.textSecondary
-              }
-            />
-            <View
-              style={[
-                styles.tuneBadge,
-                thinkingMode === 'none' && {
-                  backgroundColor: c.subtle,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tuneBadgeText,
-                  thinkingMode === 'none' && { color: c.textTertiary },
-                ]}
-              >
-                {thinkingBadge}
-              </Text>
-            </View>
-          </Pressable>
+        {/* Unified Messages-grade glass card: attachments · input · integrated toolbar */}
+        <GlassCapsule c={c} radius={22} style={styles.composerCard} contentStyle={styles.composerCardContent}>
+          <AttachmentStrip
+            images={attachments}
+            onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+            colors={c}
+          />
 
           <TextInput
             ref={inputRef}
@@ -2091,59 +1928,239 @@ export default function ChatScreen() {
             multiline
           />
 
-          {running && input.trim().length === 0 ? (
-            <Pressable
-              onPress={cancelTurn}
-              style={({ pressed }) => [
-                styles.sendButton,
-                {
-                  backgroundColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(60,60,67,0.09)',
-                  opacity: pressed ? 0.7 : 1,
-                  transform: [{ scale: pressed ? 0.88 : 1 }],
-                },
-              ]}
-              hitSlop={4}
-              accessibilityLabel="Stop"
-            >
-              <Ionicons name="stop" size={15} color={Colors.danger[400]} />
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => {
-                if (running) {
-                  if (input.trim()) {
-                    sendSteer();
+          {/* Integrated action toolbar */}
+          <View style={styles.composerToolbar}>
+            <View style={styles.toolbarLeft}>
+              <Pressable
+                onPress={pickAttachments}
+                style={({ pressed }) => [
+                  styles.toolbarCircleBtn,
+                  {
+                    backgroundColor:
+                      attachments.length > 0
+                        ? c.isDark
+                          ? 'rgba(74,136,255,0.18)'
+                          : 'rgba(38,102,235,0.12)'
+                        : c.isDark
+                          ? 'rgba(255,255,255,0.08)'
+                          : 'rgba(60,60,67,0.06)',
+                    borderColor:
+                      attachments.length > 0
+                        ? Colors.primary[400]
+                        : c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                    opacity: pressed ? 0.6 : 1,
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Attach images"
+              >
+                <Ionicons
+                  name={attachments.length > 0 ? 'image' : 'add'}
+                  size={16}
+                  color={
+                    attachments.length > 0
+                      ? c.isDark
+                        ? Colors.primary[300]
+                        : Colors.primary[600]
+                      : c.textSecondary
                   }
-                } else {
-                  sendChat();
-                }
-              }}
-              style={({ pressed }) => [
-                styles.sendButton,
-                {
-                  backgroundColor:
-                    running || !sendDisabled
-                      ? Colors.primary[500]
-                      : c.isDark
-                        ? 'rgba(255,255,255,0.08)'
-                        : 'rgba(60,60,67,0.07)',
-                  opacity: pressed ? 0.75 : 1,
-                  transform: [{ scale: pressed ? 0.88 : 1 }],
-                },
-              ]}
-              disabled={!running && sendDisabled}
-              hitSlop={4}
-              accessibilityLabel={running ? 'Steer now' : 'Send'}
-            >
-              <Ionicons
-                name={running ? 'flash' : 'arrow-up'}
-                size={16}
-                color={
-                  running || !sendDisabled ? '#ffffff' : c.textTertiary
-                }
-              />
-            </Pressable>
-          )}
+                />
+              </Pressable>
+
+              <Pressable
+                ref={modelPillRef}
+                onPress={openModelMenu}
+                style={({ pressed }) => [
+                  styles.toolbarPill,
+                  {
+                    backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
+                    borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                    opacity: pressed ? 0.6 : 1,
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Switch model"
+              >
+                <Ionicons name="cube-outline" size={11} color={c.textSecondary} />
+                <Text style={[styles.toolbarPillText, { color: c.textSecondary }]} numberOfLines={1}>
+                  {selectedModel ? getModelLabel(selectedModel, true) : 'Model'}
+                </Text>
+                <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+              </Pressable>
+
+              <Pressable
+                ref={thinkPillRef}
+                onPress={openThinkingMenu}
+                style={({ pressed }) => [
+                  styles.toolbarPill,
+                  {
+                    backgroundColor:
+                      thinkingMode !== 'none'
+                        ? c.isDark
+                          ? 'rgba(74,136,255,0.14)'
+                          : 'rgba(38,102,235,0.10)'
+                        : c.isDark
+                          ? 'rgba(255,255,255,0.07)'
+                          : 'rgba(60,60,67,0.06)',
+                    borderColor:
+                      thinkingMode !== 'none'
+                        ? c.isDark
+                          ? 'rgba(74,136,255,0.35)'
+                          : 'rgba(38,102,235,0.25)'
+                        : c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                    opacity: pressed ? 0.6 : 1,
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Thinking level"
+              >
+                <Ionicons
+                  name="bulb-outline"
+                  size={11}
+                  color={
+                    thinkingMode !== 'none'
+                      ? c.isDark
+                        ? Colors.primary[300]
+                        : Colors.primary[500]
+                      : c.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.toolbarPillText,
+                    {
+                      color:
+                        thinkingMode !== 'none'
+                          ? c.isDark
+                            ? Colors.primary[300]
+                            : Colors.primary[500]
+                          : c.textSecondary,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {thinkingBadge}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  wsService.send({ type: 'model_list_request', sessionId });
+                  setSettingsOpen(true);
+                }}
+                style={({ pressed }) => [
+                  styles.toolbarCircleBtn,
+                  {
+                    backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
+                    borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                    opacity: pressed ? 0.6 : 1,
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel="Composer settings"
+              >
+                <Ionicons name="options-outline" size={13} color={c.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.toolbarRight}>
+              <Pressable
+                onPress={() => void toggleVoice()}
+                style={({ pressed }) => [
+                  styles.toolbarCircleBtn,
+                  {
+                    backgroundColor:
+                      voiceState === 'recording'
+                        ? 'rgba(235,77,85,0.18)'
+                        : c.isDark
+                          ? 'rgba(255,255,255,0.08)'
+                          : 'rgba(60,60,67,0.06)',
+                    borderColor:
+                      voiceState === 'recording'
+                        ? Colors.danger[400]
+                        : c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                    opacity: pressed ? 0.6 : 1,
+                  },
+                ]}
+                hitSlop={4}
+                accessibilityLabel={voiceState === 'recording' ? 'Stop recording' : 'Dictate message'}
+              >
+                {voiceState === 'transcribing' ? (
+                  <ActivityIndicator size="small" color={Colors.warning[400]} />
+                ) : (
+                  <Ionicons
+                    name={voiceState === 'recording' ? 'stop' : 'mic-outline'}
+                    size={15}
+                    color={
+                      voiceState === 'recording'
+                        ? Colors.danger[400]
+                        : voiceState !== 'idle'
+                          ? Colors.warning[400]
+                          : c.textSecondary
+                    }
+                  />
+                )}
+              </Pressable>
+
+              {running && input.trim().length === 0 ? (
+                <Pressable
+                  onPress={cancelTurn}
+                  style={({ pressed }) => [
+                    styles.sendActionBtn,
+                    {
+                      backgroundColor: c.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(60,60,67,0.10)',
+                      opacity: pressed ? 0.7 : 1,
+                      transform: [{ scale: pressed ? 0.88 : 1 }],
+                    },
+                  ]}
+                  hitSlop={4}
+                  accessibilityLabel="Stop"
+                >
+                  <Ionicons name="stop" size={14} color={Colors.danger[400]} />
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    if (running) {
+                      if (input.trim()) {
+                        sendSteer();
+                      }
+                    } else {
+                      sendChat();
+                    }
+                  }}
+                  style={({ pressed }) => [
+                    styles.sendActionBtn,
+                    {
+                      backgroundColor:
+                        running || !sendDisabled
+                          ? Colors.primary[500]
+                          : c.isDark
+                            ? 'rgba(255,255,255,0.07)'
+                            : 'rgba(60,60,67,0.06)',
+                      opacity: pressed ? 0.75 : 1,
+                      transform: [{ scale: pressed ? 0.88 : 1 }],
+                    },
+                  ]}
+                  disabled={!running && sendDisabled}
+                  hitSlop={4}
+                  accessibilityLabel={running ? 'Steer now' : 'Send'}
+                >
+                  <Ionicons
+                    name={running ? 'flash' : 'arrow-up'}
+                    size={16}
+                    color={running || !sendDisabled ? '#ffffff' : c.textTertiary}
+                  />
+                </Pressable>
+              )}
+            </View>
+          </View>
         </GlassCapsule>
       </Animated.View>
 
@@ -2152,6 +2169,7 @@ export default function ChatScreen() {
         onClose={() => setSettingsOpen(false)}
         colors={c}
         models={Array.from(new Set([...providerModels, ...models]))}
+        modelDetails={modelDetails}
         selectedModel={selectedModel}
         onSelectModel={(m) => {
           pickedModelRef.current = m;
@@ -2325,28 +2343,16 @@ function ToolBurstRenderer({
 }) {
   return (
     <View style={burstStyles.container}>
-      <ToolBurstGroup
+      <ActivityCapsule
+        messages={burst.messages}
         colors={c}
-        count={burst.messages.length}
-        done={!isStreaming}
-        durationMs={
-          burst.messages.length > 1
-            ? burst.messages[burst.messages.length - 1].timestamp - burst.messages[0].timestamp
-            : 0
-        }
+        isStreaming={isStreaming}
         isExpanded={isExpanded}
         onToggle={onToggle}
-      >
-        {burst.messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            msg={msg}
-            colors={c}
-            findQuery={findQuery}
-            findActive={msg.id === findActiveMsgId}
-          />
-        ))}
-      </ToolBurstGroup>
+        onReviewDiff={onReview}
+        findQuery={findQuery}
+        findActiveMsgId={findActiveMsgId}
+      />
       {!isStreaming && (
         <TurnEndActions messages={burst.messages} colors={c} onReview={onReview} />
       )}
@@ -2455,7 +2461,8 @@ function MessageBubble({
             style={[
               styles.userBubble,
               {
-                backgroundColor: c.isDark ? Colors.primary[600] : Colors.primary[500],
+                backgroundColor: c.isDark ? '#262830' : '#ebedf2',
+                borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
                 opacity: msg.delivery === 'pending' ? 0.55 : 1,
               },
             ]}
@@ -2481,12 +2488,19 @@ function MessageBubble({
                 text={msg.content}
                 query={findQuery ?? ''}
                 active={findActive}
-                style={styles.userText}
+                style={[styles.userText, { color: c.isDark ? '#f4f5f6' : '#14161a' }]}
                 numberOfLines={isLong && !msg.isCollapsed ? 6 : undefined}
               />
             )}
             {isLong && msg.isCollapsed && (
-              <Text style={styles.userCollapseHint}>Show more</Text>
+              <Text
+                style={[
+                  styles.userCollapseHint,
+                  { color: c.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' },
+                ]}
+              >
+                Show more
+              </Text>
             )}
           </View>
         </View>
@@ -2518,7 +2532,9 @@ function MessageBubble({
               highlightQuery={findQuery}
               highlightActive={findActive}
             />
-            {msg.isStreaming && <TypingIndicator colors={c} />}
+            {msg.isStreaming && (!msg.content || msg.content.length === 0) && (
+              <TypingIndicator colors={c} />
+            )}
           </View>
         </View>
       </Pressable>
@@ -2650,7 +2666,8 @@ function MessageBubble({
 
 const burstStyles = StyleSheet.create({
   container: {
-    alignItems: 'flex-start',
+    width: '100%',
+    paddingVertical: 2,
   },
 });
 
@@ -2892,29 +2909,30 @@ const styles = StyleSheet.create({
 
   messageList: {
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xl,
-    gap: Spacing.sm,
+    paddingBottom: Spacing.xl + 16,
+    gap: 12,
   },
-  userRow: { alignItems: 'flex-end' },
+  userRow: { alignItems: 'flex-end', marginVertical: 2 },
   userBubble: {
-    maxWidth: '78%',
-    paddingHorizontal: Spacing.lg - 2,
-    paddingVertical: 9,
-    borderRadius: 19,
+    maxWidth: '82%',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
     borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#08090a',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 1,
   },
-  userText: { ...Typography.subhead, fontSize: 14.5, lineHeight: 20, color: '#ffffff' },
+  userText: { fontSize: 15.5, lineHeight: 22, letterSpacing: -0.15 },
   userTimestamp: {
     ...Typography.caption2,
-    fontSize: 10,
+    fontSize: 10.5,
     textAlign: 'right',
-    marginTop: 2,
-    marginRight: Spacing.xs,
+    marginTop: 3,
+    marginRight: 4,
   },
   retryRow: {
     flexDirection: 'row',
@@ -2932,16 +2950,15 @@ const styles = StyleSheet.create({
   userCollapseHint: {
     ...Typography.caption2,
     marginTop: 4,
-    color: 'rgba(255,255,255,0.72)',
     fontWeight: '600',
   },
-  assistantRow: { alignItems: 'flex-start' },
+  assistantRow: { width: '100%', marginVertical: 2 },
   assistantBubble: {
-    maxWidth: '100%',
+    width: '100%',
     paddingHorizontal: 2,
     paddingVertical: 2,
   },
-  assistantText: { ...Typography.subhead, fontSize: 14, lineHeight: 19 },
+  assistantText: { fontSize: 15.5, lineHeight: 23, letterSpacing: -0.15 },
   systemRow: { alignItems: 'center' },
   systemBubble: {
     paddingHorizontal: Spacing.md,
@@ -2951,33 +2968,22 @@ const styles = StyleSheet.create({
   },
   systemText: { ...Typography.caption2, fontWeight: '500' },
 
-  /** Messages-grade glass capsule: [tune][input][send/stop] — content row. */
-  composerCapsule: {},
-  composerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm - 2,
-    paddingHorizontal: Spacing.sm - 2,
-    paddingVertical: Spacing.sm - 2,
-    minHeight: 48,
+  /** Unified Messages-grade glass card: attachments · input · integrated toolbar. */
+  composerCard: {
+    width: '100%',
+  },
+  composerCardContent: {
+    paddingTop: Spacing.xs + 2,
+    paddingBottom: 4,
+    minHeight: 88,
   },
 
-  accessoryRow: {
+  activityBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    minHeight: 26,
-    paddingHorizontal: Spacing.xs + 2,
-    paddingBottom: 5,
-  },
-  activitySlot: {
-    flex: 1,
-    minWidth: 0,
-  },
-  activityLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: 6,
   },
   activityDot: {
     width: 6,
@@ -2990,23 +2996,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     flexShrink: 1,
   },
-  quickPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 24,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: Spacing.sm + 1,
-  },
-  iconPill: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   findBarWrap: {
     position: 'absolute',
     left: Spacing.md,
@@ -3024,52 +3014,68 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderCurve: 'continuous',
   },
-  quickPillText: {
-    ...Typography.caption2,
-    fontFamily: FontFamily.mono,
-    fontWeight: '600',
-    maxWidth: 130,
+
+  composerInput: {
+    ...Typography.body,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.2,
+    minHeight: 38,
+    maxHeight: 140,
+    paddingHorizontal: Spacing.md - 2,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xs + 2,
   },
 
-  tuneButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  composerToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.xs + 2,
+    paddingBottom: 4,
+    paddingTop: 2,
+    gap: 6,
+  },
+  toolbarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    minWidth: 0,
+  },
+  toolbarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  toolbarCircleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tuneBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    minWidth: 16,
-    height: 14,
-    borderRadius: 7,
-    paddingHorizontal: 3,
+  toolbarPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary[500],
+    gap: 4,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 7,
   },
-  tuneBadgeText: {
-    fontSize: 8.5,
-    lineHeight: 11,
-    fontWeight: '700',
-    color: '#ffffff',
+  toolbarPillText: {
+    ...Typography.caption2,
+    fontSize: 11,
     fontFamily: FontFamily.mono,
+    fontWeight: '600',
+    maxWidth: 95,
   },
-
-  composerInput: {
-    ...Typography.subhead,
-    flex: 1,
-    minHeight: 24,
-    maxHeight: 120,
-    padding: 0,
-  },
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  sendActionBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },

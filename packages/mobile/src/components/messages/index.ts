@@ -8,6 +8,14 @@ export { TypingIndicator } from './TypingIndicator';
 export { DiffRenderer } from './DiffRenderer';
 export { PlanCard } from './PlanCard';
 export { ToolBurstGroup } from './ToolBurstGroup';
+export { ActivityCapsule, type ActivityCapsuleProps } from './ActivityCapsule';
+export {
+  deriveActivitySummary,
+  normalizeActivityStep,
+  formatActivityDuration,
+  type ActivitySummary,
+  type NormalizedActivityStep,
+} from './activitySummary';
 export { SubagentActionCard } from './SubagentActionCard';
 export { PopoverMenu } from './PopoverMenu';
 export type { ThemeColors } from './TypingIndicator';

@@ -1,11 +1,14 @@
-import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
+import type { AgentConfig, ModelInfo, ParsedEvent, SpawnConfig } from '@baton/shared';
+import { formatModelName } from '@baton/shared/utils';
 import { BaseAgentAdapter } from './adapter.js';
+import { DEFAULT_OPENCODE_MODELS } from './opencode-sdk.js';
 import { stripAnsi } from '../parser/ansi.js';
 import { execSync } from 'node:child_process';
 
 export class OpenCodeAdapter extends BaseAgentAdapter {
   readonly name = 'OpenCode';
   readonly agentType = 'opencode' as const;
+  selectedModel: string | null = null;
 
   detect(): boolean {
     try {
@@ -14,6 +17,31 @@ export class OpenCodeAdapter extends BaseAgentAdapter {
     } catch {
       return false;
     }
+  }
+
+  listModels(): string[] {
+    try {
+      const raw = execSync('opencode models 2>/dev/null', {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+      const list = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+      return list.length > 0 ? list : DEFAULT_OPENCODE_MODELS.map((m) => m.id);
+    } catch {
+      return DEFAULT_OPENCODE_MODELS.map((m) => m.id);
+    }
+  }
+
+  listModelDetails(): ModelInfo[] {
+    const models = this.listModels();
+    return models.map((m) => {
+      const defaultMatch = DEFAULT_OPENCODE_MODELS.find((d) => d.id === m);
+      return {
+        id: m,
+        name: defaultMatch?.name ?? formatModelName(m),
+        description: defaultMatch?.description,
+      };
+    });
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {

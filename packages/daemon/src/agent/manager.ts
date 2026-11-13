@@ -2,6 +2,7 @@ import type {
   AgentConfig,
   AgentProcess,
   ChatImage,
+  ModelInfo,
   ParsedEvent,
   SdkAgentAdapter,
   ThinkingConfig,
@@ -19,6 +20,12 @@ import type {
   TimelineItem,
 } from '@baton/shared';
 import type { BaseAgentAdapter } from './adapter.js';
+import { DEFAULT_ANTIGRAVITY_MODELS } from './antigravity-sdk.js';
+import { DEFAULT_CLAUDE_MODELS } from './claude-sdk.js';
+import { DEFAULT_CODEX_MODELS } from './codex-sdk.js';
+import { DEFAULT_KIRO_MODELS } from './kiro.js';
+import { DEFAULT_PI_MODELS } from './pi.js';
+import { DEFAULT_OPENCODE_MODELS } from './opencode-sdk.js';
 import { spawnPty } from '../pty/bridge.js';
 import { SessionStore, deriveTitle } from '../session/store.js';
 import { stripAnsi } from '../parser/ansi.js';
@@ -741,7 +748,8 @@ export class AgentManager {
 
         if (managed.state.status === 'initializing') {
           this.transition(id, 'running');
-        } else if (event.type === 'status_change') {
+        }
+        if (event.type === 'status_change') {
           // Mirror adapter-reported status into the daemon's canonical state so
           // /api/agents, agent_list and attach-time status_update tell the
           // truth. Without this every SDK session stayed 'running' forever.
@@ -1298,20 +1306,71 @@ export class AgentManager {
 
   // ── Model Management ──────────────────────────────────────────────
 
+  getDefaultModelDetailsForAgent(agent?: string): ModelInfo[] {
+    switch (agent) {
+      case 'antigravity':
+        return DEFAULT_ANTIGRAVITY_MODELS;
+      case 'claude-code':
+        return DEFAULT_CLAUDE_MODELS;
+      case 'codex':
+        return DEFAULT_CODEX_MODELS;
+      case 'kiro':
+        return DEFAULT_KIRO_MODELS;
+      case 'pi':
+        return DEFAULT_PI_MODELS;
+      case 'opencode':
+        return DEFAULT_OPENCODE_MODELS;
+      default:
+        return DEFAULT_CLAUDE_MODELS;
+    }
+  }
+
+  getDefaultModelsForAgent(agent?: string): string[] {
+    return this.getDefaultModelDetailsForAgent(agent).map((m) => m.id);
+  }
+
   async listModels(id: string): Promise<string[]> {
     const adapter = this.getAdapterWithModels(id);
-    if (!adapter) return [];
-    const managed = this.agents.get(id);
-    if (managed?.state?.status === 'stopped' || managed?.state?.status === 'error') return [];
-    if ('listModels' in adapter && typeof adapter.listModels === 'function') {
-      return Promise.resolve(adapter.listModels());
+    if (adapter && 'listModels' in adapter && typeof adapter.listModels === 'function') {
+      try {
+        const models = await Promise.resolve(adapter.listModels());
+        if (models && models.length > 0) return models;
+      } catch {
+        /* fall through to default models */
+      }
     }
-    return [];
+    const proc = this.get(id);
+    return this.getDefaultModelsForAgent(proc?.type);
+  }
+
+  async listModelDetails(id: string): Promise<ModelInfo[]> {
+    const adapter = this.getAdapterWithModels(id);
+    if (adapter && 'listModelDetails' in adapter && typeof adapter.listModelDetails === 'function') {
+      try {
+        const details = await Promise.resolve(adapter.listModelDetails());
+        if (details && details.length > 0) return details;
+      } catch {
+        /* fall through to default models */
+      }
+    }
+    const proc = this.get(id);
+    return this.getDefaultModelDetailsForAgent(proc?.type);
   }
 
   setModel(id: string, model: string): void {
     const adapter = this.getAdapterWithModels(id);
-    if (adapter) adapter.selectedModel = model;
+    if (!adapter) return;
+    adapter.selectedModel = model;
+    if (
+      'setModel' in adapter &&
+      typeof (adapter as { setModel: (m: string) => void }).setModel === 'function'
+    ) {
+      try {
+        (adapter as { setModel: (m: string) => void }).setModel(model);
+      } catch (err) {
+        console.error('[baton] manager.setModel error:', err);
+      }
+    }
   }
 
   getSelectedModel(id: string): string | undefined {
@@ -1462,25 +1521,25 @@ export class AgentManager {
   private getAdapterWithModels(id: string): {
     selectedModel: string | null;
     listModels?: () => Promise<string[]> | string[];
+    listModelDetails?: () => Promise<ModelInfo[]> | ModelInfo[];
   } | null {
     const managed = this.agents.get(id);
     if (!managed) return null;
 
     if (managed.sdkAdapter && typeof managed.sdkAdapter === 'object') {
-      const sa = managed.sdkAdapter as unknown as Record<string, unknown>;
-      if ('selectedModel' in sa) {
-        return sa as unknown as {
-          selectedModel: string | null;
-          listModels?: () => Promise<string[]> | string[];
-        };
-      }
+      return managed.sdkAdapter as unknown as {
+        selectedModel: string | null;
+        listModels?: () => Promise<string[]> | string[];
+        listModelDetails?: () => Promise<ModelInfo[]> | ModelInfo[];
+      };
     }
 
     const adapter = managed.adapter as Record<string, unknown> | null;
-    if (adapter && 'selectedModel' in adapter) {
+    if (adapter && typeof adapter === 'object') {
       return adapter as unknown as {
         selectedModel: string | null;
         listModels?: () => Promise<string[]> | string[];
+        listModelDetails?: () => Promise<ModelInfo[]> | ModelInfo[];
       };
     }
     return null;

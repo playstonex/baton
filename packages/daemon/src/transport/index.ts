@@ -244,11 +244,15 @@ export class Transport {
 
       case 'model_list_request': {
         try {
-          void this.agentManager.listModels(msg.sessionId).then((models) => {
+          void Promise.all([
+            this.agentManager.listModels(msg.sessionId),
+            this.agentManager.listModelDetails(msg.sessionId),
+          ]).then(([models, modelDetails]) => {
             this.send(clientId, {
               type: 'model_list',
               sessionId: msg.sessionId,
               models,
+              modelDetails,
               selected: this.agentManager.getSelectedModel(msg.sessionId),
             });
           });

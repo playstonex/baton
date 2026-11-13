@@ -1,14 +1,40 @@
 import type {
   AgentConfig,
+  ModelInfo,
   ParsedEvent,
+  PermissionMode,
   SdkAgentAdapter,
   ThinkingConfig,
   ReasoningEffort,
   AccessMode,
   ServiceTier,
 } from '@baton/shared';
+import { formatModelName } from '@baton/shared/utils';
 import { execSync, execFileSync, spawn } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
+
+export const DEFAULT_OPENCODE_MODELS: ModelInfo[] = [
+  { id: 'opencode/deepseek-v4.1-flash-free', name: 'DeepSeek v4.1 Flash (Free)', description: 'Fast, free-tier DeepSeek model' },
+  { id: 'opencode/glm-5.3-flash-free', name: 'GLM 5.3 Flash (Free)', description: 'Free-tier GLM 5.3 model' },
+  { id: 'opencode/mimo-v2.6-flash-free', name: 'MIMO v2.6 Flash (Free)', description: 'Free-tier MIMO model' },
+  { id: 'opencode/minimax-m3.1-flash-free', name: 'MiniMax M3.1 Flash (Free)', description: 'Free-tier MiniMax model' },
+  { id: 'opencode/nemotron-3.5-lightning-free', name: 'Nemotron 3.5 Lightning (Free)', description: 'Free-tier NVIDIA Nemotron model' },
+  { id: 'opencode/big-pickle', name: 'Big Pickle', description: 'OpenCode Big Pickle model' },
+];
+
+export function parseOpencodeModelRef(model: string): { id: string; providerID: string } {
+  const slashIdx = model.indexOf('/');
+  if (slashIdx > 0) {
+    return {
+      providerID: model.slice(0, slashIdx),
+      id: model.slice(slashIdx + 1),
+    };
+  }
+  return {
+    providerID: 'opencode',
+    id: model,
+  };
+}
 
 type OcToolState = {
   status?: string;
@@ -66,10 +92,29 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   readonly name = 'OpenCode (SDK)';
   readonly agentType = 'opencode' as const;
 
-  selectedModel: string | null = null;
+  private _selectedModel: string | null = null;
   selectedReasoningEffort: ReasoningEffort | null = null;
   selectedAccessMode: AccessMode = 'on-request';
   selectedServiceTier: ServiceTier = 'default';
+  permissionMode?: PermissionMode;
+
+  get selectedModel(): string | null {
+    return this._selectedModel;
+  }
+
+  set selectedModel(model: string | null) {
+    this._selectedModel = model;
+    if (model && this.sessionId && this.baseUrl) {
+      const modelRef = this.isV2 ? parseOpencodeModelRef(model) : model;
+      this.httpPatch(`/session/${this.sessionId}`, { model: modelRef }).catch((err) => {
+        console.error('[baton] opencode-sdk: setModel error:', err);
+      });
+    }
+  }
+
+  setModel(modelId: string): void {
+    this.selectedModel = modelId;
+  }
 
   setThinkingConfig(_config: ThinkingConfig): void {
     // OpenCode SDK does not currently support thinking/reasoning configuration
@@ -88,6 +133,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private assistantProgress = new Map<string, AssistantProgress>();
   private seenIdle = new Set<string>();
+  private pendingPermissionIds = new Set<string>();
 
   detect(): boolean {
     try {
@@ -114,19 +160,30 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     this.projectPath = config.projectPath;
     this.assistantProgress.clear();
     this.seenIdle.clear();
+    this.pendingPermissionIds.clear();
+    if (config.permissionMode) {
+      this.permissionMode = config.permissionMode;
+    }
 
     await this.startServer();
 
-    const created = await this.httpPost('/session', { title: `baton-${Date.now()}` });
+    const sessionBody: Record<string, unknown> = { title: `baton-${Date.now()}` };
+    if (this._selectedModel) {
+      sessionBody.model = this.isV2 ? parseOpencodeModelRef(this._selectedModel) : this._selectedModel;
+    }
+
+    const created = await this.httpPost('/session', sessionBody);
     const session = this.unwrap<{ id: string }>(created);
     this.sessionId = session.id ?? '';
 
     this.pollEvents(onEvent);
 
-    onEvent({ type: 'status_change', status: 'running', timestamp: Date.now() });
+    // Initial status for chat mode is idle (ready for user message)
+    onEvent({ type: 'status_change', status: 'idle', timestamp: Date.now() });
 
     const write = (input: string) => {
       onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
+      onEvent({ type: 'status_change', status: 'thinking', timestamp: Date.now() });
 
       // 2.x takes a flat { text } body; 1.x took content parts on
       // prompt_async. Both accept the request asynchronously.
@@ -139,6 +196,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       request.catch((err) => {
         console.error('[baton] opencode-sdk: prompt error:', err);
         onEvent({ type: 'error', message: String(err), timestamp: Date.now() });
+        onEvent({ type: 'status_change', status: 'error', timestamp: Date.now() });
       });
     };
 
@@ -277,6 +335,21 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     return JSON.parse(text) as Record<string, unknown>;
   }
 
+  private async httpPatch(path: string, body: unknown): Promise<Record<string, unknown>> {
+    const res = await fetch(`${this.baseUrl}${this.apiPrefix}${path}`, {
+      method: 'PATCH',
+      headers: this.requestHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    const text = await res.text();
+    if (!text) return {};
+    return JSON.parse(text) as Record<string, unknown>;
+  }
+
   private async httpGet(path: string): Promise<unknown> {
     const res = await fetch(`${this.baseUrl}${this.apiPrefix}${path}`, {
       headers: this.requestHeaders(),
@@ -298,6 +371,40 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       if (!this.sessionId || !this.baseUrl) return;
 
       try {
+        if (this.isV2) {
+          try {
+            const permResult = await this.httpGet(`/session/${this.sessionId}/permission`);
+            const permList = this.unwrap<Array<{ id?: string; type?: string; description?: string }>>(permResult);
+            if (Array.isArray(permList) && permList.length > 0) {
+              const req = permList[0];
+              if (req?.id && !this.pendingPermissionIds.has(req.id)) {
+                this.pendingPermissionIds.add(req.id);
+                const isAutoApprove =
+                  this.selectedAccessMode === 'full-access' ||
+                  this.permissionMode === 'bypassPermissions' ||
+                  this.permissionMode === 'yolo';
+
+                if (isAutoApprove) {
+                  this.replyPermission('once').catch(() => {});
+                } else {
+                  onEvent({
+                    type: 'permission_request',
+                    requestId: req.id,
+                    tool: req.type ?? 'action',
+                    action: req.type ?? 'action',
+                    description: req.description ?? req.type ?? 'OpenCode permission request',
+                    timestamp: Date.now(),
+                  });
+                  onEvent({ type: 'waiting_approval', timestamp: Date.now() });
+                  onEvent({ type: 'status_change', status: 'waiting_input', timestamp: Date.now() });
+                }
+              }
+            }
+          } catch {
+            /* ignore permission poll failure */
+          }
+        }
+
         const result = await this.httpGet(`/session/${this.sessionId}/message`);
         if (!result) return;
 
@@ -463,6 +570,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
             content: text.slice(emitted),
             timestamp: Date.now(),
           });
+          onEvent({ type: 'status_change', status: 'executing', timestamp: Date.now() });
           progress.text.set(index, text.length);
         }
         return;
@@ -477,6 +585,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
             content: text.slice(emitted),
             timestamp: Date.now(),
           });
+          onEvent({ type: 'status_change', status: 'thinking', timestamp: Date.now() });
           progress.reasoning.set(index, text.length);
         }
         return;
@@ -515,6 +624,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
           args: input,
           timestamp: Date.now(),
         });
+        onEvent({ type: 'status_change', status: 'executing', timestamp: Date.now() });
       }
 
       const status = state?.status ?? (state?.metadata?.status as string | undefined);
@@ -574,6 +684,7 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
           await this.httpPost(`/session/${this.sessionId}/permission/${request.id}/reply`, {
             decision,
           });
+          this.pendingPermissionIds.delete(request.id);
         }
         return;
       }
@@ -597,13 +708,26 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
         encoding: 'utf-8',
         timeout: 15000,
       });
-      return raw
+      const list = raw
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean);
+      return list.length > 0 ? list : DEFAULT_OPENCODE_MODELS.map((m) => m.id);
     } catch {
-      return [];
+      return DEFAULT_OPENCODE_MODELS.map((m) => m.id);
     }
+  }
+
+  async listModelDetails(): Promise<ModelInfo[]> {
+    const models = await this.listModels();
+    return models.map((m) => {
+      const defaultMatch = DEFAULT_OPENCODE_MODELS.find((d) => d.id === m);
+      return {
+        id: m,
+        name: defaultMatch?.name ?? formatModelName(m),
+        description: defaultMatch?.description,
+      };
+    });
   }
 
   private isGitRepo(): boolean {

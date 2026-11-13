@@ -1,7 +1,9 @@
 import type {
   AgentConfig,
   ChatImage,
+  ModelInfo,
   ParsedEvent,
+  PermissionMode,
   SdkAgentAdapter,
   ThinkingConfig,
   ReasoningEffort,
@@ -10,9 +12,18 @@ import type {
 } from '@baton/shared';
 import { execSync, spawn } from 'node:child_process';
 
+export const DEFAULT_ANTIGRAVITY_MODELS: ModelInfo[] = [
+  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', description: 'Fast, high-reasoning Gemini model' },
+  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Medium)', description: 'Balanced speed and reasoning' },
+  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', description: 'Low-latency for quick tasks' },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Thinking)', description: 'Claude Sonnet with extended thinking' },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', description: 'Claude Opus with deep reasoning' },
+  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)', description: 'Open-weights 120B model' },
+];
+
 interface JsonRpcMessage {
   jsonrpc: '2.0';
-  id?: number;
+  id?: number | string;
   method?: string;
   params?: Record<string, unknown>;
   result?: Record<string, unknown>;
@@ -35,6 +46,7 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
   selectedReasoningEffort: ReasoningEffort | null = null;
   selectedAccessMode: AccessMode = 'on-request';
   selectedServiceTier: ServiceTier = 'default';
+  permissionMode?: PermissionMode;
 
   private process: ReturnType<typeof spawn> | null = null;
   private sessionId: string | null = null;
@@ -42,11 +54,15 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
   private lineBuffer = '';
   private onEvent: ((event: ParsedEvent) => void) | null = null;
   private pendingPermissions = new Map<
-    number,
-    { toolCallId?: string; options?: Array<{ optionId: string }> }
+    number | string,
+    {
+      toolCallId?: string;
+      options?: Array<{ optionId: string; name?: string; kind?: string }>;
+    }
   >();
   private messageQueue: Array<{ text: string; images?: ChatImage[] }> = [];
   private availableModels: string[] = [];
+  private modelDetails: ModelInfo[] = [];
   private currentPromptId: number | null = null;
 
   detect(): boolean {
@@ -63,7 +79,13 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
   }
 
   listModels(): string[] {
-    return this.availableModels;
+    return this.availableModels.length > 0
+      ? this.availableModels
+      : DEFAULT_ANTIGRAVITY_MODELS.map((m) => m.id);
+  }
+
+  listModelDetails(): ModelInfo[] {
+    return this.modelDetails.length > 0 ? this.modelDetails : DEFAULT_ANTIGRAVITY_MODELS;
   }
 
   setModel(modelId: string): void {
@@ -123,6 +145,9 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
     this.pendingPermissions.clear();
     this.messageQueue = [];
     this.currentPromptId = null;
+    if (config.permissionMode) {
+      this.permissionMode = config.permissionMode;
+    }
 
     const cwd = config.projectPath ?? process.cwd();
     const env = { ...(process.env as Record<string, string>), ...(config.env ?? {}) };
@@ -313,8 +338,34 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
         case 'tool_call_update': {
           const name = (update.name as string) ?? '';
           const args = (update.args ?? {}) as Record<string, unknown>;
-          const content = update.content as { text?: string } | undefined;
-          const outputText = content?.text || (update.rawOutput as string) || '';
+          const content = update.content;
+          let outputText = '';
+          if (typeof update.rawOutput === 'string') {
+            outputText = update.rawOutput;
+          } else if (
+            update.rawOutput &&
+            typeof (update.rawOutput as Record<string, unknown>).output === 'string'
+          ) {
+            outputText = (update.rawOutput as Record<string, unknown>).output as string;
+          } else if (content && typeof (content as { text?: string }).text === 'string') {
+            outputText = (content as { text: string }).text;
+          } else if (Array.isArray(content)) {
+            for (const item of content) {
+              if (typeof item === 'string') {
+                outputText += item;
+              } else if (item && typeof item === 'object') {
+                const itemObj = item as Record<string, unknown>;
+                if (typeof itemObj.text === 'string') {
+                  outputText += itemObj.text;
+                } else if (
+                  itemObj.content &&
+                  typeof (itemObj.content as Record<string, unknown>).text === 'string'
+                ) {
+                  outputText += (itemObj.content as Record<string, unknown>).text as string;
+                }
+              }
+            }
+          }
 
           if (name === 'run_command' || args.CommandLine) {
             this.onEvent?.({
@@ -343,7 +394,11 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
     }
 
     // 2. Server requests (e.g. permission approval)
-    if (msg.method === 'session/request_permission' && typeof msg.id === 'number') {
+    // Note: Antigravity ACP sends msg.id as a string (e.g. "1"), but standard JSON-RPC may also use numbers.
+    if (
+      msg.method === 'session/request_permission' &&
+      (typeof msg.id === 'number' || typeof msg.id === 'string')
+    ) {
       const params = (msg.params ?? {}) as {
         toolCall?: {
           toolCallId?: string;
@@ -351,13 +406,44 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
           args?: Record<string, unknown>;
           title?: string;
         };
-        options?: Array<{ optionId: string }>;
+        options?: Array<{ optionId: string; name?: string; kind?: string }>;
       };
 
       const toolCall = params.toolCall;
       const toolCallId = toolCall?.toolCallId ?? `req_${msg.id}`;
       const toolName = toolCall?.name ?? 'action';
       const description = toolCall?.title ?? toolName;
+
+      // Auto-approve if in full-access mode or permission mode bypasses
+      const isAutoApprove =
+        this.selectedAccessMode === 'full-access' ||
+        this.permissionMode === 'bypassPermissions' ||
+        this.permissionMode === 'yolo';
+
+      if (isAutoApprove) {
+        const allowOpt =
+          params.options?.find(
+            (o) =>
+              o.kind?.startsWith('allow') ||
+              o.optionId === 'allow' ||
+              o.optionId === 'proceed_once' ||
+              o.optionId === 'proceed_always',
+          )?.optionId ??
+          params.options?.[0]?.optionId ??
+          'allow';
+
+        this.send({
+          jsonrpc: '2.0',
+          id: msg.id,
+          result: {
+            outcome: {
+              outcome: 'approved',
+              optionId: allowOpt,
+            },
+          },
+        });
+        return;
+      }
 
       this.pendingPermissions.set(msg.id, {
         toolCallId,
@@ -412,6 +498,10 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
 
         if (modelsObj?.availableModels) {
           this.availableModels = modelsObj.availableModels.map((m) => m.modelId);
+          this.modelDetails = modelsObj.availableModels.map((m) => ({
+            id: m.modelId,
+            name: m.name,
+          }));
         }
         if (!this.selectedModel && modelsObj?.currentModelId) {
           this.selectedModel = modelsObj.currentModelId;
@@ -461,7 +551,16 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
 
   async approve(_reason?: string): Promise<void> {
     for (const [id, req] of this.pendingPermissions.entries()) {
-      const allowOpt = req.options?.find((o) => o.optionId === 'allow')?.optionId ?? 'allow';
+      const allowOpt =
+        req.options?.find(
+          (o) =>
+            o.kind?.startsWith('allow') ||
+            o.optionId === 'allow' ||
+            o.optionId === 'proceed_once' ||
+            o.optionId === 'proceed_always',
+        )?.optionId ??
+        req.options?.[0]?.optionId ??
+        'allow';
       this.send({
         jsonrpc: '2.0',
         id,
@@ -473,13 +572,22 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
         },
       });
       this.pendingPermissions.delete(id);
+      this.onEvent?.({ type: 'status_change', status: 'executing', timestamp: Date.now() });
       break;
     }
   }
 
   async reject(_reason?: string): Promise<void> {
     for (const [id, req] of this.pendingPermissions.entries()) {
-      const denyOpt = req.options?.find((o) => o.optionId === 'deny')?.optionId ?? 'deny';
+      const denyOpt =
+        req.options?.find(
+          (o) =>
+            o.kind?.startsWith('reject') ||
+            o.kind?.startsWith('deny') ||
+            o.optionId === 'deny' ||
+            o.optionId === 'cancel',
+        )?.optionId ??
+        'deny';
       this.send({
         jsonrpc: '2.0',
         id,

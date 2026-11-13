@@ -13,6 +13,7 @@ import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontFamily, Glass, Radius, Spacing, Typography } from '../constants/theme';
 import type { ThemeColors } from './messages';
+import { formatModelName, type ModelInfo } from '@baton/shared/utils';
 
 export type ThinkingMode = 'none' | 'auto' | 'level';
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -25,6 +26,7 @@ interface Props {
   colors: ThemeColors;
   /** Adapter models + user provider models, merged by the caller. */
   models: string[];
+  modelDetails?: ModelInfo[];
   selectedModel: string | null;
   onSelectModel: (model: string) => void;
   thinkingMode: ThinkingMode;
@@ -39,11 +41,6 @@ interface Props {
   onReview: () => void;
   /** Sent as a literal prompt — no daemon-side handling. */
   onCommand: (command: '/plan' | '/compact') => void;
-}
-
-function shortModelName(model: string): string {
-  const parts = model.split('-');
-  return parts.length > 1 ? parts.slice(-2).join('-') : model;
 }
 
 /** HIG segmented control — Linear restraint: accent lives only on the active segment. */
@@ -212,6 +209,7 @@ export function ComposerSettingsSheet({
   onClose,
   colors,
   models,
+  modelDetails,
   selectedModel,
   onSelectModel,
   thinkingMode,
@@ -307,7 +305,7 @@ export function ComposerSettingsSheet({
                   <React.Fragment key={m}>
                     {i > 0 && <Separator colors={colors} inset={Spacing.lg} />}
                     <Row
-                      label={shortModelName(m)}
+                      label={formatModelName(m, { modelDetails })}
                       selected={m === selectedModel}
                       colors={colors}
                       onPress={() => {

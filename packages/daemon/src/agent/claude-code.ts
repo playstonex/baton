@@ -1,11 +1,13 @@
 import { execSync } from 'node:child_process';
-import type { AgentConfig, ParsedEvent, SpawnConfig, AgentType } from '@baton/shared';
+import type { AgentConfig, ModelInfo, ParsedEvent, SpawnConfig, AgentType } from '@baton/shared';
 import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { ClaudeCodeParser } from '../parser/index.js';
+import { DEFAULT_CLAUDE_MODELS } from './claude-sdk.js';
 
 export class ClaudeCodeAdapter extends BaseAgentAdapter {
   readonly name = 'Claude Code';
   readonly agentType: AgentType = 'claude-code';
+  selectedModel: string | null = null;
   private parser = new ClaudeCodeParser();
 
   detect(_projectPath: string): boolean {
@@ -19,6 +21,14 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     } catch {
       return false;
     }
+  }
+
+  listModels(): string[] {
+    return DEFAULT_CLAUDE_MODELS.map((m) => m.id);
+  }
+
+  listModelDetails(): ModelInfo[] {
+    return DEFAULT_CLAUDE_MODELS;
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {

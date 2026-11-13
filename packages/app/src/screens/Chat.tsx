@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import type { PermissionMode } from '@baton/shared';
+import type { PermissionMode, ModelInfo } from '@baton/shared';
+import { formatModelName } from '@baton/shared';
 import { useChatStore } from '../stores/chat.js';
 import { wsService } from '../services/websocket.js';
 import { Button } from '../lib/ui.js';
@@ -64,6 +65,10 @@ export function ChatScreen() {
   const [input, setInput] = useState('');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [showPermMenu, setShowPermMenu] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [modelDetails, setModelDetails] = useState<ModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [showModelMenu, setShowModelMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -78,6 +83,18 @@ export function ChatScreen() {
         action: 'set_permission_mode',
         sessionId,
         payload: { mode },
+      });
+    }
+  }
+
+  function handleSelectModel(model: string) {
+    setSelectedModel(model);
+    setShowModelMenu(false);
+    if (sessionId) {
+      wsService.send({
+        type: 'model_select',
+        sessionId,
+        model,
       });
     }
   }
@@ -131,12 +148,28 @@ export function ChatScreen() {
       }
     });
 
+    const unsubModels = wsService.on('model_list', (msg) => {
+      if (msg.type === 'model_list' && msg.sessionId === sessionId) {
+        setModels(msg.models);
+        if (msg.modelDetails && Array.isArray(msg.modelDetails)) {
+          setModelDetails(msg.modelDetails);
+        }
+        if (msg.selected) {
+          setSelectedModel(msg.selected);
+        }
+      }
+    });
+
     const unsubState = wsService.on('_state', () => {
-      if (wsService.connected) attachSession();
+      if (wsService.connected) {
+        attachSession();
+        wsService.send({ type: 'model_list_request', sessionId });
+      }
     });
 
     if (wsService.connected) {
       attachSession();
+      wsService.send({ type: 'model_list_request', sessionId });
     } else {
       wsService.connect();
     }
@@ -146,6 +179,7 @@ export function ChatScreen() {
       unsubEventHistory();
       unsubHistory();
       unsubStatus();
+      unsubModels();
       unsubState();
     };
   }, [sessionId, addEvent, setStatus, clear, attachSession]);
@@ -258,6 +292,63 @@ export function ChatScreen() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Model Selector */}
+          {models.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowModelMenu(!showModelMenu)}
+                className="flex items-center gap-1.5 rounded-full border border-line-soft bg-field px-2.5 py-1 text-xs transition-colors hover:brightness-105"
+                title="Active Model"
+              >
+                <span className="text-meta">Model:</span>
+                <span className="font-medium text-fg">
+                  {formatModelName(selectedModel ?? models[0], { modelDetails, compact: true })}
+                </span>
+              </button>
+
+              {showModelMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowModelMenu(false)} />
+                  <div className="absolute right-0 top-8 z-50 w-72 max-h-96 overflow-y-auto rounded-md border border-line-soft bg-surface p-1.5 shadow-lg">
+                    <div className="px-2 py-1 text-[11px] font-medium text-meta">
+                      Select Agent Model
+                    </div>
+                    {models.map((modelId) => {
+                      const isCurrent = modelId === (selectedModel ?? models[0]);
+                      const detail = modelDetails.find((d) => d.id === modelId);
+                      const displayName = formatModelName(modelId, { modelDetails });
+                      return (
+                        <button
+                          key={modelId}
+                          type="button"
+                          onClick={() => handleSelectModel(modelId)}
+                          className={`flex w-full flex-col items-start rounded-sm px-2 py-1.5 text-left transition-colors hover:bg-raised ${
+                            isCurrent ? 'bg-raised/70' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full text-xs font-medium">
+                            <span className={isCurrent ? 'text-accent font-semibold' : 'text-fg'}>
+                              {displayName}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] text-accent">✓ Active</span>
+                            )}
+                          </div>
+                          {detail?.description && (
+                            <span className="text-[11px] text-muted line-clamp-1">
+                              {detail.description}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Permission Mode Selector */}
           <div className="relative">
             <button

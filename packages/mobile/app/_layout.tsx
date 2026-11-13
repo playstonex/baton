@@ -1,7 +1,9 @@
 import '../global.css';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Alert, Platform, View, ActivityIndicator } from 'react-native';
+import { Alert, Platform, View, ActivityIndicator, LogBox } from 'react-native';
+
+LogBox.ignoreAllLogs(true);
 import { useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BlurView } from 'expo-blur';

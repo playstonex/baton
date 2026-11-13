@@ -1,5 +1,6 @@
 import type {
   AgentConfig,
+  ModelInfo,
   ParsedEvent,
   SdkAgentAdapter,
   ThinkingConfig,
@@ -7,9 +8,19 @@ import type {
   AccessMode,
   ServiceTier,
 } from '@baton/shared';
+import { formatModelName } from '@baton/shared/utils';
 import { execSync, execFileSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
+
+export const DEFAULT_CODEX_MODELS: ModelInfo[] = [
+  { id: 'gpt-5-codex', name: 'GPT-5 Codex', description: 'Flagship agentic coding model' },
+  { id: 'gpt-5', name: 'GPT-5', description: 'Advanced reasoning and general intelligence' },
+  { id: 'o3', name: 'o3', description: 'Deep reasoning for complex algorithms' },
+  { id: 'o3-mini', name: 'o3-mini', description: 'Fast, efficient reasoning' },
+  { id: 'o4-mini', name: 'o4-mini', description: 'Next-generation low-latency reasoning' },
+  { id: 'codex-mini', name: 'Codex Mini', description: 'Fast and responsive coding' },
+];
 
 // ── JSON-RPC types for codex app-server ────────────────────────────
 
@@ -280,14 +291,35 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async listModels(): Promise<string[]> {
-    if (!this.process?.stdin?.writable) return [];
+    if (!this.process?.stdin?.writable) return DEFAULT_CODEX_MODELS.map((m) => m.id);
     try {
       const result = (await this.sendRequest('model/list', {})) as Record<string, unknown>;
       const items = ((result?.data ?? result?.models) as Array<Record<string, unknown>>) ?? [];
-      return items.map((m) => (m.id ?? m.name ?? '') as string).filter(Boolean);
+      const ids = items.map((m) => (m.id ?? m.name ?? '') as string).filter(Boolean);
+      return ids.length > 0 ? ids : DEFAULT_CODEX_MODELS.map((m) => m.id);
     } catch (err) {
       console.error('[baton] codex-sdk: listModels error:', err);
-      return [];
+      return DEFAULT_CODEX_MODELS.map((m) => m.id);
+    }
+  }
+
+  async listModelDetails(): Promise<ModelInfo[]> {
+    if (!this.process?.stdin?.writable) return DEFAULT_CODEX_MODELS;
+    try {
+      const result = (await this.sendRequest('model/list', {})) as Record<string, unknown>;
+      const items = ((result?.data ?? result?.models) as Array<Record<string, unknown>>) ?? [];
+      if (items.length > 0) {
+        return items
+          .map((m) => {
+            const id = (m.id ?? m.name ?? '') as string;
+            const name = (m.name ?? m.title ?? formatModelName(id)) as string;
+            return { id, name };
+          })
+          .filter((m) => Boolean(m.id));
+      }
+      return DEFAULT_CODEX_MODELS;
+    } catch {
+      return DEFAULT_CODEX_MODELS;
     }
   }
 

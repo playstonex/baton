@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -18,19 +18,15 @@ import { OfflineBanner } from '../../src/components/OfflineBanner';
 
 const TAB_ITEMS = [
   { name: 'index', label: 'Agents', icon: 'grid' as const, title: 'Dashboard' },
-  { name: 'pipelines', label: 'Pipelines', icon: 'git-branch' as const, title: 'Pipelines' },
   { name: 'settings', label: 'Settings', icon: 'settings' as const, title: 'Settings' },
 ] as const;
 
-/** Lens flush to the item; the capsule's own padding is the visual inset. */
-const LENS_INSET = 0;
-const LENS_ITEM_GAP = 1;
-const TAB_WIDTH = 84;
-const ICON_SIZE = 24;
-/** Snappier than the tab-bar-wide morph spring — small mass, quick settle. */
-const LENS_SPRING = { damping: 24, stiffness: 320, mass: 1 } as const;
+const TAB_WIDTH = 96;
+const LENS_INSET = 2;
+const ICON_SIZE = 22;
+const LENS_SPRING = { damping: 22, stiffness: 280, mass: 0.9 } as const;
 
-/** Native icon bounce on selection: 1 → 1.12 → 1. */
+/** Native icon micro-bounce on selection: 1 → 1.1 → 1. */
 function BouncingIcon({
   name,
   focused,
@@ -44,12 +40,14 @@ function BouncingIcon({
   useEffect(() => {
     if (focused) {
       scale.value = withSequence(
-        withSpring(1.06, { damping: 14, stiffness: 320 }),
+        withSpring(1.08, { damping: 14, stiffness: 320 }),
         withTiming(1, { duration: 120 }),
       );
     }
   }, [focused, scale]);
+
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
   return (
     <Animated.View style={[{ height: 24, justifyContent: 'center' }, iconStyle]}>
       <Ionicons name={name as any} size={ICON_SIZE} color={color} />
@@ -58,54 +56,50 @@ function BouncingIcon({
 }
 
 /**
- * iOS 26/27 native floating TabBar (matched to a system screenshot):
- * near-opaque chrome-glass capsule with a 1px specular top edge, hovering
- * above the home indicator. Active tab = a NEUTRAL secondary-glass lens
- * capsule behind icon + label together; the tint lives on the icon and
- * label, not the lens. Inactive items are primary monochrome. Selection
- * bounces the icon, the lens springs across.
+ * iOS 26 Liquid Glass Floating Island TabBar:
+ * Ultra-compact 2-tab floating pill hovering above the home indicator.
+ * Features an animated sliding frosted lens, specular top-edge rim,
+ * and icon bounce physics.
  */
 function FloatingTabBar({ state, descriptors, navigation }: any) {
+  const router = useRouter();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
   const setTabBarHeight = useLayoutStore((s) => s.setTabBarHeight);
+  const activeTint = c.isDark ? Colors.primary[300] : Colors.primary[600];
 
-  const frames = useRef<Map<number, { x: number; width: number }>>(new Map()).current;
-  const [frameVersion, setFrameVersion] = useState(0);
+  const visibleRoutes = state.routes.filter(
+    (route: any) => descriptors[route.key]?.options?.href !== null && route.name !== 'pipelines',
+  );
+
+  const activeIndex = visibleRoutes.findIndex(
+    (r: any) => r.name === state.routes[state.index]?.name,
+  );
+
   const lensX = useSharedValue(0);
-  const lensW = useSharedValue(0);
-
-  const activeIndex = state.index as number;
 
   useEffect(() => {
-    const frame = frames.get(activeIndex);
-    if (frame) {
-      lensX.value = withSpring(frame.x + LENS_ITEM_GAP, LENS_SPRING);
-      lensW.value = withSpring(frame.width - LENS_ITEM_GAP * 2, LENS_SPRING);
+    if (activeIndex >= 0) {
+      lensX.value = withSpring(activeIndex * TAB_WIDTH + LENS_INSET, LENS_SPRING);
     }
-  }, [activeIndex, frameVersion, frames, lensX, lensW]);
+  }, [activeIndex, lensX]);
 
   const lensStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: lensX.value }],
-    width: lensW.value,
-    opacity: lensW.value > 1 ? 1 : 0,
   }));
-
-  const activeTint = c.isDark ? Colors.primary[300] : Colors.primary[600];
 
   return (
     <View
       onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
       style={{
         position: 'absolute',
-        bottom: insets.bottom + Spacing.md,
+        bottom: insets.bottom + Spacing.sm,
         alignSelf: 'center',
-        /* ambient layer of the float shadow — the tight contact shadow
-         * lives on the capsule itself, layered like the native material */
         shadowColor: '#08090a',
-        shadowOffset: { width: 0, height: 14 },
-        shadowOpacity: c.isDark ? 0.12 : 0.07,
-        shadowRadius: 28,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: c.isDark ? 0.35 : 0.12,
+        shadowRadius: 24,
+        elevation: 10,
       }}
       pointerEvents="box-none"
     >
@@ -115,22 +109,19 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         style={{
           flexDirection: 'row',
           borderRadius: 999,
-          padding: Spacing.xs,
+          padding: LENS_INSET,
           overflow: 'hidden',
-          backgroundColor: c.isDark ? 'rgba(25,26,29,0.96)' : 'rgba(252,253,254,0.94)',
-          /* specular rim — brightest at top; RN border is uniform, so the
-           * alpha is tuned low to stay inside native restraint */
+          backgroundColor: c.isDark ? 'rgba(25, 26, 30, 0.90)' : 'rgba(252, 253, 254, 0.92)',
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.6)',
+          borderColor: c.isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.75)',
           shadowColor: '#08090a',
           shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: c.isDark ? 0.1 : 0.05,
-          shadowRadius: 5,
-          elevation: 6,
+          shadowOpacity: c.isDark ? 0.15 : 0.08,
+          shadowRadius: 6,
+          elevation: 4,
         }}
       >
-        {/* Neutral secondary-glass lens — icon + label together, springs across.
-         * Full item width, flush to the capsule padding, no outer shadow. */}
+        {/* Sliding Liquid Glass Lens */}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -138,29 +129,35 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
               position: 'absolute',
               top: LENS_INSET,
               bottom: LENS_INSET,
+              width: TAB_WIDTH - LENS_INSET * 2,
               borderRadius: 999,
-              backgroundColor: c.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(60,60,67,0.09)',
+              backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.13)' : 'rgba(60, 60, 67, 0.09)',
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: c.isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.04)',
             },
             lensStyle,
           ]}
         />
 
-        {state.routes.map((route: any, index: number) => {
+        {visibleRoutes.map((route: any) => {
+          const isFocused = state.routes[state.index]?.name === route.name;
           const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
           const tabItem = TAB_ITEMS.find((t) => t.name === route.name);
           const iconName = tabItem?.icon ?? 'ellipse';
+          const label = options.tabBarLabel ?? options.title ?? tabItem?.label ?? route.name;
 
           const onPress = () => {
-            const event = navigation?.emit
-              ? navigation.emit({
-                  type: 'tabPress',
-                  target: route.key,
-                  canPreventDefault: true,
-                })
-              : { defaultPrevented: false };
+            const event = navigation?.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
             if (!isFocused && !event?.defaultPrevented) {
-              navigation?.navigate?.(route.name);
+              if (route.name === 'index') {
+                router.navigate('/(tabs)');
+              } else {
+                router.navigate(`/(tabs)/${route.name}` as any);
+              }
             }
           };
 
@@ -168,40 +165,31 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             <Pressable
               key={route.key}
               onPress={onPress}
-              onLayout={(e) => {
-                frames.set(index, {
-                  x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width,
-                });
-                if (index === state.routes.length - 1) {
-                  setFrameVersion((v) => v + 1);
-                }
-              }}
-              style={({ pressed }) => ({
-                width: TAB_WIDTH,
-                paddingVertical: Spacing.xs - 2,
-                borderRadius: 999,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.6 : 1,
-              })}
+              hitSlop={6}
+              style={({ pressed }) => [
+                styles.tabItem,
+                { opacity: pressed ? 0.65 : 1 },
+              ]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={label}
             >
               <BouncingIcon
                 name={isFocused ? iconName : `${iconName}-outline`}
                 focused={isFocused}
-                color={isFocused ? activeTint : c.textPrimary}
+                color={isFocused ? activeTint : c.textTertiary}
               />
               <Text
-                style={{
-                  fontSize: 11,
-                  lineHeight: 13,
-                  marginTop: 2,
-                  fontWeight: '400',
-                  color: isFocused ? activeTint : c.textPrimary,
-                }}
+                style={[
+                  styles.tabLabel,
+                  {
+                    color: isFocused ? activeTint : c.textTertiary,
+                    fontWeight: isFocused ? '600' : '500',
+                  },
+                ]}
                 allowFontScaling={false}
               >
-                {options.tabBarLabel ?? options.title ?? route.name}
+                {label}
               </Text>
             </Pressable>
           );
@@ -220,6 +208,15 @@ export default function TabLayout() {
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{
           headerTransparent: true,
+          tabBarStyle: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+            elevation: 0,
+          },
           headerBackground: () => (
             <BlurView
               tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
@@ -243,18 +240,45 @@ export default function TabLayout() {
           tabBarAllowFontScaling: false,
         }}
       >
-        {TAB_ITEMS.map((tab) => (
-          <Tabs.Screen
-            key={tab.name}
-            name={tab.name}
-            options={{
-              title: tab.title,
-              tabBarLabel: tab.label,
-            }}
-          />
-        ))}
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Dashboard',
+            tabBarLabel: 'Agents',
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+            tabBarLabel: 'Settings',
+          }}
+        />
+        <Tabs.Screen
+          name="pipelines"
+          options={{
+            title: 'Pipelines',
+            href: null, // Hidden from bottom tab bar, accessible via router.push('/pipelines')
+          }}
+        />
       </Tabs>
       <OfflineBanner />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  tabItem: {
+    width: TAB_WIDTH,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+  },
+  tabLabel: {
+    fontSize: 10.5,
+    lineHeight: 13,
+    marginTop: 2,
+    letterSpacing: -0.1,
+  },
+});

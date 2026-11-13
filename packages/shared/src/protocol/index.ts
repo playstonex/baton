@@ -338,10 +338,13 @@ export interface AckMessage {
   error?: string;
 }
 
+import type { ModelInfo } from '../utils/models.js';
+
 export interface ModelListMessage {
   type: 'model_list';
   sessionId: string;
   models: string[];
+  modelDetails?: ModelInfo[];
   selected?: string;
 }
 

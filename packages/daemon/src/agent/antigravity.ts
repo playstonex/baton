@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process';
-import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
+import type { AgentConfig, ModelInfo, ParsedEvent, SpawnConfig } from '@baton/shared';
 import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
+import { DEFAULT_ANTIGRAVITY_MODELS } from './antigravity-sdk.js';
 
 /**
  * Google Antigravity terminal agent (`agy`, Go binary shipped with the
@@ -11,6 +12,7 @@ import { stripAnsi } from '../parser/ansi.js';
 export class AntigravityAdapter extends BaseAgentAdapter {
   readonly name = 'Antigravity';
   readonly agentType = 'antigravity' as const;
+  selectedModel: string | null = null;
 
   detect(_projectPath: string): boolean {
     try {
@@ -19,6 +21,14 @@ export class AntigravityAdapter extends BaseAgentAdapter {
     } catch {
       return false;
     }
+  }
+
+  listModels(): string[] {
+    return DEFAULT_ANTIGRAVITY_MODELS.map((m) => m.id);
+  }
+
+  listModelDetails(): ModelInfo[] {
+    return DEFAULT_ANTIGRAVITY_MODELS;
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {

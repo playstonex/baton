@@ -1,11 +1,13 @@
-import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
+import type { AgentConfig, ModelInfo, ParsedEvent, SpawnConfig } from '@baton/shared';
 import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
 import { execSync } from 'node:child_process';
+import { DEFAULT_CODEX_MODELS } from './codex-sdk.js';
 
 export class CodexAdapter extends BaseAgentAdapter {
   readonly name = 'Codex';
   readonly agentType = 'codex' as const;
+  selectedModel: string | null = null;
 
   detect(): boolean {
     try {
@@ -14,6 +16,14 @@ export class CodexAdapter extends BaseAgentAdapter {
     } catch {
       return false;
     }
+  }
+
+  listModels(): string[] {
+    return DEFAULT_CODEX_MODELS.map((m) => m.id);
+  }
+
+  listModelDetails(): ModelInfo[] {
+    return DEFAULT_CODEX_MODELS;
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {

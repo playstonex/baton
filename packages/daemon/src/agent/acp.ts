@@ -238,7 +238,7 @@ export class GenericAcpSdkAdapter implements SdkAgentAdapter {
   private msgIdCounter = 0;
   private lineBuffer = '';
   private onEvent: ((event: ParsedEvent) => void) | null = null;
-  private pendingRequests = new Map<number, string>();
+  private pendingRequests = new Map<number | string, string>();
   private messageQueue: string[] = [];
 
   constructor(
@@ -438,7 +438,7 @@ export class GenericAcpSdkAdapter implements SdkAgentAdapter {
 
 interface ConsumeOptions {
   onSessionId?: (id: string) => void;
-  onServerRequest?: (id: number, method: string, params: Record<string, unknown>) => void;
+  onServerRequest?: (id: number | string, method: string, params: Record<string, unknown>) => void;
   /** SDK (chat) mode emits chat_message for assistant text; PTY mode raw_output. */
   chatAsChatMessage?: boolean;
 }
@@ -487,9 +487,13 @@ export function consumeAcpLines(
     }
 
     // Server→client request (permissions etc.).
-    if ('id' in msg && 'method' in msg && typeof msg.id === 'number') {
+    if (
+      'id' in msg &&
+      'method' in msg &&
+      (typeof msg.id === 'number' || typeof msg.id === 'string')
+    ) {
       opts.onServerRequest?.(
-        msg.id,
+        msg.id as number | string,
         msg.method as string,
         (msg.params ?? {}) as Record<string, unknown>,
       );

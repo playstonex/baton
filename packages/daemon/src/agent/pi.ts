@@ -1,7 +1,14 @@
 import { execSync } from 'node:child_process';
-import type { AgentConfig, ParsedEvent, SpawnConfig } from '@baton/shared';
+import type { AgentConfig, ModelInfo, ParsedEvent, SpawnConfig } from '@baton/shared';
 import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
+
+export const DEFAULT_PI_MODELS: ModelInfo[] = [
+  { id: 'anthropic/claude-3-7-sonnet', name: 'Claude 3.7 Sonnet (Anthropic)', description: 'Hybrid reasoning model' },
+  { id: 'anthropic/claude-3-5-sonnet', name: 'Claude 3.5 Sonnet (Anthropic)', description: 'Code intelligence' },
+  { id: 'openai/gpt-4o', name: 'GPT-4o (OpenAI)', description: 'Omni model' },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (OpenAI)', description: 'Fast, lightweight' },
+];
 
 /**
  * Pi coding agent (`pi`, npm @mariozechner/pi-coding-agent) — minimalist
@@ -12,6 +19,7 @@ import { stripAnsi } from '../parser/ansi.js';
 export class PiAdapter extends BaseAgentAdapter {
   readonly name = 'Pi';
   readonly agentType = 'pi' as const;
+  selectedModel: string | null = null;
 
   detect(_projectPath: string): boolean {
     try {
@@ -20,6 +28,14 @@ export class PiAdapter extends BaseAgentAdapter {
     } catch {
       return false;
     }
+  }
+
+  listModels(): string[] {
+    return DEFAULT_PI_MODELS.map((m) => m.id);
+  }
+
+  listModelDetails(): ModelInfo[] {
+    return DEFAULT_PI_MODELS;
   }
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {

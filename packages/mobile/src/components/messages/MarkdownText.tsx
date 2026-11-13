@@ -1,8 +1,11 @@
-import React, { useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, Linking, ScrollView } from 'react-native';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Linking, ScrollView, Pressable, Clipboard } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
 import { findMatchRanges, toHighlightSegments } from './HighlightedText';
 import { Colors, FontFamily } from '../../constants/theme';
+import { useRevealedText } from '../../hooks/useRevealedText';
 
 interface Props {
   content: string;
@@ -43,25 +46,174 @@ function getMd(): MarkdownParser {
   return mdInstance;
 }
 
+const CodeBlock = React.memo(function CodeBlock({
+  code,
+  language,
+  colors,
+}: {
+  code: string;
+  language?: string;
+  colors: ThemeColors;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    Clipboard.setString(code);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code]);
+
+  const cleanLang = (language?.trim().split(/\s+/)[0] || 'code').toUpperCase();
+
+  return (
+    <View
+      style={[
+        styles.codeBlock,
+        {
+          backgroundColor: colors.isDark ? '#141519' : '#f4f5f7',
+          borderColor: colors.cardBorder,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.codeHeader,
+          {
+            borderBottomColor: colors.isDark
+              ? 'rgba(255,255,255,0.06)'
+              : 'rgba(0,0,0,0.06)',
+          },
+        ]}
+      >
+        <Text style={[styles.codeLang, { color: colors.textTertiary }]}>
+          {cleanLang}
+        </Text>
+        <Pressable
+          onPress={handleCopy}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.copyBtn,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+          accessibilityLabel={copied ? 'Copied code' : 'Copy code'}
+        >
+          <Ionicons
+            name={copied ? 'checkmark' : 'copy-outline'}
+            size={12}
+            color={
+              copied
+                ? colors.isDark
+                  ? Colors.primary[300]
+                  : Colors.primary[600]
+                : colors.textTertiary
+            }
+          />
+          <Text
+            style={[
+              styles.copyText,
+              {
+                color: copied
+                  ? colors.isDark
+                    ? Colors.primary[300]
+                    : Colors.primary[600]
+                  : colors.textTertiary,
+              },
+            ]}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </Text>
+        </Pressable>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.codeScrollContent}
+      >
+        <Text style={[styles.codeText, { color: colors.textPrimary }]}>
+          {code.replace(/\n$/, '')}
+        </Text>
+      </ScrollView>
+    </View>
+  );
+});
+
+const StreamingCursor = React.memo(function StreamingCursor({
+  colors,
+}: {
+  colors: ThemeColors;
+}) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setVisible((v) => !v);
+    }, 500);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Text
+      style={[
+        styles.streamingCursor,
+        {
+          color: colors.isDark ? Colors.primary[300] : Colors.primary[500],
+          opacity: visible ? 0.95 : 0.2,
+        },
+      ]}
+    >
+      {' ▎'}
+    </Text>
+  );
+});
+
 export const MarkdownText = React.memo(function MarkdownText({
   content,
   colors,
+  isStreaming,
   highlightQuery,
   highlightActive,
 }: Props) {
+  const revealedContent = useRevealedText(content, isStreaming);
+
   const tokens = useMemo(() => {
     try {
-      return getMd().parse(content, {}) as TokenNode[];
+      return getMd().parse(revealedContent, {}) as TokenNode[];
     } catch {
       return [];
     }
-  }, [content]);
+  }, [revealedContent]);
 
   const renderTokens = useCallback(
     (tokens: TokenNode[]): React.ReactNode[] => {
       const hl = highlightQuery?.trim()
         ? { query: highlightQuery, active: highlightActive ?? false }
         : undefined;
+
+      // Identify the last inline token so the trailing cursor attaches to it
+      let lastInlineIdx = -1;
+      if (isStreaming) {
+        for (let j = tokens.length - 1; j >= 0; j--) {
+          if (tokens[j].type === 'inline') {
+            lastInlineIdx = j;
+            break;
+          }
+        }
+      }
+
+      if (tokens.length === 0) {
+        if (isStreaming) {
+          return [
+            <View key="cursor-only" style={styles.block}>
+              <Text style={[styles.paragraph, { color: colors.textPrimary }]}>
+                <StreamingCursor colors={colors} />
+              </Text>
+            </View>,
+          ];
+        }
+        return [];
+      }
+
       const elements: React.ReactNode[] = [];
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
@@ -72,23 +224,54 @@ export const MarkdownText = React.memo(function MarkdownText({
           continue;
         }
         if (token.type === 'inline') {
+          const isLastInline = isStreaming && i === lastInlineIdx;
           elements.push(
-            <Text key={i} style={[styles.paragraph, { color: colors.textPrimary }]}>
-              {renderInline(token.children ?? [], colors, i, hl)}
-            </Text>,
+            <View key={i} style={styles.block}>
+              <Text style={[styles.paragraph, { color: colors.textPrimary }]}>
+                {renderInline(
+                  token.children ?? [],
+                  colors,
+                  i,
+                  hl,
+                  isLastInline ? <StreamingCursor key="cursor" colors={colors} /> : undefined,
+                )}
+              </Text>
+            </View>,
           );
           continue;
         }
         if (token.type === 'heading_open') {
           const level = token.tag?.toString().replace('h', '') ?? '1';
-          const sizeMap: Record<string, number> = { '1': 22, '2': 18, '3': 16, '4': 14 };
-          const size = sizeMap[level] ?? 14;
+          const sizeMap: Record<
+            string,
+            { size: number; lineHeight: number; marginTop: number; marginBottom: number }
+          > = {
+            '1': { size: 21, lineHeight: 27, marginTop: 14, marginBottom: 6 },
+            '2': { size: 18.5, lineHeight: 24, marginTop: 12, marginBottom: 5 },
+            '3': { size: 16.5, lineHeight: 22, marginTop: 10, marginBottom: 4 },
+            '4': { size: 15, lineHeight: 20, marginTop: 8, marginBottom: 3 },
+          };
+          const conf =
+            sizeMap[level] ?? { size: 15, lineHeight: 20, marginTop: 8, marginBottom: 3 };
           const inlineToken = tokens[i + 1];
           if (inlineToken?.type === 'inline') {
             elements.push(
-              <Text key={i} style={[styles.heading, { fontSize: size, color: colors.textPrimary }]}>
-                {renderInline(inlineToken.children ?? [], colors, i, hl)}
-              </Text>,
+              <View key={i} style={styles.block}>
+                <Text
+                  style={[
+                    styles.heading,
+                    {
+                      fontSize: conf.size,
+                      lineHeight: conf.lineHeight,
+                      marginTop: conf.marginTop,
+                      marginBottom: conf.marginBottom,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                >
+                  {renderInline(inlineToken.children ?? [], colors, i, hl)}
+                </Text>
+              </View>,
             );
             i += 2;
           }
@@ -96,63 +279,36 @@ export const MarkdownText = React.memo(function MarkdownText({
         }
         if (token.type === 'code_block' || token.type === 'fence') {
           const code = token.content ?? '';
+          const lang = token.info ?? '';
           elements.push(
-            <View key={i} style={[styles.codeBlock, { backgroundColor: colors.subtle }]}>
-              <Text style={[styles.codeText, { color: colors.textPrimary }]}>{code}</Text>
+            <View key={i} style={styles.block}>
+              <CodeBlock code={code} language={lang} colors={colors} />
             </View>,
           );
           continue;
         }
         if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') {
-          const ordered = token.type === 'ordered_list_open';
-          const items: React.ReactNode[] = [];
-          let j = i + 1;
-          let n = 0;
-          while (
-            j < tokens.length &&
-            tokens[j].type !== 'bullet_list_close' &&
-            tokens[j].type !== 'ordered_list_close'
-          ) {
-            if (tokens[j].type === 'list_item_open') {
-              n += 1;
-              // A list item wraps its inline content one level deeper
-              // (paragraph_open → inline); find the first inline descendant.
-              const inlineToken =
-                tokens[j + 1]?.type === 'inline'
-                  ? tokens[j + 1]
-                  : tokens[j + 2]?.type === 'inline'
-                    ? tokens[j + 2]
-                    : undefined;
-              if (inlineToken) {
-                items.push(
-                  <View key={j} style={styles.listItem}>
-                    <Text style={[styles.bullet, { color: colors.textTertiary }]}>
-                      {ordered ? `${n}.` : '\u2022'}
-                    </Text>
-                    <Text style={[styles.listText, { color: colors.textPrimary }]}>
-                      {renderInline(inlineToken.children ?? [], colors, j, hl)}
-                    </Text>
-                  </View>,
-                );
-              }
-              j += 3;
-            } else {
-              j++;
-            }
-          }
+          const { node, nextIndex } = renderList(tokens, i, colors, hl);
           elements.push(
-            <View key={i} style={styles.list}>
-              {items}
+            <View key={i} style={styles.block}>
+              {node}
             </View>,
           );
-          i = j;
+          i = nextIndex;
           continue;
         }
         if (token.type === 'blockquote_open') {
           const inlineToken = tokens[i + 1];
           if (inlineToken?.type === 'inline') {
             elements.push(
-              <View key={i} style={[styles.blockquote, { borderLeftColor: colors.textTertiary }]}>
+              <View
+                key={i}
+                style={[
+                  styles.block,
+                  styles.blockquote,
+                  { borderLeftColor: colors.textTertiary },
+                ]}
+              >
                 <Text style={[styles.blockquoteText, { color: colors.textSecondary }]}>
                   {renderInline(inlineToken.children ?? [], colors, i, hl)}
                 </Text>
@@ -169,18 +325,33 @@ export const MarkdownText = React.memo(function MarkdownText({
           continue;
         }
         if (token.type === 'table_open') {
-          const { node, next } = renderTable(tokens, i + 1, colors);
-          elements.push(node);
+          const { node, next } = renderTable(tokens, i + 1, colors, hl);
+          elements.push(
+            <View key={i} style={styles.block}>
+              {node}
+            </View>,
+          );
           i = next - 1;
           continue;
         }
       }
+
+      if (isStreaming && lastInlineIdx === -1 && elements.length > 0) {
+        elements.push(
+          <View key="trailing-cursor" style={styles.block}>
+            <Text style={[styles.paragraph, { color: colors.textPrimary }]}>
+              <StreamingCursor colors={colors} />
+            </Text>
+          </View>,
+        );
+      }
+
       return elements;
     },
-    [colors, highlightQuery, highlightActive],
+    [colors, highlightQuery, highlightActive, isStreaming],
   );
 
-  return <View>{renderTokens(tokens)}</View>;
+  return <View style={styles.container}>{renderTokens(tokens)}</View>;
 });
 
 /**
@@ -193,6 +364,7 @@ function renderInline(
   colors: ThemeColors,
   baseKey: number,
   hl?: { query: string; active: boolean },
+  trailingNode?: React.ReactNode,
 ): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   let i = 0;
@@ -329,6 +501,9 @@ function renderInline(
         }
     }
   }
+  if (trailingNode) {
+    out.push(trailingNode);
+  }
   return out;
 }
 
@@ -345,6 +520,82 @@ function findClose(children: TokenNode[], from: number, closeType: string): numb
     }
   }
   return -1;
+}
+
+/**
+ * Renders nested markdown-it bullet or ordered lists with reliable depth tracking.
+ */
+function renderList(
+  tokens: TokenNode[],
+  startIndex: number,
+  colors: ThemeColors,
+  hl?: { query: string; active: boolean },
+): { node: React.ReactNode; nextIndex: number } {
+  const isOrdered = tokens[startIndex].type === 'ordered_list_open';
+  const closeType = isOrdered ? 'ordered_list_close' : 'bullet_list_close';
+  const openType = tokens[startIndex].type;
+  const items: React.ReactNode[] = [];
+  let depth = 1;
+  let j = startIndex + 1;
+  let counter = 0;
+
+  while (j < tokens.length && depth > 0) {
+    const t = tokens[j];
+    if (t.type === openType) {
+      depth++;
+      j++;
+      continue;
+    }
+    if (t.type === closeType) {
+      depth--;
+      if (depth === 0) break;
+      j++;
+      continue;
+    }
+    if (t.type === 'list_item_open' && depth === 1) {
+      counter++;
+      let itemDepth = 1;
+      let k = j + 1;
+      const inlineTokens: TokenNode[] = [];
+      while (k < tokens.length && itemDepth > 0) {
+        if (tokens[k].type === 'list_item_open') itemDepth++;
+        else if (tokens[k].type === 'list_item_close') {
+          itemDepth--;
+          if (itemDepth === 0) break;
+        } else if (tokens[k].type === 'inline' && itemDepth === 1) {
+          inlineTokens.push(tokens[k]);
+        }
+        k++;
+      }
+
+      items.push(
+        <View key={j} style={styles.listItem}>
+          <Text style={[styles.bullet, { color: colors.textTertiary }]}>
+            {isOrdered ? `${counter}.` : '•'}
+          </Text>
+          <View style={styles.listTextContainer}>
+            {inlineTokens.map((inlineTok, idx) => (
+              <Text key={idx} style={[styles.listText, { color: colors.textPrimary }]}>
+                {renderInline(inlineTok.children ?? [], colors, j * 100 + idx, hl)}
+              </Text>
+            ))}
+          </View>
+        </View>,
+      );
+      j = k + 1;
+      continue;
+    }
+    j++;
+  }
+
+  return {
+    node: (
+      <View key={`list-${startIndex}`} style={styles.list}>
+        {items}
+      </View>
+    ),
+    nextIndex: j,
+  };
 }
 
 /** Renders a markdown-it table as a hairline grid; wide tables scroll. */
@@ -411,14 +662,21 @@ function renderTable(
 }
 
 const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+  },
+  block: {
+    width: '100%',
+  },
   paragraph: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15.5,
+    lineHeight: 23,
+    letterSpacing: -0.15,
+    marginVertical: 3,
   },
   heading: {
     fontWeight: '600',
-    marginTop: 8,
-    lineHeight: 22,
+    letterSpacing: -0.3,
   },
   strong: {
     fontWeight: '700',
@@ -441,60 +699,99 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   codeBlock: {
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 4,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    marginVertical: 6,
+  },
+  codeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  codeLang: {
+    fontFamily: FontFamily.mono,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  copyText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  codeScrollContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   codeText: {
     fontFamily: FontFamily.mono,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   inlineCode: {
     fontFamily: FontFamily.mono,
-    fontSize: 13,
+    fontSize: 13.5,
     paddingHorizontal: 4,
-    paddingVertical: 1,
     borderRadius: 3,
   },
   list: {
-    gap: 2,
-    marginTop: 4,
-    marginBottom: 4,
+    width: '100%',
+    gap: 4,
+    marginVertical: 4,
   },
   listItem: {
+    width: '100%',
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 8,
-    paddingLeft: 8,
+    marginVertical: 2,
+    paddingLeft: 4,
+  },
+  listTextContainer: {
+    flex: 1,
+    minWidth: 0,
   },
   bullet: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     minWidth: 16,
+    textAlign: 'right',
   },
   listText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
+    letterSpacing: -0.15,
   },
   blockquote: {
     borderLeftWidth: 3,
     paddingLeft: 12,
-    marginVertical: 4,
+    marginVertical: 6,
   },
   blockquoteText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22.5,
+    fontStyle: 'italic',
   },
   hr: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 10,
+    marginVertical: 12,
   },
   table: {
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(128,128,128,0.35)',
-    marginVertical: 4,
+    marginVertical: 6,
     minWidth: '100%',
   },
   tableRow: {
@@ -504,13 +801,19 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    fontSize: 12.5,
-    lineHeight: 17,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    fontSize: 13.5,
+    lineHeight: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     minWidth: 90,
   },
   tableCellHeader: {
     fontWeight: '600',
+  },
+  streamingCursor: {
+    fontFamily: FontFamily.mono,
+    fontWeight: '700',
+    fontSize: 15.5,
+    lineHeight: 22,
   },
 });

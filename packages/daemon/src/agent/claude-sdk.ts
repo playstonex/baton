@@ -1,6 +1,7 @@
 import type {
   AgentConfig,
   ChatImage,
+  ModelInfo,
   ParsedEvent,
   SdkAgentAdapter,
   ThinkingConfig,
@@ -9,8 +10,17 @@ import type {
   ServiceTier,
   PermissionMode,
 } from '@baton/shared';
+import { formatModelName } from '@baton/shared/utils';
 import { execSync, execFileSync } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
+
+export const DEFAULT_CLAUDE_MODELS: ModelInfo[] = [
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Thinking)', description: 'Balanced speed and deep reasoning' },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', description: 'Deep reasoning for complex tasks' },
+  { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet', description: 'Hybrid reasoning model' },
+  { id: 'claude-3-5-sonnet-latest', name: 'Claude 3.5 Sonnet', description: 'Fast code intelligence' },
+  { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku', description: 'Fast and lightweight' },
+];
 
 type SdkMessage = {
   type: string;
@@ -374,12 +384,18 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
         .split('\n')
         .map((l) => l.trim())
         .filter((l) => l.length > 0 && !l.startsWith('#') && !l.startsWith('Model'));
-      return models.length > 0
-        ? models
-        : ['claude-sonnet-7-20251119', 'claude-opus-4-20250514', 'claude-haiku-4-20250506'];
+      return models.length > 0 ? models : DEFAULT_CLAUDE_MODELS.map((m) => m.id);
     } catch {
-      return ['claude-sonnet-7-20251119', 'claude-opus-4-20250514', 'claude-haiku-4-20250506'];
+      return DEFAULT_CLAUDE_MODELS.map((m) => m.id);
     }
+  }
+
+  async listModelDetails(): Promise<ModelInfo[]> {
+    const ids = await this.listModels();
+    return ids.map((id) => {
+      const def = DEFAULT_CLAUDE_MODELS.find((m) => m.id === id);
+      return def ?? { id, name: formatModelName(id) };
+    });
   }
 
   // ── Git helpers (run via local git binary) ─────────────────────────

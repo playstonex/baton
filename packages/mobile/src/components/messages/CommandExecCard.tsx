@@ -96,12 +96,26 @@ export const CommandExecCard = React.memo(function CommandExecCard({
   isStreaming,
   colors,
 }: Props) {
-  const hasCommand = command && command.trim().length > 0;
-  const hasOutput = output && output.trim().length > 0;
+  const normCommand =
+    typeof command === 'string'
+      ? command
+      : command != null
+        ? String(command)
+        : '';
+  const normOutput =
+    typeof output === 'string'
+      ? output
+      : output != null
+        ? typeof (output as Record<string, unknown>).output === 'string'
+          ? ((output as Record<string, unknown>).output as string)
+          : String(output)
+        : '';
+  const hasCommand = normCommand.trim().length > 0;
+  const hasOutput = normOutput.trim().length > 0;
 
   if (!hasCommand && !hasOutput && exitCode == null) return null;
 
-  const display = hasCommand ? humanizeCommand(command, isStreaming ?? false) : null;
+  const display = hasCommand ? humanizeCommand(normCommand, isStreaming ?? false) : null;
   const isFailed = exitCode != null && exitCode !== 0;
   const verbText = display
     ? display.verb
@@ -135,7 +149,7 @@ export const CommandExecCard = React.memo(function CommandExecCard({
           numberOfLines={1}
           ellipsizeMode="middle"
         >
-          {truncateCommand(command)}
+          {truncateCommand(normCommand)}
         </Text>
       )}
 
