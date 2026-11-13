@@ -61,6 +61,7 @@ import {
 } from '../../src/components/AgentQuestionCard';
 import { AgentInputAutocomplete } from '../../src/components/AgentInputAutocomplete';
 import { AllFilesDiffView } from '../../src/components/AllFilesDiffView';
+import { SidebarLayout } from '../../src/components/SidebarLayout';
 import type { ChatImage, SessionOwnershipMessage, StatusDetail } from '@baton/shared';
 import { formatModelName, type ModelInfo } from '@baton/shared/utils';
 import {
@@ -1268,6 +1269,7 @@ export default function ChatScreen() {
       anchor,
       options: [
         { label: 'Terminal' },
+        { label: 'Git & Pull Requests' },
         { separator: true },
         { label: 'Review All Changes' },
         { label: 'Commit...' },
@@ -1285,10 +1287,13 @@ export default function ChatScreen() {
         if (index === 0) {
           router.push(`/terminal/${sessionId}`);
         }
-        if (index === 2) {
-          setShowDiffReview(true);
+        if (index === 1) {
+          router.push(`/git/${sessionId}`);
         }
         if (index === 3) {
+          setShowDiffReview(true);
+        }
+        if (index === 4) {
           setPromptModal({
             visible: true,
             title: 'Commit',
@@ -1300,19 +1305,19 @@ export default function ChatScreen() {
             },
           });
         }
-        if (index === 4) {
+        if (index === 5) {
           wsService.send({ type: 'git_push', sessionId });
         }
-        if (index === 5) {
+        if (index === 6) {
           wsService.send({ type: 'git_pull', sessionId });
         }
-        if (index === 6) {
+        if (index === 7) {
           wsService.send({ type: 'git_status_request', sessionId });
         }
-        if (index === 7) {
+        if (index === 8) {
           openGitBranchMenu();
         }
-        if (index === 9) {
+        if (index === 10) {
           if (sessionOwner === 'remote') {
             wsService.send({ type: 'control', action: 'release_session', sessionId });
             setSessionOwner('local');
@@ -1424,72 +1429,131 @@ export default function ChatScreen() {
   }));
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: c.bg }, screenKeyboardInset]}>
-      <View style={styles.headerOverlay}>
-        <BlurView
-          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-          intensity={Glass.blur.nav}
-          style={styles.headerBlur}
-        >
-          <View style={{ height: insets.top }} />
-          <View style={styles.headerContent}>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                styles.headerAction,
-                styles.headerBack,
-                {
-                  opacity: pressed ? 0.55 : 1,
-                  transform: [{ scale: pressed ? 0.9 : 1 }],
-                },
-              ]}
-              hitSlop={4}
-              accessibilityLabel="Back"
+    <SidebarLayout
+      currentSessionId={sessionId}
+      onSelectSession={(id) => {
+        if (id !== sessionId) {
+          router.replace(`/chat/${id}`);
+        }
+      }}
+      onNewChat={() => {
+        router.navigate('/(tabs)');
+      }}
+    >
+      {({ isWide, openSidebar, toggleSidebar }) => (
+        <Animated.View style={[styles.container, { backgroundColor: c.bg }, screenKeyboardInset]}>
+          <View style={styles.headerOverlay}>
+            <BlurView
+              tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+              intensity={Glass.blur.nav}
+              style={styles.headerBlur}
             >
-              <Ionicons
-                name="chevron-back"
-                size={22}
-                color={c.isDark ? Colors.primary[300] : Colors.primary[500]}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => setShowDiffReview(true)}
-              style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
-            >
-              <View style={styles.headerNameRow}>
-                <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
-                  {running && <PulsingDot color={statusColor} />}
-                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <View style={{ height: insets.top }} />
+              <View style={styles.headerContent}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                  <Pressable
+                    onPress={isWide ? toggleSidebar : openSidebar}
+                    style={({ pressed }) => [
+                      styles.headerAction,
+                      styles.headerBack,
+                      {
+                        opacity: pressed ? 0.55 : 1,
+                        transform: [{ scale: pressed ? 0.9 : 1 }],
+                      },
+                    ]}
+                    hitSlop={4}
+                    accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
+                  >
+                    <Ionicons
+                      name="reorder-three"
+                      size={26}
+                      color={c.textPrimary}
+                    />
+                  </Pressable>
+                  {!isWide && router.canGoBack() && (
+                    <Pressable
+                      onPress={() => router.back()}
+                      style={({ pressed }) => [
+                        styles.headerAction,
+                        styles.headerBack,
+                        {
+                          opacity: pressed ? 0.55 : 1,
+                          transform: [{ scale: pressed ? 0.9 : 1 }],
+                        },
+                      ]}
+                      hitSlop={4}
+                      accessibilityLabel="Back"
+                    >
+                      <Ionicons
+                        name="chevron-back"
+                        size={22}
+                        color={c.isDark ? Colors.primary[300] : Colors.primary[500]}
+                      />
+                    </Pressable>
+                  )}
                 </View>
-                <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
-                  {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
-                </Text>
-              </View>
-              <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
-                {!wsConnected ? (
-                  <Text style={{ color: Colors.warning[400] }}>Reconnecting…</Text>
-                ) : activity ? (
-                  <Text style={{ color: activityToneColor }}>{activity.text}</Text>
-                ) : (
-                  <>
-                    {currentBranch ? (
-                      <Text style={styles.headerMono}>{currentBranch + '  \u2022  '}</Text>
-                    ) : null}
-                    {agentStatus === 'unknown' ? 'connecting' : agentStatus.replace('_', ' ')}
-                  </>
-                )}
-                {contextFraction > 0.01
-                  ? `  \u2022  ${Math.round(contextFraction * 100)}%`
-                  : ''}
-              </Text>
-            </Pressable>
+                <Pressable
+                  onPress={() => setShowDiffReview(true)}
+                  style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View style={styles.headerNameRow}>
+                    <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
+                      {running && <PulsingDot color={statusColor} />}
+                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                    </View>
+                    <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
+                      {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
+                    {!wsConnected ? (
+                      <Text style={{ color: Colors.warning[400] }}>Reconnecting…</Text>
+                    ) : activity ? (
+                      <Text style={{ color: activityToneColor }}>{activity.text}</Text>
+                    ) : (
+                      <>
+                        {currentBranch ? (
+                          <Text style={styles.headerMono}>{currentBranch + '  \u2022  '}</Text>
+                        ) : null}
+                        {agentStatus === 'unknown' ? 'connecting' : agentStatus.replace('_', ' ')}
+                      </>
+                    )}
+                    {contextFraction > 0.01
+                      ? `  \u2022  ${Math.round(contextFraction * 100)}%`
+                      : ''}
+                  </Text>
+                </Pressable>
 
-            {/* iOS 26 merged button group — one chrome capsule, hairline lenses. */}
-            <GlassCapsule c={c} style={styles.headerGroup} contentStyle={styles.headerGroupContent}>
-              <Pressable
-                onPress={() => {
-                  setFindOpen(true);
-                }}
+                {/* iOS 26 merged button group — one chrome capsule, hairline lenses. */}
+                <GlassCapsule c={c} style={styles.headerGroup} contentStyle={styles.headerGroupContent}>
+                  <Pressable
+                    onPress={() => router.navigate('/(tabs)')}
+                    style={({ pressed }) => [
+                      styles.headerGroupBtn,
+                      {
+                        opacity: pressed ? 0.55 : 1,
+                        transform: [{ scale: pressed ? 0.9 : 1 }],
+                      },
+                    ]}
+                    hitSlop={4}
+                    accessibilityLabel="New chat"
+                  >
+                    <Ionicons name="create-outline" size={16} color={c.textSecondary} />
+                  </Pressable>
+                  <View
+                    style={[
+                      styles.groupDivider,
+                      {
+                        backgroundColor: c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                      },
+                    ]}
+                  />
+                  <Pressable
+                    onPress={() => {
+                      setFindOpen(true);
+                    }}
                 style={({ pressed }) => [
                   styles.headerGroupBtn,
                   {
@@ -1678,6 +1742,9 @@ export default function ChatScreen() {
               {
                 paddingTop: insets.top + HEADER_HEIGHT,
                 paddingBottom: insets.bottom + 140,
+                maxWidth: 720,
+                width: '100%',
+                alignSelf: 'center',
               },
             ]}
             renderItem={renderGroupedItem}
@@ -1843,7 +1910,7 @@ export default function ChatScreen() {
         </Animated.View>
       )}
 
-      <Animated.View style={composerStyle}>
+      <Animated.View style={[composerStyle, { maxWidth: 720, width: '100%', alignSelf: 'center' }]}>
         {autocomplete && (
           <AgentInputAutocomplete
             type={autocomplete.type}
@@ -2319,7 +2386,9 @@ export default function ChatScreen() {
           wsService.send({ type: 'git_status_request', sessionId });
         }}
       />
-    </Animated.View>
+        </Animated.View>
+      )}
+    </SidebarLayout>
   );
 }
 

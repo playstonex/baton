@@ -200,23 +200,16 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const router = useRouter();
   const c = useThemeColors();
 
   return (
     <View style={{ flex: 1 }}>
       <Tabs
-        tabBar={(props) => <FloatingTabBar {...props} />}
+        tabBar={() => null}
         screenOptions={{
           headerTransparent: true,
-          tabBarStyle: {
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'transparent',
-            borderTopWidth: 0,
-            elevation: 0,
-          },
+          tabBarStyle: { display: 'none' },
           headerBackground: () => (
             <BlurView
               tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
@@ -243,22 +236,42 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Dashboard',
-            tabBarLabel: 'Agents',
+            headerShown: false,
+            title: 'Chat',
           }}
         />
         <Tabs.Screen
           name="settings"
           options={{
             title: 'Settings',
-            tabBarLabel: 'Settings',
+            headerShown: true,
+            headerLeft: () => (
+              <Pressable
+                onPress={() => router.navigate('/(tabs)')}
+                hitSlop={8}
+                style={{ paddingLeft: Spacing.sm }}
+                accessibilityLabel="Back to chat"
+              >
+                <Ionicons name="chevron-back" size={24} color={c.textPrimary} />
+              </Pressable>
+            ),
           }}
         />
         <Tabs.Screen
           name="pipelines"
           options={{
             title: 'Pipelines',
-            href: null, // Hidden from bottom tab bar, accessible via router.push('/pipelines')
+            headerShown: true,
+            headerLeft: () => (
+              <Pressable
+                onPress={() => router.navigate('/(tabs)')}
+                hitSlop={8}
+                style={{ paddingLeft: Spacing.sm }}
+                accessibilityLabel="Back to chat"
+              >
+                <Ionicons name="chevron-back" size={24} color={c.textPrimary} />
+              </Pressable>
+            ),
           }}
         />
       </Tabs>
