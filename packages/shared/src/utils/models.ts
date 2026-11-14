@@ -33,6 +33,34 @@ export const KNOWN_MODELS: Record<
     compactName: 'Gemini 3.8 Flash',
     description: 'Gemini 3.8 Flash',
   },
+  'gemini-3.8-flash-tiered': {
+    name: 'Gemini 3.8 Flash (Tiered)',
+    compactName: 'Gemini 3.8 Flash',
+  },
+  'gemini-3.5-flash-lite': {
+    name: 'Gemini 3.5 Flash Lite',
+    compactName: 'Gemini 3.5 Flash',
+  },
+  'gemini-3.1-flash-lite': {
+    name: 'Gemini 3.1 Flash Lite',
+    compactName: 'Gemini 3.1 Flash',
+  },
+  'gemini-3.1-flash-image': {
+    name: 'Gemini 3.1 Flash Image',
+    compactName: 'Gemini 3.1 Image',
+  },
+  'gemini-3-flash': {
+    name: 'Gemini 3 Flash',
+    compactName: 'Gemini 3 Flash',
+  },
+  'gemini-2.5-flash': {
+    name: 'Gemini 2.5 Flash',
+    compactName: 'Gemini 2.5 Flash',
+  },
+  'gemini-2.5-flash-lite': {
+    name: 'Gemini 2.5 Flash Lite',
+    compactName: 'Gemini 2.5 Flash',
+  },
   'claude-sonnet-4-6': {
     name: 'Claude Sonnet 4.6 (Thinking)',
     compactName: 'Claude Sonnet 4.6',
@@ -211,28 +239,38 @@ export function formatModelName(
     return known.name;
   }
 
-  // 3. Handle provider-prefixed IDs: "opencode/deepseek-v4.1-flash-free", "amazon-bedrock/anthropic.claude-sonnet-4-6"
+  // 3. Handle provider-prefixed IDs (e.g. "opencode/deepseek-v4.1", "magpie/antigravity/gemini-3.8-flash")
   if (trimmed.includes('/')) {
-    const [provider, modelPart] = trimmed.split('/', 2);
-    const subKnown = KNOWN_MODELS[modelPart];
-    if (subKnown) {
-      return options?.compact
-        ? (subKnown.compactName ?? subKnown.name)
-        : `${subKnown.name} (${provider})`;
-    }
-    const cleanModel = modelPart
+    const parts = trimmed.split('/');
+    const provider = parts[0];
+    const subCategory = parts.length > 2 ? parts[1] : undefined;
+    const leaf = parts[parts.length - 1];
+
+    const cleanLeaf = leaf
       .replace(/^anthropic\./i, '')
       .replace(/^openai\./i, '')
       .replace(/^google\./i, '')
       .replace(/:0$/i, '');
-    const cleanKnown = KNOWN_MODELS[cleanModel];
-    if (cleanKnown) {
-      return options?.compact
-        ? (cleanKnown.compactName ?? cleanKnown.name)
-        : `${cleanKnown.name} (${provider})`;
+
+    const knownMatch =
+      KNOWN_MODELS[trimmed] ??
+      KNOWN_MODELS[parts.slice(1).join('/')] ??
+      KNOWN_MODELS[cleanLeaf] ??
+      KNOWN_MODELS[leaf];
+
+    const baseName = knownMatch
+      ? options?.compact && knownMatch.compactName
+        ? knownMatch.compactName
+        : knownMatch.name
+      : formatFallbackModelName(cleanLeaf, options?.compact);
+
+    const categoryPrefix =
+      subCategory && subCategory !== 'antigravity' ? `${subCategory.toUpperCase()}: ` : '';
+
+    if (options?.compact) {
+      return `${categoryPrefix}${baseName}`;
     }
-    const fallbackFormatted = formatFallbackModelName(cleanModel, options?.compact);
-    return options?.compact ? fallbackFormatted : `${fallbackFormatted} (${provider})`;
+    return `${categoryPrefix}${baseName} (${provider})`;
   }
 
   // 4. Intelligent generic heuristic for custom / unknown model strings:

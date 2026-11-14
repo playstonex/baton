@@ -6,6 +6,7 @@ import { Alert, Platform, View, ActivityIndicator, LogBox } from 'react-native';
 LogBox.ignoreAllLogs(true);
 import { useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { useFonts } from 'expo-font';
 import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
@@ -187,19 +188,22 @@ export default function RootLayout() {
   if (!hasCompletedOnboarding) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar style={c.isDark ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="onboarding" />
-        </Stack>
+        <SafeAreaProvider>
+          <StatusBar style={c.isDark ? 'light' : 'dark'} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="onboarding" />
+          </Stack>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style={c.isDark ? 'light' : 'dark'} />
-      <SessionNavigationWiring />
-      <Stack
+      <SafeAreaProvider>
+        <StatusBar style={c.isDark ? 'light' : 'dark'} />
+        <SessionNavigationWiring />
+        <Stack
           screenOptions={{
             headerTintColor: c.textPrimary,
             headerTransparent: true,
@@ -280,6 +284,7 @@ export default function RootLayout() {
             }}
           />
         </Stack>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

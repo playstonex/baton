@@ -29,6 +29,10 @@ describe('formatModelName', () => {
     expect(formatModelName('opencode/deepseek-v4.1-flash-free')).toBe(
       'DeepSeek V4.1 Flash (Free) (opencode)',
     );
+    expect(formatModelName('magpie/antigravity/gemini-3.8-flash')).toBe('Gemini 3.8 Flash (magpie)');
+    expect(formatModelName('magpie/auto/claude-sonnet-4-6')).toBe(
+      'AUTO: Claude Sonnet 4.6 (Thinking) (magpie)',
+    );
   });
 
   it('handles null, undefined, or empty gracefully', () => {
