@@ -2,7 +2,6 @@ import {
   StyleSheet,
   Platform,
   TextInput,
-  FlatList,
   Pressable,
   View,
   Text,
@@ -13,7 +12,6 @@ import {
   Clipboard,
   Image,
   Keyboard,
-  LayoutAnimation,
   NativeScrollEvent,
   NativeSyntheticEvent,
   ScrollView,
@@ -30,7 +28,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { LegendList, type LegendListRef } from '@legendapp/list/react-native';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -470,7 +469,7 @@ export default function ChatScreen() {
     onSelect: (i: number) => void;
     anchor?: { x: number; y: number; width: number; height: number };
   } | null>(null);
-  const flatRef = useRef<FlatList>(null);
+  const flatRef = useRef<LegendListRef>(null);
   const inputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const moreBtnRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const modelPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
@@ -676,12 +675,6 @@ export default function ChatScreen() {
   }, [sessionId, addEvent, setStatus, setSessionOwner, clear, attachSession, resolveDelivery]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      requestAnimationFrame(() => flatRef.current?.scrollToEnd({ animated: false }));
-    }
-  }, []);
-
-  useEffect(() => {
     if (errorToast) {
       const t = setTimeout(() => setErrorToast(null), 3000);
       return () => clearTimeout(t);
@@ -695,9 +688,6 @@ export default function ChatScreen() {
       setUnread(0);
     } else if (delta > 0) {
       setUnread((u) => u + delta);
-    }
-    if (messages.length > 0 && isNearBottom) {
-      setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 50);
     }
     if (tokenUsage) {
       const estimatedFraction = Math.min(tokenUsage.total / 200000, 1);
@@ -823,11 +813,11 @@ export default function ChatScreen() {
         g.type === 'message' ? g.msg.id === msgId : g.messages.some((m) => m.id === msgId),
       );
       if (rowIdx >= 0) {
-        try {
-          flatRef.current?.scrollToIndex({ index: rowIdx, viewPosition: 0.3, animated: true });
-        } catch {
-          // index not yet materialized — the next navigation will land it
-        }
+        void flatRef.current
+          ?.scrollToIndex({ index: rowIdx, viewPosition: 0.3, animated: true })
+          .catch(() => {
+            // row not materialized yet — the next navigation will land it
+          });
       }
     }, 120);
   }
@@ -954,11 +944,15 @@ export default function ChatScreen() {
     };
   }, [voiceState, recorder]);
 
+  // The list owns follow-the-tail (maintainScrollAtEnd) and anchoring
+  // (maintainVisibleContentPosition); this only drives the jump-to-latest pill.
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
     setIsNearBottom(distanceFromBottom < SCROLL_BOTTOM_THRESHOLD);
   }, []);
+
+  const listExtraData = useMemo(() => ({ running, expandedBursts }), [running, expandedBursts]);
 
   function loadEarlier() {
     setVisibleCount((v) => Math.min(v + PAGE_SIZE, messages.length));
@@ -1389,43 +1383,75 @@ export default function ChatScreen() {
         ? 'Auto'
         : THINKING_LEVEL_SHORT[thinkingLevel];
 
-  // Morph the composer action slot (send ↔ stop ↔ steer) the native way —
-  // fires only on state boundaries, not per keystroke.
-  useEffect(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [running, hasInput]);
+  // Row handlers live behind a ref so the object identity is stable; memoized
+  // rows then skip re-rendering while a neighbouring message streams.
+  const rowActionsLatest = {
+    showMessageActions,
+    answerQuestion,
+    approveAction,
+    rejectAction,
+    retrySend,
+    toggleBurst,
+    openReview: () => setShowDiffReview(true),
+  };
+  const rowActionsRef = useRef(rowActionsLatest);
+  rowActionsRef.current = rowActionsLatest;
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      showMessageActions: (m) => rowActionsRef.current.showMessageActions(m),
+      answerQuestion: (a) => rowActionsRef.current.answerQuestion(a),
+      approveAction: (id) => rowActionsRef.current.approveAction(id),
+      rejectAction: (id) => rowActionsRef.current.rejectAction(id),
+      retrySend: (m) => rowActionsRef.current.retrySend(m),
+      toggleBurst: (id) => rowActionsRef.current.toggleBurst(id),
+      openReview: () => rowActionsRef.current.openReview(),
+    }),
+    [],
+  );
 
-  function renderGroupedItem({ item, index }: { item: GroupedItem; index: number }) {
-    if (item.type === 'burst') {
-      const isStreaming = running && index === groupedData.length - 1;
+  const lastGroupedIndex = groupedData.length - 1;
+  const renderGroupedItem = useCallback(
+    ({ item, index }: { item: GroupedItem; index: number }) => {
+      if (item.type === 'burst') {
+        return (
+          <View style={styles.listRow}>
+            <BurstRow
+              burst={item}
+              sessionId={sessionId}
+              colors={c}
+              isStreaming={running && index === lastGroupedIndex}
+              isExpanded={expandedBursts.has(item.id)}
+              actions={rowActions}
+              findQuery={findOpen ? findQuery : ''}
+              findActiveMsgId={findActiveMsgId}
+            />
+          </View>
+        );
+      }
       return (
-        <ToolBurstRenderer
-          burst={item}
-          sessionId={sessionId}
-          colors={c}
-          isStreaming={isStreaming}
-          isExpanded={expandedBursts.has(item.id)}
-          onToggle={() => toggleBurst(item.id)}
-          onReview={() => setShowDiffReview(true)}
-          findQuery={findOpen ? findQuery : ''}
-          findActiveMsgId={findActiveMsgId}
-        />
+        <View style={styles.listRow}>
+          <MessageRow
+            msg={item.msg}
+            colors={c}
+            actions={rowActions}
+            findQuery={findOpen ? findQuery : ''}
+            findActive={item.msg.id === findActiveMsgId}
+          />
+        </View>
       );
-    }
-    return (
-      <MessageBubble
-        msg={item.msg}
-        colors={c}
-        onLongPress={() => showMessageActions(item.msg)}
-        onAnswerQuestion={answerQuestion}
-        onApprovePermission={() => approveAction(item.msg.meta?.requestId as string | undefined)}
-        onRejectPermission={() => rejectAction(item.msg.meta?.requestId as string | undefined)}
-        onRetry={() => retrySend(item.msg)}
-        findQuery={findOpen ? findQuery : ''}
-        findActive={item.msg.id === findActiveMsgId}
-      />
-    );
-  }
+    },
+    [
+      sessionId,
+      c,
+      running,
+      lastGroupedIndex,
+      expandedBursts,
+      rowActions,
+      findOpen,
+      findQuery,
+      findActiveMsgId,
+    ],
+  );
 
   // Keyboard tracking via RN Keyboard events driving a shared value (the
   // keyboardLayoutGuide equivalent): the animated bottom inset lives on the
@@ -1742,7 +1768,7 @@ export default function ChatScreen() {
         </View>
       ) : (
         <View style={styles.listContainer}>
-          <FlatList
+          <LegendList
             ref={flatRef}
             data={groupedData}
             keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
@@ -1755,14 +1781,17 @@ export default function ChatScreen() {
               },
             ]}
             renderItem={renderGroupedItem}
-            extraData={[running, expandedBursts]}
+            extraData={listExtraData}
+            estimatedItemSize={90}
+            initialScrollAtEnd
+            maintainScrollAtEnd={{ animated: true }}
+            maintainScrollAtEndThreshold={0.15}
+            maintainVisibleContentPosition
+            alignItemsAtEnd
             onScroll={handleScroll}
             scrollEventThrottle={16}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
-            maxToRenderPerBatch={10}
-            windowSize={7}
-            removeClippedSubviews={false}
             ListHeaderComponent={
               hasMore ? (
                 <Pressable
@@ -2399,6 +2428,81 @@ export default function ChatScreen() {
   );
 }
 
+interface RowActions {
+  showMessageActions: (msg: ChatMessage) => void;
+  answerQuestion: (answer: string) => void;
+  approveAction: (requestId?: string) => void;
+  rejectAction: (requestId?: string) => void;
+  retrySend: (msg: ChatMessage) => void;
+  toggleBurst: (burstId: string) => void;
+  openReview: () => void;
+}
+
+const MessageRow = React.memo(function MessageRow({
+  msg,
+  colors,
+  actions,
+  findQuery,
+  findActive,
+}: {
+  msg: ChatMessage;
+  colors: ThemeColors;
+  actions: RowActions;
+  findQuery: string;
+  findActive: boolean;
+}) {
+  return (
+    <MessageBubble
+      msg={msg}
+      colors={colors}
+      onLongPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        actions.showMessageActions(msg);
+      }}
+      onAnswerQuestion={actions.answerQuestion}
+      onApprovePermission={() => actions.approveAction(msg.meta?.requestId as string | undefined)}
+      onRejectPermission={() => actions.rejectAction(msg.meta?.requestId as string | undefined)}
+      onRetry={() => actions.retrySend(msg)}
+      findQuery={findQuery}
+      findActive={findActive}
+    />
+  );
+});
+
+const BurstRow = React.memo(function BurstRow({
+  burst,
+  sessionId,
+  colors,
+  isStreaming,
+  isExpanded,
+  actions,
+  findQuery,
+  findActiveMsgId,
+}: {
+  burst: { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
+  sessionId?: string;
+  colors: ThemeColors;
+  isStreaming: boolean;
+  isExpanded: boolean;
+  actions: RowActions;
+  findQuery: string;
+  findActiveMsgId?: string | null;
+}) {
+  return (
+    <ToolBurstRenderer
+      burst={burst}
+      sessionId={sessionId}
+      colors={colors}
+      isStreaming={isStreaming}
+      isExpanded={isExpanded}
+      onToggle={() => actions.toggleBurst(burst.id)}
+      onReview={actions.openReview}
+      findQuery={findQuery}
+      findActiveMsgId={findActiveMsgId}
+    />
+  );
+});
+
 function ToolBurstRenderer({
   burst,
   sessionId,
@@ -2587,7 +2691,7 @@ function MessageBubble({
       <Pressable
         onLongPress={onLongPress}
         delayLongPress={300}
-        style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}
+        style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
       >
         <View style={styles.userRow}>
           <View
@@ -2595,7 +2699,6 @@ function MessageBubble({
               styles.userBubble,
               {
                 backgroundColor: c.isDark ? '#262830' : '#ebedf2',
-                borderColor: c.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
                 opacity: msg.delivery === 'pending' ? 0.55 : 1,
               },
             ]}
@@ -3059,21 +3162,17 @@ const styles = StyleSheet.create({
   messageList: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.xl + 16,
-    gap: 12,
   },
+  /** Per-row spacing (a list container `gap` isn't honoured by virtualised lists). */
+  listRow: { paddingBottom: 12 },
   userRow: { alignItems: 'flex-end', marginVertical: 2 },
   userBubble: {
     maxWidth: '82%',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
+    borderBottomRightRadius: 6,
     borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#08090a',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 1,
   },
   userText: { ...MessageText.body },
   userTimestamp: {
