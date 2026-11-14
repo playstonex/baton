@@ -66,6 +66,24 @@ export const useChatStore = create<ChatState>()((set) => ({
           if (last?.role === 'user' && last?.content === event.content) {
             return state;
           }
+        } else {
+          // Streaming providers emit assistant text in arbitrary fragments —
+          // an ACP agent_message_chunk carries whatever the agent flushed — so
+          // one reply arrives as many chat_message events. Append to the
+          // trailing assistant bubble, the same way raw_output coalesces
+          // below; a message per event shatters one reply into dozens.
+          const messages = [...state.messages];
+          const last = messages[messages.length - 1];
+          if (last?.eventType === 'chat_message' && last.role === event.role) {
+            messages[messages.length - 1] = {
+              ...last,
+              content: last.content + event.content,
+            };
+            return {
+              messages:
+                messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages,
+            };
+          }
         }
         return {
           messages: push(state.messages, [

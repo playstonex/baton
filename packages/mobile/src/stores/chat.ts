@@ -353,10 +353,46 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             ],
           };
         }
+        // Streaming providers emit assistant text in arbitrary fragments: an
+        // ACP agent_message_chunk carries whatever the agent flushed, so one
+        // reply arrives as "个主", "题提交，或", "者先", … — one event each.
+        // Appending them to the active assistant message rebuilds the
+        // sentence; a message per event shattered one reply into dozens of
+        // bubbles. raw_output and thinking already coalesce this way.
+        if (itemId && state._itemIdToMsgId.has(itemId)) {
+          const existingId = state._itemIdToMsgId.get(itemId)!;
+          const msgs = [...state.messages];
+          const idx = msgs.findIndex((m) => m.id === existingId);
+          if (idx >= 0) {
+            msgs[idx] = { ...msgs[idx], content: msgs[idx].content + event.content };
+            return { messages: msgs };
+          }
+        }
+
+        const streamingId = state._streamingMsgIdByType.get('chat_message');
+        if (streamingId) {
+          const last = state.messages[state.messages.length - 1];
+          // Merge only while the target is still the trailing message of this
+          // turn. Anything in between — a tool card, a status note, the next
+          // user prompt — means the agent moved on, so the text starts a new
+          // block instead of being glued onto a stale bubble.
+          if (last && last.id === streamingId && last.turnId === tid) {
+            const msgs = [...state.messages];
+            msgs[msgs.length - 1] = { ...last, content: last.content + event.content };
+            return { messages: msgs };
+          }
+        }
+
         const newCounter = state._counter + 1;
         const id = `m-${newCounter}`;
+        const updatedItemIdMap = new Map(state._itemIdToMsgId);
+        if (itemId) updatedItemIdMap.set(itemId, id);
+        const updatedStreaming = new Map(state._streamingMsgIdByType);
+        updatedStreaming.set('chat_message', id);
         return {
           _counter: newCounter,
+          _itemIdToMsgId: updatedItemIdMap,
+          _streamingMsgIdByType: updatedStreaming,
           messages: [
             ...state.messages,
             {
