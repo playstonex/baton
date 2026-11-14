@@ -91,6 +91,9 @@ type GroupedItem =
   | { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
 
 const PAGE_SIZE = 40;
+/** Reading-column cap shared by the transcript and the composer, so both stay
+ * on the same measure on iPad / Duo-unfolded widths. */
+const CONTENT_MAX_WIDTH = 720;
 const TOOL_BURST_THRESHOLD = 2;
 const SCROLL_BOTTOM_THRESHOLD = 120;
 
@@ -1743,14 +1746,12 @@ export default function ChatScreen() {
             ref={flatRef}
             data={groupedData}
             keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
+            style={styles.transcriptColumn}
             contentContainerStyle={[
               styles.messageList,
               {
                 paddingTop: insets.top + HEADER_HEIGHT,
                 paddingBottom: insets.bottom + 140,
-                maxWidth: 720,
-                width: '100%',
-                alignSelf: 'center',
               },
             ]}
             renderItem={renderGroupedItem}
@@ -1916,7 +1917,7 @@ export default function ChatScreen() {
         </Animated.View>
       )}
 
-      <Animated.View style={[composerStyle, { maxWidth: 720, width: '100%', alignSelf: 'center' }]}>
+      <Animated.View style={[composerStyle, styles.contentColumn]}>
         {autocomplete && (
           <AgentInputAutocomplete
             type={autocomplete.type}
@@ -3039,6 +3040,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  /** Centering a reading column belongs on the scroll view itself. Putting
+   * maxWidth/alignSelf on contentContainerStyle leaves the result dependent on
+   * how the content view's width gets resolved, which degrades to left-aligned
+   * on wide layouts. */
+  transcriptColumn: {
+    flex: 1,
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  /** Same measure as the transcript, for siblings outside the scroll view. */
+  contentColumn: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
   messageList: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.xl + 16,
