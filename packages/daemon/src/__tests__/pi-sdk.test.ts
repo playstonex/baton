@@ -30,9 +30,12 @@ describe('PiSdkAdapter event mapping', () => {
       { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] } },
       { type: 'agent_end', messages: [] },
     ]);
-    expect(events.map((e) => e.type)).toEqual(['status_change', 'chat_message', 'raw_output', 'status_change']);
+    // Assistant text reaches exactly one event type. AgentManager mirrors
+    // chat_message into displayHistory and the store's output table, so a
+    // paired raw_output recorded and streamed the same reply twice.
+    expect(events.map((e) => e.type)).toEqual(['status_change', 'chat_message', 'status_change']);
     expect(events[1]).toMatchObject({ role: 'assistant', content: 'Hi' });
-    expect(events[3]).toMatchObject({ status: 'idle' });
+    expect(events[2]).toMatchObject({ status: 'idle' });
   });
 
   it('maps tool execution and failed responses', () => {

@@ -130,6 +130,59 @@ describe('consumeAcpLines (framing + mapping)', () => {
       { type: 'error', message: 'boom', timestamp: h.events[0].timestamp },
     ]);
   });
+
+  /**
+   * AgentManager mirrors both chat_message and raw_output into displayHistory
+   * and the session store's output table, so emitting both for one chunk
+   * duplicated every reply on disk and in the terminal stream.
+   */
+  describe('assistant text reaches exactly one event type', () => {
+    function chatHarness(chatAsChatMessage: boolean) {
+      let buf = '';
+      const events: ParsedEvent[] = [];
+      const feed = (chunk: string) =>
+        consumeAcpLines(
+          chunk,
+          () => buf,
+          (r) => {
+            buf = r;
+          },
+          (ev) => events.push(ev),
+          { chatAsChatMessage },
+        );
+      return { events, feed };
+    }
+
+    const UPDATE =
+      '{"jsonrpc":"2.0","method":"session/update","params":{"update":{"sessionUpdate":"agent_message_chunk","content":{"text":"hi"}}}}\n';
+    const NOTIFICATION =
+      '{"jsonrpc":"2.0","method":"session/notification","params":{"update":{"type":"AgentMessageChunk","content":"hi"}}}\n';
+
+    it('emits chat_message only in chat mode (session/update)', () => {
+      const h = chatHarness(true);
+      h.feed(UPDATE);
+      expect(h.events.map((e) => e.type)).toEqual(['chat_message']);
+      expect((h.events[0] as { content: string }).content).toBe('hi');
+    });
+
+    it('emits raw_output only in PTY mode (session/update)', () => {
+      const h = chatHarness(false);
+      h.feed(UPDATE);
+      expect(h.events.map((e) => e.type)).toEqual(['raw_output']);
+    });
+
+    it('emits chat_message only in chat mode (session/notification)', () => {
+      const h = chatHarness(true);
+      h.feed(NOTIFICATION);
+      expect(h.events.map((e) => e.type)).toEqual(['chat_message']);
+    });
+
+    it('emits raw_output only in PTY mode (session/notification)', () => {
+      const h = chatHarness(false);
+      h.feed(NOTIFICATION);
+      expect(h.events.map((e) => e.type)).toEqual(['raw_output']);
+    });
+  });
 });
 
 describe('GenericAcpSdkAdapter end-to-end (stub agent)', () => {

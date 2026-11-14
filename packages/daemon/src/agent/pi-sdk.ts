@@ -209,8 +209,10 @@ export class PiSdkAdapter implements SdkAgentAdapter {
         if (message?.role === 'assistant') {
           const text = piMessageText(message);
           if (text) {
+            // chat_message only: AgentManager mirrors it into displayHistory
+            // and the store's output table, so a paired raw_output stored and
+            // streamed the same text twice.
             emit({ type: 'chat_message', role: 'assistant', content: text, timestamp: now });
-            emit({ type: 'raw_output', content: text, timestamp: now });
           }
         }
         break;

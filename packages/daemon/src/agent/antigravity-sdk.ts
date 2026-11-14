@@ -331,13 +331,15 @@ export class AntigravitySdkAdapter implements SdkAgentAdapter {
           const content = update.content as { text?: string } | undefined;
           const text = content?.text ?? '';
           if (text) {
+            // chat_message only — AgentManager mirrors it into displayHistory
+            // and the store's output table, so a paired raw_output duplicated
+            // every reply on disk and in the terminal stream.
             this.onEvent?.({
               type: 'chat_message',
               role: 'assistant',
               content: text,
               timestamp: now,
             });
-            this.onEvent?.({ type: 'raw_output', content: text, timestamp: now });
             this.onEvent?.({ type: 'status_change', status: 'executing', timestamp: now });
           }
           break;

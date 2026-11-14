@@ -7,9 +7,34 @@ export interface CoalescerOptions {
   onFlush: (event: ParsedEvent) => void;
 }
 
+/** Event types whose content streams in micro-chunks and can be merged. */
+type CoalescableType = 'raw_output' | 'thinking' | 'chat_message';
+
 /**
- * AgentStreamCoalescer merges high-frequency micro-chunks of raw_output or thinking
- * within a 60ms window while preserving 0ms immediate delivery for the leading chunk.
+ * Assistant prose only, with the content narrowed out of the union. A user or
+ * system chat_message is a discrete utterance and must never be merged into a
+ * neighbour.
+ */
+function coalescable(event: ParsedEvent): { type: CoalescableType; content: string } | null {
+  if (event.type === 'raw_output' || event.type === 'thinking') {
+    return { type: event.type, content: event.content };
+  }
+  if (event.type === 'chat_message' && event.role === 'assistant') {
+    return { type: 'chat_message', content: event.content };
+  }
+  return null;
+}
+
+/**
+ * AgentStreamCoalescer merges high-frequency micro-chunks of assistant text
+ * (raw_output, thinking, chat_message) within a 60ms window while preserving
+ * 0ms immediate delivery for the leading chunk.
+ *
+ * chat_message belongs in this set because streaming providers size their
+ * chunks arbitrarily: an ACP agent_message_chunk often carries one or two
+ * characters. Leaving it out also defeated the coalescer for the other types,
+ * since an interleaved chat_message took the "any other event" path and
+ * flushed the buffer on every chunk.
  *
  * Any non-coalescable event (tool_use, permission_request, status_change, etc.)
  * immediately flushes any buffered text first to maintain strict chronological ordering.
@@ -19,7 +44,7 @@ export class AgentStreamCoalescer {
   private readonly onFlush: (event: ParsedEvent) => void;
 
   private buffer = '';
-  private bufferType: 'raw_output' | 'thinking' | null = null;
+  private bufferType: CoalescableType | null = null;
   private bufferTimestamp = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private leadingSent = false;
@@ -30,13 +55,14 @@ export class AgentStreamCoalescer {
   }
 
   push(event: ParsedEvent): void {
-    if (event.type === 'raw_output' || event.type === 'thinking') {
+    const text = coalescable(event);
+    if (text) {
       // If we already had buffered text of a DIFFERENT type, flush it first
-      if (this.bufferType && this.bufferType !== event.type) {
+      if (this.bufferType && this.bufferType !== text.type) {
         this.flush();
       }
 
-      this.bufferType = event.type;
+      this.bufferType = text.type;
       this.bufferTimestamp = event.timestamp || Date.now();
 
       // Leading edge: if no timer is active and leading has not been sent,
@@ -49,7 +75,7 @@ export class AgentStreamCoalescer {
       }
 
       // Trailing edge: buffer subsequent chunks within the window
-      this.buffer += event.content;
+      this.buffer += text.content;
       if (!this.timer) {
         this.scheduleFlush();
       }
@@ -67,16 +93,18 @@ export class AgentStreamCoalescer {
       this.timer = null;
     }
 
-    if (this.buffer.length > 0 && this.bufferType) {
-      const flushedEvent: ParsedEvent = {
-        type: this.bufferType,
-        content: this.buffer,
-        timestamp: this.bufferTimestamp,
-      };
+    const type = this.bufferType;
+    if (this.buffer.length > 0 && type) {
+      const content = this.buffer;
+      const timestamp = this.bufferTimestamp;
       this.buffer = '';
       this.bufferType = null;
       this.leadingSent = false;
-      this.onFlush(flushedEvent);
+      this.onFlush(
+        type === 'chat_message'
+          ? { type, role: 'assistant', content, timestamp }
+          : { type, content, timestamp },
+      );
     } else {
       this.buffer = '';
       this.bufferType = null;

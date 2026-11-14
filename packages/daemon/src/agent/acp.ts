@@ -453,6 +453,27 @@ interface ConsumeOptions {
 }
 
 /**
+ * Assistant prose reaches exactly one event type, never both.
+ *
+ * AgentManager mirrors chat_message AND raw_output into displayHistory and the
+ * session store's output table, so emitting both for one chunk duplicated every
+ * reply: twice in the terminal stream, twice on disk, and twice in any client
+ * that renders both kinds.
+ */
+function emitAssistantText(
+  emit: (ev: ParsedEvent) => void,
+  content: string,
+  timestamp: number,
+  asChatMessage: boolean | undefined,
+): void {
+  emit(
+    asChatMessage
+      ? { type: 'chat_message', role: 'assistant', content, timestamp }
+      : { type: 'raw_output', content, timestamp },
+  );
+}
+
+/**
  * Feed one stdout chunk through the line buffer and emit events for each
  * complete JSON-RPC message. PTY chunks are not line-aligned, so a partial
  * trailing line is carried over via the get/set accessors.
@@ -523,10 +544,7 @@ export function consumeAcpLines(
       const kind = update.sessionUpdate as string | undefined;
       const text = (update.content as { text?: string } | undefined)?.text ?? '';
       if (kind === 'agent_message_chunk') {
-        if (opts.chatAsChatMessage) {
-          emit({ type: 'chat_message', role: 'assistant', content: text, timestamp: now });
-        }
-        emit({ type: 'raw_output', content: text, timestamp: now });
+        emitAssistantText(emit, text, now, opts.chatAsChatMessage);
       } else if (kind === 'tool_call') {
         emit({
           type: 'tool_use',
@@ -548,10 +566,7 @@ export function consumeAcpLines(
       switch (update.type) {
         case 'AgentMessageChunk': {
           const content = (update.content as string) ?? '';
-          if (opts.chatAsChatMessage) {
-            emit({ type: 'chat_message', role: 'assistant', content, timestamp: now });
-          }
-          emit({ type: 'raw_output', content, timestamp: now });
+          emitAssistantText(emit, content, now, opts.chatAsChatMessage);
           break;
         }
         case 'ToolCall':
