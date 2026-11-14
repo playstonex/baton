@@ -16,7 +16,8 @@ describe('CodexAdapter', () => {
       projectPath: '/tmp/test',
       args: ['--model', 'gpt-4'],
     });
-    expect(config.command).toBe('codex');
+    // 'codex' from PATH, or the copy bundled with the ChatGPT app.
+    expect(config.command).toMatch(/(^|\/)codex$/);
     expect(config.args).toEqual(['--model', 'gpt-4']);
     expect(config.cwd).toBe('/tmp/test');
   });
@@ -93,12 +94,12 @@ describe('createSdkAdapter factory semantics', () => {
   it('returns null for PTY-only types', async () => {
     const { createSdkAdapter } = await import('../agent/index.js');
     expect(createSdkAdapter('acp')).toBeNull(); // acp resolves via its own per-provider factory
-    // Kiro/Pi are PTY-only — the kiro ACP path died with the
-    // CLI's `acp` subcommand removal.
+    // Kiro is PTY-only here; its chat path is the built-in `acp` provider.
     expect(createSdkAdapter('kiro')).toBeNull();
     expect(createSdkAdapter('kiro-cli')).toBeNull();
     expect(createSdkAdapter('kiro-cli-acp')).toBeNull();
-    expect(createSdkAdapter('pi')).toBeNull();
+    // Pi chats through `pi --mode rpc`.
+    expect(createSdkAdapter('pi')?.agentType).toBe('pi');
   });
 });
 

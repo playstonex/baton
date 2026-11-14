@@ -22,6 +22,7 @@ import { KiroAdapter } from './kiro.js';
 import { AntigravityAdapter } from './antigravity.js';
 import { AntigravitySdkAdapter, antigravitySdkAdapter } from './antigravity-sdk.js';
 import { PiAdapter } from './pi.js';
+import { PiSdkAdapter } from './pi-sdk.js';
 import { OpenCodeAdapter } from './opencode.js';
 import { OpenCodeSdkAdapter, opencodeSdkAdapter } from './opencode-sdk.js';
 import { ReplaySdkAdapter } from './replay-sdk.js';
@@ -67,6 +68,7 @@ const sdkAdapterFactories: Partial<Record<AgentType, () => SdkAgentAdapter>> = {
   codex: () => new CodexSdkAdapter(),
   opencode: () => new OpenCodeSdkAdapter(),
   antigravity: () => new AntigravitySdkAdapter(),
+  pi: () => new PiSdkAdapter(),
   replay: () => new ReplaySdkAdapter(),
   'replay-dev': () => new ReplaySdkAdapter(),
 };
@@ -109,6 +111,7 @@ export function isSdkMode(type: AgentType): boolean {
     type === 'codex' ||
     type === 'opencode' ||
     type === 'antigravity' ||
+    type === 'pi' ||
     type === 'replay' ||
     type === 'replay-dev' ||
     type === 'acp'

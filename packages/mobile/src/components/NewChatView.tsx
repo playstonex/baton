@@ -15,11 +15,12 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { AgentType } from '@baton/shared';
-import { formatModelName } from '@baton/shared';
+import { formatModelName } from '@baton/shared/utils';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useRecentStore } from '../stores/recent';
 import { useAgentStore } from '../stores/agents';
 import { apiFetch } from '../services/api';
+import { wsService } from '../services/websocket';
 import { Typography, Spacing, CornerRadius, Glass, Colors } from '../constants/theme';
 import { DirectoryPicker } from './DirectoryPicker';
 import { PopoverMenu, type MenuOption, type AnchorRect } from './messages/PopoverMenu';
@@ -128,6 +129,7 @@ export function NewChatView({
     anchor: AnchorRect;
   } | null>(null);
 
+  const [startError, setStartError] = useState<string | null>(null);
   const inputRef = useRef<any>(null);
   const modelPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
   const thinkPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
@@ -227,45 +229,54 @@ export function NewChatView({
     if (!promptText && !customPrompt) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    if (!projectPath) {
+      setStartError('Choose a project directory first');
+      return;
+    }
+
     setStarting(true);
+    setStartError(null);
     try {
-      const body: Record<string, any> = {
-        type: selectedAgent,
-        projectPath: projectPath || undefined,
-        initialPrompt: promptText || undefined,
-      };
-
-      // Add model selection if available
-      if (selectedModel) {
-        body.model = selectedModel;
-      }
-
-      // Add thinking configuration
-      if (thinkingMode !== 'none') {
-        body.thinkingMode = thinkingMode;
-        if (thinkingMode === 'level') {
-          body.thinkingLevel = thinkingLevel;
-        }
-      }
-
-      const data = await apiFetch<any>('/api/agents', {
+      const data = await apiFetch<{ sessionId: string }>('/api/agents/start', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify(
+          // Kiro's PTY UI (v3 animation / "Initializing...") isn't parseable; its
+          // `kiro-cli acp` JSON-RPC surface is (provider defined in ~/.baton/acp.json).
+          selectedAgent === 'kiro'
+            ? { agentType: 'acp', acpProvider: 'kiro', projectPath, mode: 'sdk' }
+            : { agentType: selectedAgent, projectPath, mode: 'sdk' },
+        ),
       });
 
-      if (data?.id) {
-        addAgent({
-          id: data.id,
-          type: selectedAgent,
-          projectPath: data.projectPath ?? projectPath,
-          status: 'running',
-          startedAt: new Date().toISOString(),
-          title: promptText ? promptText.slice(0, 40) : undefined,
-        });
-        onStartSession(data.id);
+      const sessionId = data.sessionId;
+      addAgent({
+        id: sessionId,
+        type: selectedAgent,
+        projectPath,
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        title: promptText ? promptText.slice(0, 40) : undefined,
+      });
+
+      // Apply the composer's choices, then deliver the first prompt.
+      if (selectedModel) {
+        wsService.send({ type: 'model_select', sessionId, model: selectedModel });
       }
-    } catch {
-      // Offline or error
+      wsService.send({
+        type: 'thinking_config_select',
+        sessionId,
+        config:
+          thinkingMode === 'level'
+            ? { mode: 'level', level: thinkingLevel }
+            : { mode: thinkingMode },
+      });
+      if (promptText) {
+        wsService.send({ type: 'chat_input', sessionId, content: promptText });
+      }
+      setInput('');
+      onStartSession(sessionId);
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : 'Failed to start session');
     } finally {
       setStarting(false);
     }
@@ -506,6 +517,11 @@ export function NewChatView({
           </Pressable>
         </View>
 
+        {startError ? (
+          <Text style={{ color: Colors.danger[400], fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
+            {startError}
+          </Text>
+        ) : null}
         <View style={styles.composerInnerWrap}>
           <View
             style={[

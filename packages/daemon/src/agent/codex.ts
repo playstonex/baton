@@ -1,7 +1,7 @@
 import type { AgentConfig, ModelInfo, ParsedEvent, SpawnConfig } from '@baton/shared';
 import { BaseAgentAdapter, resumeArgs, extractUuid } from './adapter.js';
 import { stripAnsi } from '../parser/ansi.js';
-import { execSync } from 'node:child_process';
+import { resolveCodexBin } from './codex-bin.js';
 import { DEFAULT_CODEX_MODELS } from './codex-sdk.js';
 
 export class CodexAdapter extends BaseAgentAdapter {
@@ -10,12 +10,7 @@ export class CodexAdapter extends BaseAgentAdapter {
   selectedModel: string | null = null;
 
   detect(): boolean {
-    try {
-      execSync('which codex', { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
+    return resolveCodexBin() !== null;
   }
 
   listModels(): string[] {
@@ -28,7 +23,7 @@ export class CodexAdapter extends BaseAgentAdapter {
 
   buildSpawnConfig(config: AgentConfig): SpawnConfig {
     return {
-      command: 'codex',
+      command: resolveCodexBin() ?? 'codex',
       args: [
         // codex: `resume <id>` continues an exact session, bare `resume` the latest.
         ...resumeArgs({ idFlag: 'resume', latest: ['resume'] }, config.resume),

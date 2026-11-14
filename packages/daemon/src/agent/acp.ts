@@ -72,16 +72,25 @@ function acpProvidersFile(): string {
   return join(home, 'acp.json');
 }
 
-/** Load + validate $BATON_HOME/acp.json. Missing file → empty map. */
+/**
+ * Providers available without any config. acp.json entries with the same name
+ * override these. Kiro's PTY UI (v3 animation / "Initializing...") can't be
+ * parsed, so its `kiro-cli acp` JSON-RPC surface is the supported chat path.
+ */
+export const BUILTIN_ACP_PROVIDERS: Record<string, AcpProviderProfile> = {
+  kiro: { command: 'kiro-cli', args: ['acp', '--trust-all-tools'], label: 'Kiro' },
+};
+
+/** Load + validate $BATON_HOME/acp.json on top of the built-ins. */
 export async function loadAcpProviders(
   filePath = acpProvidersFile(),
 ): Promise<Map<string, AcpProviderProfile>> {
-  const map = new Map<string, AcpProviderProfile>();
+  const map = new Map<string, AcpProviderProfile>(Object.entries(BUILTIN_ACP_PROVIDERS));
   let raw: string;
   try {
     raw = await readFile(filePath, 'utf-8');
   } catch {
-    return map; // no acp.json — no generic providers configured
+    return map; // no acp.json — built-ins only
   }
   let parsed: unknown;
   try {
@@ -188,7 +197,7 @@ export class GenericAcpAdapter extends BaseAgentAdapter {
         jsonrpc: '2.0',
         id: this.msgIdCounter++,
         method: 'session/prompt',
-        params: { sessionId: this.sessionId, content: [{ type: 'text', text }] },
+        params: { sessionId: this.sessionId, prompt: [{ type: 'text', text }] },
       }) + '\n'
     );
   }
@@ -391,7 +400,7 @@ export class GenericAcpSdkAdapter implements SdkAgentAdapter {
         jsonrpc: '2.0',
         id: this.msgIdCounter++,
         method: 'session/prompt',
-        params: { sessionId: this.sessionId, content: [{ type: 'text', text }] },
+        params: { sessionId: this.sessionId, prompt: [{ type: 'text', text }] },
       }) + '\n'
     );
   }
@@ -483,6 +492,11 @@ export function consumeAcpLines(
         emit({ type: 'status_change', status: 'idle', timestamp: now });
         continue;
       }
+      // session/prompt response — the turn is over.
+      if (typeof result?.stopReason === 'string') {
+        emit({ type: 'status_change', status: 'idle', timestamp: now });
+        continue;
+      }
       continue;
     }
 
@@ -497,6 +511,31 @@ export function consumeAcpLines(
         msg.method as string,
         (msg.params ?? {}) as Record<string, unknown>,
       );
+      continue;
+    }
+
+    // Standard ACP stream: `session/update` with `update.sessionUpdate`
+    // (agent_message_chunk / tool_call / tool_call_update / ...). Agents such
+    // as kiro-cli emit this form instead of the legacy `session/notification`.
+    if ('method' in msg && msg.method === 'session/update') {
+      const update = (msg.params as { update?: Record<string, unknown> } | undefined)?.update;
+      if (!update) continue;
+      const kind = update.sessionUpdate as string | undefined;
+      const text = (update.content as { text?: string } | undefined)?.text ?? '';
+      if (kind === 'agent_message_chunk') {
+        if (opts.chatAsChatMessage) {
+          emit({ type: 'chat_message', role: 'assistant', content: text, timestamp: now });
+        }
+        emit({ type: 'raw_output', content: text, timestamp: now });
+      } else if (kind === 'tool_call') {
+        emit({
+          type: 'tool_use',
+          tool: (update.title as string) ?? (update.kind as string) ?? 'unknown',
+          args: (update.rawInput as Record<string, unknown>) ?? {},
+          timestamp: now,
+        });
+        emit({ type: 'status_change', status: 'executing', timestamp: now });
+      }
       continue;
     }
 

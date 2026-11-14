@@ -160,7 +160,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
                         color: opt.destructive
                           ? Colors.danger[400]
                           : opt.selected
-                            ? colors.accentBg
+                            ? Colors.primary[500]
                             : colors.textPrimary,
                         fontWeight: opt.selected ? '600' : '400',
                       },
@@ -170,7 +170,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
                     {opt.label}
                   </Text>
                   {opt.selected && (
-                    <Text style={[styles.checkmark, { color: colors.accentBg }]}>✓</Text>
+                    <Text style={[styles.checkmark, { color: Colors.primary[500] }]}>✓</Text>
                   )}
                 </Pressable>
               );

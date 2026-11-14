@@ -31,8 +31,16 @@ describe('isSafeAcpCommand', () => {
 
 describe('loadAcpProviders', () => {
   let dir: string;
-  it('returns empty for a missing file', async () => {
-    expect(await loadAcpProviders(join(tmpdir(), 'no-such-acp.json'))).toEqual(new Map());
+  it('returns only the built-in providers for a missing file', async () => {
+    const map = await loadAcpProviders(join(tmpdir(), 'no-such-acp.json'));
+    expect([...map.keys()]).toEqual(['kiro']);
+    expect(map.get('kiro')!.args).toEqual(['acp', '--trust-all-tools']);
+  });
+  it('lets acp.json override a built-in provider', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'acp-cfg-'));
+    const file = join(dir, 'acp.json');
+    await writeFile(file, JSON.stringify({ providers: { kiro: { command: 'kiro-cli', args: ['acp'] } } }));
+    expect((await loadAcpProviders(file)).get('kiro')!.args).toEqual(['acp']);
   });
   it('parses valid providers and skips unsafe commands', async () => {
     dir = await mkdtemp(join(tmpdir(), 'acp-cfg-'));
@@ -48,7 +56,7 @@ describe('loadAcpProviders', () => {
       }),
     );
     const map = await loadAcpProviders(file);
-    expect(map.size).toBe(2);
+    expect(map.size).toBe(3); // kiro (built-in) + gemini + nolabel
     expect(map.get('gemini')).toEqual({
       command: 'gemini',
       args: ['--experimental-acp'],
@@ -61,7 +69,7 @@ describe('loadAcpProviders', () => {
     dir = await mkdtemp(join(tmpdir(), 'acp-cfg-'));
     const file = join(dir, 'acp.json');
     await writeFile(file, '{broken');
-    expect((await loadAcpProviders(file)).size).toBe(0);
+    expect([...(await loadAcpProviders(file)).keys()]).toEqual(['kiro']);
   });
 });
 

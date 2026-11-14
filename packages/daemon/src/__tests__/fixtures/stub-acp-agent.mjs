@@ -34,9 +34,9 @@ rl.on('line', (line) => {
       send({ jsonrpc: '2.0', id, result: { sessionId: 'stub-session-1' } });
       break;
     case 'session/prompt': {
-      const text = Array.isArray(params?.content)
-        ? String(params.content[0]?.text ?? '')
-        : '';
+      // Standard ACP uses `prompt`; `content` is accepted for older callers.
+      const blocks = Array.isArray(params?.prompt) ? params.prompt : params?.content;
+      const text = Array.isArray(blocks) ? String(blocks[0]?.text ?? '') : '';
       if (text.startsWith('/ask-permission')) {
         send({
           jsonrpc: '2.0',

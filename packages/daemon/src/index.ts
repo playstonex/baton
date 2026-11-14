@@ -17,6 +17,7 @@ import {
   getAcpPtyAdapter,
   acpProviderAvailable,
 } from './agent/acp.js';
+import { fetchCodexModels } from './agent/codex-bin.js';
 import { Transport } from './transport/index.js';
 import { RelayConnection } from './transport/relay.js';
 import { FileWatcher } from './watcher/index.js';
@@ -460,6 +461,21 @@ export function createDaemon(port = DEFAULT_PORT) {
 
   app.get('/api/agents', (c) => {
     return c.json(agentManager.list());
+  });
+
+  // Default model list for an agent type, used by clients before a session
+  // exists (e.g. the mobile new-chat model picker).
+  app.get('/api/agents/models', async (c) => {
+    const type = c.req.query('type') ?? undefined;
+    // Codex's catalog depends on the signed-in account, so ask codex itself.
+    if (type === 'codex' || type === 'codex-sdk') {
+      const live = await fetchCodexModels();
+      if (live) return c.json({ models: live.map((m) => m.id), modelDetails: live });
+    }
+    return c.json({
+      models: agentManager.getDefaultModelsForAgent(type),
+      modelDetails: agentManager.getDefaultModelDetailsForAgent(type),
+    });
   });
 
   // Persistent session directory — live + past sessions from the store,

@@ -8,10 +8,10 @@ import type {
   AccessMode,
   ServiceTier,
 } from '@baton/shared';
-import { formatModelName } from '@baton/shared/utils';
 import { execSync, execFileSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { isSafeGitRef } from './adapter.js';
+import { resolveCodexBin, parseCodexModels } from './codex-bin.js';
 
 export const DEFAULT_CODEX_MODELS: ModelInfo[] = [
   { id: 'gpt-5-codex', name: 'GPT-5 Codex', description: 'Flagship agentic coding model' },
@@ -130,12 +130,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   detect(): boolean {
-    try {
-      execSync('which codex', { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
+    return resolveCodexBin() !== null;
   }
 
   async startSession(
@@ -162,7 +157,7 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
 
     console.log(`[baton] codex-sdk: spawning codex app-server (cwd=${this.projectPath})`);
 
-    this.process = spawn('codex', ['app-server'], {
+    this.process = spawn(resolveCodexBin() ?? 'codex', ['app-server'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: this.projectPath,
       env,
@@ -291,34 +286,16 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
   }
 
   async listModels(): Promise<string[]> {
-    if (!this.process?.stdin?.writable) return DEFAULT_CODEX_MODELS.map((m) => m.id);
-    try {
-      const result = (await this.sendRequest('model/list', {})) as Record<string, unknown>;
-      const items = ((result?.data ?? result?.models) as Array<Record<string, unknown>>) ?? [];
-      const ids = items.map((m) => (m.id ?? m.name ?? '') as string).filter(Boolean);
-      return ids.length > 0 ? ids : DEFAULT_CODEX_MODELS.map((m) => m.id);
-    } catch (err) {
-      console.error('[baton] codex-sdk: listModels error:', err);
-      return DEFAULT_CODEX_MODELS.map((m) => m.id);
-    }
+    return (await this.listModelDetails()).map((m) => m.id);
   }
 
   async listModelDetails(): Promise<ModelInfo[]> {
     if (!this.process?.stdin?.writable) return DEFAULT_CODEX_MODELS;
     try {
-      const result = (await this.sendRequest('model/list', {})) as Record<string, unknown>;
-      const items = ((result?.data ?? result?.models) as Array<Record<string, unknown>>) ?? [];
-      if (items.length > 0) {
-        return items
-          .map((m) => {
-            const id = (m.id ?? m.name ?? '') as string;
-            const name = (m.name ?? m.title ?? formatModelName(id)) as string;
-            return { id, name };
-          })
-          .filter((m) => Boolean(m.id));
-      }
-      return DEFAULT_CODEX_MODELS;
-    } catch {
+      const models = parseCodexModels(await this.sendRequest('model/list', {}));
+      return models.length > 0 ? models : DEFAULT_CODEX_MODELS;
+    } catch (err) {
+      console.error('[baton] codex-sdk: listModels error:', err);
       return DEFAULT_CODEX_MODELS;
     }
   }
@@ -380,10 +357,10 @@ export class CodexSdkAdapter implements SdkAgentAdapter {
         threadId: this.threadId,
         input: [{ type: 'text', text: userInput, text_elements: [] }],
       };
+      // No pick → let codex use its own default (config.toml / account), since
+      // a hardcoded id is rejected on accounts that don't offer that model.
       if (this.selectedModel) {
         turnParams.model = this.selectedModel;
-      } else {
-        turnParams.model = 'gpt-5.4';
       }
       if (this.selectedReasoningEffort) {
         turnParams.effort = this.selectedReasoningEffort;
