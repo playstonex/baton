@@ -1155,7 +1155,19 @@ export default function ChatScreen() {
       return;
     }
     const anchor = await measureAnchor(modelPillRef);
-    const options: MenuOption[] = allModels.map((m) => ({
+
+    // Deduplicate models so identical formatted labels never repeat
+    const uniqueModels: string[] = [];
+    const seenLabels = new Set<string>();
+    for (const m of allModels) {
+      const label = getModelLabel(m, false);
+      if (!seenLabels.has(label)) {
+        seenLabels.add(label);
+        uniqueModels.push(m);
+      }
+    }
+
+    const options: MenuOption[] = uniqueModels.map((m) => ({
       label: getModelLabel(m, false),
       selected: m === selectedModel,
     }));
@@ -1166,14 +1178,14 @@ export default function ChatScreen() {
       anchor,
       options,
       onSelect: (index) => {
-        if (index < allModels.length && allModels[index] !== selectedModel) {
+        if (index < uniqueModels.length && uniqueModels[index] !== selectedModel) {
           tapLight();
-          const model = allModels[index];
+          const model = uniqueModels[index];
           pickedModelRef.current = model;
           setSelectedModel(model);
           wsService.send({ type: 'model_select', sessionId, model });
           if (sessionId) useComposerPrefs.getState().setModel(sessionId, model);
-        } else if (index === allModels.length + 1) {
+        } else if (index === uniqueModels.length + 1) {
           wsService.send({ type: 'model_list_request', sessionId });
           setSettingsOpen(true);
         }

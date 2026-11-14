@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Colors, CornerRadius, Glass, Shadows } from '../../constants/theme';
 import type { ThemeColors } from './TypingIndicator';
@@ -30,7 +31,7 @@ interface Props {
   onClose: () => void;
 }
 
-const CARD_WIDTH = 240;
+const CARD_WIDTH = 280;
 const GAP = 6;
 const SCREEN_MARGIN = 16;
 const OPTION_HEIGHT = 44;
@@ -55,6 +56,8 @@ export const PopoverMenu = React.memo(function PopoverMenu({
   onSelect,
   onClose,
 }: Props) {
+  const insets = useSafeAreaInsets();
+
   const { containerStyle, maxHeight } = useMemo(() => {
     if (!anchor) {
       return { containerStyle: styles.cardCentered, maxHeight: undefined };
@@ -68,8 +71,12 @@ export const PopoverMenu = React.memo(function PopoverMenu({
     }
     if (left < SCREEN_MARGIN) left = SCREEN_MARGIN;
 
-    const spaceBelow = screenH - (y + ah + GAP) - SCREEN_MARGIN;
-    const spaceAbove = y - GAP - SCREEN_MARGIN;
+    // Keep clear of iOS notch / Dynamic Island and home indicator
+    const topMargin = Math.max(insets.top, 44) + 10;
+    const bottomMargin = Math.max(insets.bottom, 24) + 10;
+
+    const spaceBelow = screenH - (y + ah + GAP) - bottomMargin;
+    const spaceAbove = y - GAP - topMargin;
     const cardH = estimateCardHeight(options, !!title);
 
     let top: number | undefined;
@@ -77,11 +84,11 @@ export const PopoverMenu = React.memo(function PopoverMenu({
     let maxH: number | undefined;
 
     if (spaceBelow >= cardH || spaceBelow >= spaceAbove) {
-      top = y + ah + GAP;
-      maxH = Math.min(cardH, spaceBelow);
+      top = Math.max(topMargin, y + ah + GAP);
+      maxH = Math.min(cardH, Math.max(120, spaceBelow));
     } else {
-      bottom = screenH - y + GAP;
-      maxH = Math.min(cardH, spaceAbove);
+      bottom = Math.max(bottomMargin, screenH - y + GAP);
+      maxH = Math.min(cardH, Math.max(120, spaceAbove));
     }
 
     const positionStyle = {
@@ -92,7 +99,7 @@ export const PopoverMenu = React.memo(function PopoverMenu({
     };
 
     return { containerStyle: positionStyle, maxHeight: maxH };
-  }, [anchor, options, title]);
+  }, [anchor, options, title, insets.top, insets.bottom]);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
@@ -117,7 +124,10 @@ export const PopoverMenu = React.memo(function PopoverMenu({
           />
           {title && <Text style={[styles.title, { color: colors.textTertiary }]}>{title}</Text>}
 
-          <ScrollView style={maxHeight ? { maxHeight } : undefined}>
+          <ScrollView
+            style={maxHeight ? { maxHeight: maxHeight - (title ? TITLE_HEIGHT : 16) } : undefined}
+            showsVerticalScrollIndicator={true}
+          >
             {options.map((opt, i) => {
               if (opt.separator) {
                 return (
@@ -136,31 +146,31 @@ export const PopoverMenu = React.memo(function PopoverMenu({
                     {
                       backgroundColor: pressed
                         ? colors.isDark
-                          ? Glass.opacity.dark.subtle
-                          : Glass.opacity.light.subtle
+                          ? 'rgba(255,255,255,0.08)'
+                          : 'rgba(0,0,0,0.05)'
                         : 'transparent',
-                      borderRadius: pressed ? CornerRadius.medium : 0,
                     },
                   ]}
-                  onPress={() => {
-                    if (!opt.disabled) onSelect(i);
-                  }}
-                  disabled={opt.disabled}
+                  onPress={() => onSelect(i)}
                 >
                   <Text
                     style={[
                       styles.optionText,
                       {
-                        color: opt.destructive ? Colors.danger[400] : colors.textPrimary,
+                        color: opt.destructive
+                          ? Colors.danger[400]
+                          : opt.selected
+                            ? colors.accentBg
+                            : colors.textPrimary,
+                        fontWeight: opt.selected ? '600' : '400',
                       },
-                      opt.disabled && { opacity: 0.35 },
                     ]}
                     numberOfLines={1}
                   >
                     {opt.label}
                   </Text>
                   {opt.selected && (
-                    <Text style={[styles.checkmark, { color: Colors.primary[500] }]}>✓</Text>
+                    <Text style={[styles.checkmark, { color: colors.accentBg }]}>✓</Text>
                   )}
                 </Pressable>
               );
@@ -186,8 +196,8 @@ const styles = StyleSheet.create({
   },
   cardCentered: {
     alignSelf: 'center',
-    width: '76%',
-    maxWidth: 320,
+    width: '84%',
+    maxWidth: 340,
   },
   title: {
     fontSize: 12,
@@ -206,7 +216,7 @@ const styles = StyleSheet.create({
   },
   optionText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
   },
   checkmark: {
     fontSize: 16,

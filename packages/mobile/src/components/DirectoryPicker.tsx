@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Platform,
   type ListRenderItemInfo,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { apiFetch } from '../services/api';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { FileIconTile } from './FileIconTile';
+import { Typography, CornerRadius } from '../constants/theme';
 
 interface DirEntry {
   name: string;
@@ -87,27 +89,66 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
     );
   }
 
-  // In-window overlay instead of <Modal>: on RN 0.88-rc, touch handling inside a
-  // Modal only reaches the scrolling container — header buttons outside the
-  // FlatList never fire (verified on simulator).
   if (!visible) return null;
+
+  const safeTop = Math.max(insets.top, Platform.OS === 'ios' ? 44 : 20);
+  const folderName = currentPath.split('/').filter(Boolean).pop() || '/';
+
   return (
     <View
-      style={[styles.modal, { backgroundColor: c.bg, paddingTop: insets.top }]}
+      style={[
+        styles.modal,
+        {
+          backgroundColor: c.bg,
+          paddingTop: safeTop,
+          paddingBottom: Math.max(insets.bottom, 16),
+        },
+      ]}
       pointerEvents="box-none"
     >
-      <View style={[styles.header, { borderBottomColor: c.cardBorder }]}>
-        <Pressable onPress={onClose} style={styles.headerBtn} hitSlop={8}>
-          <Text style={[styles.headerBtnText, { color: c.textSecondary }]}>Cancel</Text>
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
-          {currentPath}
-        </Text>
-        <Pressable onPress={() => onSelect(currentPath)} style={styles.headerBtn} hitSlop={8}>
-          <Text style={[styles.headerBtnText, { color: '#2383e2' }]}>Select</Text>
-        </Pressable>
+      {/* Header Container */}
+      <View style={[styles.headerContainer, { borderBottomColor: c.cardBorder }]}>
+        {/* Top actions bar: Cancel | Folder Name | Select button */}
+        <View style={styles.headerBar}>
+          <Pressable onPress={onClose} style={styles.headerBtn} hitSlop={8}>
+            <Text style={[styles.headerBtnText, { color: c.textSecondary }]}>Cancel</Text>
+          </Pressable>
+
+          <Text style={[styles.folderName, { color: c.textPrimary }]} numberOfLines={1}>
+            {folderName}
+          </Text>
+
+          <Pressable
+            onPress={() => onSelect(currentPath)}
+            style={({ pressed }) => [
+              styles.selectPill,
+              { backgroundColor: c.accentBg, opacity: pressed ? 0.75 : 1 },
+            ]}
+            hitSlop={8}
+          >
+            <Text style={styles.selectPillText}>Select</Text>
+          </Pressable>
+        </View>
+
+        {/* Path Breadcrumb */}
+        <View
+          style={[
+            styles.breadcrumbRow,
+            { backgroundColor: c.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' },
+          ]}
+        >
+          <Ionicons name="folder-open-outline" size={13} color={c.textTertiary} />
+          <Text
+            style={[styles.breadcrumbText, { color: c.textTertiary }]}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
+            {currentPath}
+          </Text>
+        </View>
       </View>
 
+      {/* Navigation up one directory */}
       <Pressable
         onPress={goUp}
         style={[styles.row, { backgroundColor: c.card, borderBottomColor: c.cardBorder }]}
@@ -123,6 +164,7 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
         <Text style={[styles.rowName, { color: c.textSecondary }]}>..</Text>
       </Pressable>
 
+      {/* Directory list or loading/error */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="small" color={c.textSecondary} />
@@ -162,23 +204,63 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     elevation: 8,
+    zIndex: 999,
   },
-  header: {
+  headerContainer: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+    gap: 8,
+  },
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    height: 38,
   },
-  headerBtn: { paddingVertical: 4 },
-  headerBtnText: { fontSize: 16, fontWeight: '500' },
-  headerTitle: {
-    flex: 1,
-    fontSize: 14,
+  headerBtn: {
+    paddingVertical: 4,
+    minWidth: 60,
+  },
+  headerBtnText: {
+    ...Typography.body,
+    fontSize: 16,
     fontWeight: '500',
+  },
+  folderName: {
+    ...Typography.headline,
+    fontSize: 16,
+    fontWeight: '600',
     textAlign: 'center',
+    flex: 1,
     marginHorizontal: 8,
+  },
+  selectPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectPillText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: CornerRadius.small,
+  },
+  breadcrumbText: {
+    ...Typography.caption2,
+    fontSize: 12,
+    flex: 1,
   },
   row: {
     flexDirection: 'row',
@@ -187,7 +269,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowIcon: { fontSize: 18, marginRight: 10 },
   upTile: {
     width: 28,
     height: 28,
@@ -197,11 +278,17 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   rowName: { flex: 1, fontSize: 15 },
-  chevron: { fontSize: 20, fontWeight: '300' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  errorText: { fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
-  retryBtn: { paddingVertical: 8, paddingHorizontal: 16 },
+  chevron: { fontSize: 18 },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  errorText: { fontSize: 13, textAlign: 'center' },
+  retryBtn: { padding: 8 },
   retryText: { fontSize: 14, fontWeight: '500' },
-  emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyList: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: 14 },
 });

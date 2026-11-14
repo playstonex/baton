@@ -275,7 +275,7 @@ export function NewChatView({
                       >
                         {a.label}
                       </Text>
-                      <Text style={[styles.agentOptionDesc, { color: c.textTertiary }]} numberOfLines={1}>
+                      <Text style={[styles.agentOptionDesc, { color: c.textTertiary }]} numberOfLines={2}>
                         {a.desc}
                       </Text>
                     </View>
@@ -323,8 +323,9 @@ export function NewChatView({
         style={[
           styles.composerBar,
           {
-            paddingBottom: insets.bottom + Spacing.sm,
+            paddingBottom: Math.max(insets.bottom, 20) + Spacing.xs,
             borderTopColor: c.separator,
+            backgroundColor: c.bg,
           },
         ]}
       >
@@ -498,6 +499,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: CornerRadius.medium,
     width: '48.5%',
+    minHeight: 62,
   },
   agentOptionIcon: {
     width: 28,
