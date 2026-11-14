@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,17 +9,20 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { AgentType } from '@baton/shared';
+import { formatModelName } from '@baton/shared';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useRecentStore } from '../stores/recent';
 import { useAgentStore } from '../stores/agents';
 import { apiFetch } from '../services/api';
-import { Typography, Spacing, CornerRadius } from '../constants/theme';
+import { Typography, Spacing, CornerRadius, Glass, Colors } from '../constants/theme';
 import { DirectoryPicker } from './DirectoryPicker';
+import { PopoverMenu, type MenuOption, type AnchorRect } from './messages/PopoverMenu';
 
 const AGENT_OPTIONS: {
   type: AgentType;
@@ -111,7 +114,46 @@ export function NewChatView({
   const [input, setInput] = useState('');
   const [starting, setStarting] = useState(false);
 
+  // Model & thinking state
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [thinkingMode, setThinkingMode] = useState<'none' | 'auto' | 'level'>('auto');
+  const [thinkingLevel, setThinkingLevel] = useState<'low' | 'medium' | 'high'>('medium');
+
+  // Menu state
+  const [modelMenu, setModelMenu] = useState<{
+    anchor: AnchorRect;
+  } | null>(null);
+  const [thinkingMenu, setThinkingMenu] = useState<{
+    anchor: AnchorRect;
+  } | null>(null);
+
   const inputRef = useRef<any>(null);
+  const modelPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
+  const thinkPillRef = useRef<React.ElementRef<typeof Pressable>>(null);
+
+  // Fetch models for selected agent
+  useEffect(() => {
+    async function fetchModels() {
+      try {
+        const data = await apiFetch<{ models: string[] }>(`/api/agents/models?type=${selectedAgent}`);
+        if (data?.models?.length) {
+          setAvailableModels(data.models);
+          if (!selectedModel) {
+            setSelectedModel(data.models[0]);
+          }
+        }
+      } catch {
+        // Use defaults
+      }
+    }
+    fetchModels();
+  }, [selectedAgent]);
+
+  // Reset model when agent changes
+  useEffect(() => {
+    setSelectedModel('');
+  }, [selectedAgent]);
 
   // Default project path from recent sessions
   useEffect(() => {
@@ -128,6 +170,58 @@ export function NewChatView({
     [selectedAgent],
   );
 
+  const thinkingBadge = useMemo(() => {
+    if (thinkingMode === 'none') return 'No thinking';
+    if (thinkingMode === 'auto') return 'Auto';
+    return thinkingLevel.charAt(0).toUpperCase() + thinkingLevel.slice(1);
+  }, [thinkingMode, thinkingLevel]);
+
+  const measureAnchor = useCallback(
+    (ref: React.RefObject<any>): Promise<AnchorRect> => {
+      return new Promise((resolve) => {
+        if (ref.current) {
+          ref.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+            resolve({ x, y, width, height });
+          });
+        } else {
+          resolve({ x: 0, y: 0, width: 0, height: 0 });
+        }
+      });
+    },
+    [],
+  );
+
+  const openModelMenu = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const anchor = await measureAnchor(modelPillRef);
+
+    // Deduplicate models
+    const uniqueModels: string[] = [];
+    const seenLabels = new Set<string>();
+    for (const m of availableModels) {
+      const label = formatModelName(m, { compact: true });
+      if (!seenLabels.has(label)) {
+        seenLabels.add(label);
+        uniqueModels.push(m);
+      }
+    }
+
+    const options: MenuOption[] = uniqueModels.map((m) => ({
+      label: formatModelName(m, { compact: false }),
+      selected: m === selectedModel,
+    }));
+
+    setModelMenu({
+      anchor,
+    });
+  }, [availableModels, selectedModel, measureAnchor]);
+
+  const openThinkingMenu = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const anchor = await measureAnchor(thinkPillRef);
+    setThinkingMenu({ anchor });
+  }, [measureAnchor]);
+
   const handleStart = async (customPrompt?: string) => {
     const promptText = (customPrompt ?? input).trim();
     if (!promptText && !customPrompt) return;
@@ -135,13 +229,28 @@ export function NewChatView({
 
     setStarting(true);
     try {
+      const body: Record<string, any> = {
+        type: selectedAgent,
+        projectPath: projectPath || undefined,
+        initialPrompt: promptText || undefined,
+      };
+
+      // Add model selection if available
+      if (selectedModel) {
+        body.model = selectedModel;
+      }
+
+      // Add thinking configuration
+      if (thinkingMode !== 'none') {
+        body.thinkingMode = thinkingMode;
+        if (thinkingMode === 'level') {
+          body.thinkingLevel = thinkingLevel;
+        }
+      }
+
       const data = await apiFetch<any>('/api/agents', {
         method: 'POST',
-        body: JSON.stringify({
-          type: selectedAgent,
-          projectPath: projectPath || undefined,
-          initialPrompt: promptText || undefined,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (data?.id) {
@@ -329,6 +438,74 @@ export function NewChatView({
           },
         ]}
       >
+        {/* Toolbar with model & thinking pills */}
+        <View style={styles.toolbarRow}>
+          <Pressable
+            ref={modelPillRef}
+            onPress={openModelMenu}
+            style={({ pressed }) => [
+              styles.toolbarPill,
+              {
+                backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
+                borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
+                opacity: pressed ? 0.6 : 1,
+              },
+            ]}
+            hitSlop={4}
+          >
+            <Ionicons name="cube-outline" size={11} color={c.textSecondary} />
+            <Text style={[styles.toolbarPillText, { color: c.textSecondary }]} numberOfLines={1}>
+              {selectedModel ? formatModelName(selectedModel, { compact: true }) : 'Model'}
+            </Text>
+            <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+          </Pressable>
+
+          <Pressable
+            ref={thinkPillRef}
+            onPress={openThinkingMenu}
+            style={({ pressed }) => [
+              styles.toolbarPill,
+              {
+                backgroundColor:
+                  thinkingMode !== 'none'
+                    ? c.isDark
+                      ? 'rgba(74,136,255,0.14)'
+                      : 'rgba(38,102,235,0.10)'
+                    : c.isDark
+                      ? 'rgba(255,255,255,0.07)'
+                      : 'rgba(60,60,67,0.06)',
+                borderColor:
+                  thinkingMode !== 'none'
+                    ? c.isDark
+                      ? 'rgba(74,136,255,0.35)'
+                      : 'rgba(38,102,235,0.25)'
+                    : c.isDark
+                      ? Glass.opacity.dark.border
+                      : Glass.opacity.light.border,
+                opacity: pressed ? 0.6 : 1,
+              },
+            ]}
+            hitSlop={4}
+          >
+            <Ionicons
+              name="bulb-outline"
+              size={11}
+              color={thinkingMode !== 'none' ? (c.isDark ? Colors.primary[300] : Colors.primary[500]) : c.textSecondary}
+            />
+            <Text
+              style={[
+                styles.toolbarPillText,
+                {
+                  color: thinkingMode !== 'none' ? (c.isDark ? Colors.primary[300] : Colors.primary[500]) : c.textSecondary,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {thinkingBadge}
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={styles.composerInnerWrap}>
           <View
             style={[
@@ -373,6 +550,85 @@ export function NewChatView({
           </View>
         </View>
       </View>
+
+      {/* Model Menu Popover */}
+      {modelMenu && (
+        <PopoverMenu
+          visible={true}
+          title="Model"
+          anchor={modelMenu.anchor}
+          colors={c}
+          options={(() => {
+            const uniqueModels: string[] = [];
+            const seenLabels = new Set<string>();
+            for (const m of availableModels) {
+              const label = formatModelName(m, { compact: true });
+              if (!seenLabels.has(label)) {
+                seenLabels.add(label);
+                uniqueModels.push(m);
+              }
+            }
+            return uniqueModels.map((m) => ({
+              label: formatModelName(m, { compact: false }),
+              selected: m === selectedModel,
+            }));
+          })()}
+          onSelect={(index) => {
+            const uniqueModels: string[] = [];
+            const seenLabels = new Set<string>();
+            for (const m of availableModels) {
+              const label = formatModelName(m, { compact: true });
+              if (!seenLabels.has(label)) {
+                seenLabels.add(label);
+                uniqueModels.push(m);
+              }
+            }
+            if (index < uniqueModels.length) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSelectedModel(uniqueModels[index]);
+            }
+            setModelMenu(null);
+          }}
+          onClose={() => setModelMenu(null)}
+        />
+      )}
+
+      {/* Thinking Menu Popover */}
+      {thinkingMenu && (
+        <PopoverMenu
+          visible={true}
+          title="Thinking"
+          anchor={thinkingMenu.anchor}
+          colors={c}
+          options={[
+            { label: 'No thinking', selected: thinkingMode === 'none' },
+            { label: 'Auto (default)', selected: thinkingMode === 'auto' },
+            { separator: true },
+            { label: 'Low', selected: thinkingMode === 'level' && thinkingLevel === 'low' },
+            { label: 'Medium', selected: thinkingMode === 'level' && thinkingLevel === 'medium' },
+            { label: 'High', selected: thinkingMode === 'level' && thinkingLevel === 'high' },
+          ]}
+          onSelect={(index) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (index === 0) {
+              setThinkingMode('none');
+            } else if (index === 1) {
+              setThinkingMode('auto');
+            } else if (index === 3) {
+              setThinkingMode('level');
+              setThinkingLevel('low');
+            } else if (index === 4) {
+              setThinkingMode('level');
+              setThinkingLevel('medium');
+            } else if (index === 5) {
+              setThinkingMode('level');
+              setThinkingLevel('high');
+            }
+            setThinkingMenu(null);
+          }}
+          onClose={() => setThinkingMenu(null)}
+        />
+      )}
 
       {/* Directory Picker Modal */}
       <DirectoryPicker
@@ -552,6 +808,29 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xs + 4,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  toolbarPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  toolbarPillText: {
+    ...Typography.caption1,
+    fontSize: 12,
+    fontWeight: '500',
   },
   composerInnerWrap: {
     maxWidth: 680,
