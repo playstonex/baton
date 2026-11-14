@@ -22,6 +22,7 @@ import { Typography, Spacing, Colors, CornerRadius } from '../constants/theme';
 import type { AgentProcess } from '@baton/shared';
 import { wsService } from '../services/websocket';
 import { apiFetch } from '../services/api';
+import { resolveSessionTitle } from '../lib/sessionTitle';
 
 const AGENT_META: Record<string, { label: string; icon: string; color: string }> = {
   'claude-code': { label: 'Claude Code', icon: 'sparkles', color: '#D97757' },
@@ -321,9 +322,7 @@ export function ChatSidebar({
                 color: Colors.primary[500],
               };
               const isSelected = agent.id === currentSessionId;
-              const title =
-                agent.title ||
-                (agent.projectPath ? agent.projectPath.split('/').pop() : agent.id.slice(0, 8));
+              const title = resolveSessionTitle(agent);
 
               return (
                 <Pressable
@@ -379,11 +378,7 @@ export function ChatSidebar({
                 color: Colors.surface[400],
               };
               const isSelected = session.id === currentSessionId;
-              const title =
-                session.title ||
-                (session.projectPath
-                  ? session.projectPath.split('/').pop()
-                  : session.id.slice(0, 8));
+              const title = resolveSessionTitle(session);
 
               return (
                 <Pressable

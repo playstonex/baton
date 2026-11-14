@@ -39,8 +39,11 @@ import { wsService } from '../../src/services/websocket';
 import { useChatStore, type ChatMessage } from '../../src/stores/chat';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useComposerPrefs } from '../../src/stores/composer-prefs';
+import { useAgentStore } from '../../src/stores/agents';
+import { useRecentStore } from '../../src/stores/recent';
+import { resolveSessionTitle } from '../../src/lib/sessionTitle';
 import { apiFetch } from '../../src/services/api';
-import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Glass, Shadows } from '../../src/constants/theme';
+import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Glass, Shadows, MessageText } from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import * as ImagePicker from 'expo-image-picker';
 import { AudioModule, RecordingPresets, useAudioRecorder } from 'expo-audio';
@@ -409,6 +412,20 @@ export default function ChatScreen() {
   const [currentBranch, setCurrentBranch] = useState('main');
   const [contextFraction, setContextFraction] = useState(0);
   const [projectPath, setProjectPath] = useState('');
+  /** Readable header label. The live agent row carries the freshest title; the
+   * recent-session cache (seeded from GET /api/sessions) covers sessions that
+   * have already stopped, and projectPath covers the window before either
+   * arrives. ULID ids are never shown. */
+  const agentTitle = useAgentStore((s) => s.agents.find((a) => a.id === sessionId)?.title);
+  const cachedSession = useRecentStore((s) => s.sessions.find((x) => x.id === sessionId));
+  const headerLabel = useMemo(
+    () =>
+      resolveSessionTitle({
+        title: agentTitle ?? cachedSession?.title,
+        projectPath: projectPath || cachedSession?.projectPath,
+      }),
+    [agentTitle, cachedSession?.title, cachedSession?.projectPath, projectPath],
+  );
   const [gitStatus, setGitStatus] = useState('');
   const [gitDiff, setGitDiff] = useState('');
   const [approvalDetail, setApprovalDetail] = useState<{ toolName: string; detail: string } | null>(
@@ -1462,48 +1479,25 @@ export default function ChatScreen() {
             >
               <View style={{ height: insets.top }} />
               <View style={styles.headerContent}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                  <Pressable
-                    onPress={isWide ? toggleSidebar : openSidebar}
-                    style={({ pressed }) => [
-                      styles.headerAction,
-                      styles.headerBack,
-                      {
-                        opacity: pressed ? 0.55 : 1,
-                        transform: [{ scale: pressed ? 0.9 : 1 }],
-                      },
-                    ]}
-                    hitSlop={4}
-                    accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
-                  >
-                    <Ionicons
-                      name="reorder-three"
-                      size={26}
-                      color={c.textPrimary}
-                    />
-                  </Pressable>
-                  {!isWide && router.canGoBack() && (
-                    <Pressable
-                      onPress={() => router.back()}
-                      style={({ pressed }) => [
-                        styles.headerAction,
-                        styles.headerBack,
-                        {
-                          opacity: pressed ? 0.55 : 1,
-                          transform: [{ scale: pressed ? 0.9 : 1 }],
-                        },
-                      ]}
-                      hitSlop={4}
-                      accessibilityLabel="Back"
-                    >
-                      <Ionicons
-                        name="chevron-back"
-                        size={22}
-                        color={c.isDark ? Colors.primary[300] : Colors.primary[500]}
-                      />
-                    </Pressable>
-                  )}
-                </View>
+                {/* Single left-edge nav control. The drawer already is the
+                    session list + new-chat surface, so a second "back" chevron
+                    pointed at the same place; two nav controls in the leading
+                    corner also reads wrong on iOS. */}
+                <Pressable
+                  onPress={isWide ? toggleSidebar : openSidebar}
+                  style={({ pressed }) => [
+                    styles.headerAction,
+                    styles.headerBack,
+                    {
+                      opacity: pressed ? 0.55 : 1,
+                      transform: [{ scale: pressed ? 0.9 : 1 }],
+                    },
+                  ]}
+                  hitSlop={4}
+                  accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
+                >
+                  <Ionicons name="reorder-three" size={26} color={c.textPrimary} />
+                </Pressable>
                 <Pressable
                   onPress={() => setShowDiffReview(true)}
                   style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
@@ -1514,7 +1508,7 @@ export default function ChatScreen() {
                       <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                     </View>
                     <Text style={[styles.headerTitle, { color: c.textPrimary }]} numberOfLines={1}>
-                      {projectPath ? projectPath.split('/').pop() : sessionId?.slice(0, 8)}
+                      {headerLabel}
                     </Text>
                   </View>
                   <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
@@ -3064,7 +3058,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  userText: { fontSize: 15.5, lineHeight: 22, letterSpacing: -0.15 },
+  userText: { ...MessageText.body },
   userTimestamp: {
     ...Typography.caption2,
     fontSize: 10.5,
@@ -3093,10 +3087,13 @@ const styles = StyleSheet.create({
   assistantRow: { width: '100%', marginVertical: 2 },
   assistantBubble: {
     width: '100%',
-    paddingHorizontal: 2,
+    // Matches userBubble's inner padding so both text columns sit the same
+    // distance from their screen edge. Code blocks and tables scroll
+    // horizontally, so the inset costs no content.
+    paddingHorizontal: 16,
     paddingVertical: 2,
   },
-  assistantText: { fontSize: 15.5, lineHeight: 23, letterSpacing: -0.15 },
+  assistantText: { ...MessageText.body },
   systemRow: { alignItems: 'center' },
   systemBubble: {
     paddingHorizontal: Spacing.md,

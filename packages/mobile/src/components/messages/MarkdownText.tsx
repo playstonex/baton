@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
 import { findMatchRanges, toHighlightSegments } from './HighlightedText';
-import { Colors, FontFamily } from '../../constants/theme';
+import { Colors, FontFamily, MessageText } from '../../constants/theme';
 import { useRevealedText } from '../../hooks/useRevealedText';
 
 interface Props {
@@ -231,21 +231,9 @@ export const MarkdownText = React.memo(function MarkdownText({
         }
         if (token.type === 'heading_open') {
           const level = token.tag?.toString().replace('h', '') ?? '1';
-          const sizeMap: Record<
-            string,
-            { size: number; lineHeight: number; marginTop: number; marginBottom: number }
-          > = {
-            '1': { size: 21, lineHeight: 27, marginTop: 14, marginBottom: 6 },
-            '2': { size: 18.5, lineHeight: 24, marginTop: 12, marginBottom: 5 },
-            '3': { size: 16.5, lineHeight: 22, marginTop: 10, marginBottom: 4 },
-            '4': { size: 15, lineHeight: 20, marginTop: 8, marginBottom: 3 },
-          };
-          const conf = sizeMap[level] ?? {
-            size: 15,
-            lineHeight: 20,
-            marginTop: 8,
-            marginBottom: 3,
-          };
+          const conf =
+            MessageText.heading[level as keyof typeof MessageText.heading] ??
+            MessageText.heading['4'];
           const inlineToken = tokens[i + 1];
           if (inlineToken?.type === 'inline') {
             elements.push(
@@ -254,7 +242,7 @@ export const MarkdownText = React.memo(function MarkdownText({
                   style={[
                     styles.heading,
                     {
-                      fontSize: conf.size,
+                      fontSize: conf.fontSize,
                       lineHeight: conf.lineHeight,
                       marginTop: conf.marginTop,
                       marginBottom: conf.marginBottom,
@@ -395,7 +383,7 @@ function renderInline(
       case 'code_inline':
         out.push(
           <Text key={key} style={[styles.inlineCode, { backgroundColor: colors.subtle }]}>
-            {child.content}
+            {`\u2009${child.content ?? ''}\u2009`}
           </Text>,
         );
         i++;
@@ -658,14 +646,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   paragraph: {
-    fontSize: 15.5,
-    lineHeight: 23,
-    letterSpacing: -0.15,
+    ...MessageText.body,
     marginVertical: 3,
   },
   heading: {
     fontWeight: '600',
-    letterSpacing: -0.3,
   },
   strong: {
     fontWeight: '700',
@@ -725,14 +710,13 @@ const styles = StyleSheet.create({
   },
   codeText: {
     fontFamily: FontFamily.mono,
-    fontSize: 13,
-    lineHeight: 19,
+    ...MessageText.codeBlock,
   },
+  // Nested <Text> ignores padding and borderRadius on iOS, so the inset is
+  // carried by thin spaces inside the span instead (see the code_inline case).
   inlineCode: {
     fontFamily: FontFamily.mono,
-    fontSize: 13.5,
-    paddingHorizontal: 4,
-    borderRadius: 3,
+    ...MessageText.inlineCode,
   },
   list: {
     width: '100%',
@@ -752,15 +736,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   bullet: {
-    fontSize: 15,
-    lineHeight: 22,
+    ...MessageText.body,
     minWidth: 16,
     textAlign: 'right',
   },
   listText: {
-    fontSize: 15,
-    lineHeight: 22,
-    letterSpacing: -0.15,
+    ...MessageText.body,
   },
   blockquote: {
     borderLeftWidth: 3,
@@ -768,8 +749,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   blockquoteText: {
-    fontSize: 15,
-    lineHeight: 22.5,
+    ...MessageText.body,
     fontStyle: 'italic',
   },
   hr: {
@@ -790,8 +770,7 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    fontSize: 13.5,
-    lineHeight: 18,
+    ...MessageText.tableCell,
     paddingHorizontal: 10,
     paddingVertical: 7,
     minWidth: 90,
@@ -802,7 +781,6 @@ const styles = StyleSheet.create({
   streamingCursor: {
     fontFamily: FontFamily.mono,
     fontWeight: '700',
-    fontSize: 15.5,
-    lineHeight: 22,
+    ...MessageText.body,
   },
 });

@@ -270,6 +270,33 @@ export const Typography = {
   },
 } as const;
 
+/**
+ * Chat message body metrics.
+ *
+ * One body size is used across paragraphs, lists, quotes and user bubbles so a
+ * single message never shifts size between blocks.
+ *
+ * Line heights are tuned for CJK. Chinese glyphs fill the em box with no
+ * ascender/descender slack, so the Latin-tuned ~1.45 ratio reads cramped; these
+ * sit at ~1.6. `letterSpacing` is deliberately absent — React Native applies
+ * negative tracking uniformly, including to CJK, which squeezes the glyphs
+ * together.
+ */
+export const MessageText = {
+  body: { fontSize: 15.5, lineHeight: 25 },
+  /** Denser so wide tables still fit; keeps the body line-height ratio. */
+  tableCell: { fontSize: 13.5, lineHeight: 21 },
+  codeBlock: { fontSize: 13, lineHeight: 20 },
+  /** Mono has a tall x-height, so it reads level with body text one step down. */
+  inlineCode: { fontSize: 14 },
+  heading: {
+    '1': { fontSize: 21, lineHeight: 29, marginTop: 14, marginBottom: 6 },
+    '2': { fontSize: 18.5, lineHeight: 26, marginTop: 12, marginBottom: 5 },
+    '3': { fontSize: 16.5, lineHeight: 24, marginTop: 10, marginBottom: 4 },
+    '4': { fontSize: 15.5, lineHeight: 23, marginTop: 8, marginBottom: 3 },
+  },
+} as const;
+
 export const Radius = {
   sm: 6,
   md: 10,
