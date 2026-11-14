@@ -650,7 +650,10 @@ export function NewChatView({
       <DirectoryPicker
         visible={pickerOpen}
         initialPath={projectPath}
-        onSelect={(p) => setProjectPath(p)}
+        onSelect={(p) => {
+          setProjectPath(p);
+          setPickerOpen(false);
+        }}
         onClose={() => setPickerOpen(false)}
       />
     </KeyboardAvoidingView>

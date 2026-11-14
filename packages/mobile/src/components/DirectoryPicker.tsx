@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -37,7 +37,8 @@ interface DirectoryPickerProps {
 export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: DirectoryPickerProps) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
-  const [currentPath, setCurrentPath] = useState(initialPath ?? '/');
+  const startPath = initialPath && initialPath.trim() ? initialPath : '/';
+  const [currentPath, setCurrentPath] = useState(startPath);
   const [dirs, setDirs] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -58,11 +59,15 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
     }
   }, []);
 
+  // Reload only when the picker opens — an initialPath change while it is
+  // already open must not reset where the user has browsed to.
+  const wasVisible = useRef(false);
   useEffect(() => {
-    if (visible) {
-      loadDir(initialPath ?? '/');
+    if (visible && !wasVisible.current) {
+      loadDir(startPath);
     }
-  }, [visible, initialPath, loadDir]);
+    wasVisible.current = visible;
+  }, [visible, startPath, loadDir]);
 
   function goUp() {
     const parts = currentPath.replace(/\/$/, '').split('/');
