@@ -225,39 +225,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tid = currentTurnId(state);
       const itemId = 'itemId' in event ? (event as { itemId?: string }).itemId : undefined;
 
-      if (event.type === 'status_change') {
-        if (event.status === 'idle' || event.status === 'stopped') {
-          const msgs = pruneDuplicateMessages(
-            state.messages.map((m) => {
-              if (!m.isStreaming && !m.meta?.running) return m;
-              const meta = m.meta ? { ...m.meta, isStreaming: false, running: false } : m.meta;
-              return { ...m, isStreaming: false, meta };
-            }),
-          );
-          return {
-            agentStatus: event.status,
-            statusDetail: undefined,
-            waitingApproval: false,
-            activePrompt: null,
-            activePermission: null,
-            messages: msgs,
-            _streamingMsgIdByType: new Map<string, string>(),
-          };
-        }
-        return { agentStatus: event.status };
-      }
+      // Status is owned by the daemon's `status_update` (see setStatus). Raw
+      // status_change / turn_boundary events are parser-reported and can be
+      // rejected by the daemon's state machine, so they never write
+      // agentStatus here — doing so is how the UI drifted from the daemon.
+      if (event.type === 'status_change') return state;
 
-      if (event.type === 'turn_boundary') {
-        if (event.direction === 'end') {
-          return {
-            agentStatus: 'idle',
-            waitingApproval: false,
-            activePrompt: null,
-            activePermission: null,
-          };
-        }
-        return state;
-      }
+      if (event.type === 'turn_boundary') return state;
 
       if (event.type === 'checkpoint_created') {
         const newCounter = state._counter + 1;
@@ -936,7 +910,30 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
-  setStatus: (status, detail) => set({ agentStatus: status, statusDetail: detail }),
+  setStatus: (status, detail) =>
+    set((state) => {
+      if (status !== 'idle' && status !== 'stopped') {
+        if (state.agentStatus === status && state.statusDetail === detail) return state;
+        return { agentStatus: status, statusDetail: detail };
+      }
+      // Turn over: settle streaming bubbles and drop pending prompts.
+      const msgs = pruneDuplicateMessages(
+        state.messages.map((m) => {
+          if (!m.isStreaming && !m.meta?.running) return m;
+          const meta = m.meta ? { ...m.meta, isStreaming: false, running: false } : m.meta;
+          return { ...m, isStreaming: false, meta };
+        }),
+      );
+      return {
+        agentStatus: status,
+        statusDetail: undefined,
+        waitingApproval: false,
+        activePrompt: null,
+        activePermission: null,
+        messages: msgs,
+        _streamingMsgIdByType: new Map<string, string>(),
+      };
+    }),
 
   setSessionOwner: (owner) => set({ sessionOwner: owner }),
 

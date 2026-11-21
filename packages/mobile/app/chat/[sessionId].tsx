@@ -42,7 +42,17 @@ import { useAgentStore } from '../../src/stores/agents';
 import { useRecentStore } from '../../src/stores/recent';
 import { resolveSessionTitle } from '../../src/lib/sessionTitle';
 import { apiFetch } from '../../src/services/api';
-import { FontFamily, STATUS_COLORS, Typography, Spacing, Colors, CornerRadius, Glass, Shadows, MessageText } from '../../src/constants/theme';
+import {
+  FontFamily,
+  STATUS_COLORS,
+  Typography,
+  Spacing,
+  Colors,
+  CornerRadius,
+  Glass,
+  Shadows,
+  MessageText,
+} from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import * as ImagePicker from 'expo-image-picker';
 import { AudioModule, RecordingPresets, useAudioRecorder } from 'expo-audio';
@@ -84,6 +94,7 @@ import {
   type ThemeColors,
   type MenuOption,
 } from '../../src/components/messages';
+import { HighlightPressable, ScalePressable } from '../../src/components/Pressables';
 
 type GroupedItem =
   | { type: 'message'; msg: ChatMessage }
@@ -280,11 +291,8 @@ function PulsingDot({ color }: { color: string }) {
     );
   }, [opacity]);
   const haloStyle = useAnimatedStyle(() => ({ opacity: 0.35 * opacity.value }));
-  return (
-    <Animated.View style={[styles.statusDotPulse, { backgroundColor: color }, haloStyle]} />
-  );
+  return <Animated.View style={[styles.statusDotPulse, { backgroundColor: color }, haloStyle]} />;
 }
-
 
 function showActionSheet(
   title: string,
@@ -382,17 +390,12 @@ export default function ChatScreen() {
   const toggleSessionControl = useCallback(() => {
     if (!sessionId) return;
     if (sessionOwner === 'remote') {
-      showActionSheet(
-        'Device Control',
-        ['Yield Control to Desktop', 'Cancel'],
-        1,
-        (idx) => {
-          if (idx === 0) {
-            wsService.send({ type: 'control', action: 'release_session', sessionId });
-            setSessionOwner('local');
-          }
-        },
-      );
+      showActionSheet('Device Control', ['Yield Control to Desktop', 'Cancel'], 1, (idx) => {
+        if (idx === 0) {
+          wsService.send({ type: 'control', action: 'release_session', sessionId });
+          setSessionOwner('local');
+        }
+      });
     } else {
       wsService.send({ type: 'control', action: 'claim_session', sessionId });
       setSessionOwner('remote');
@@ -502,21 +505,24 @@ export default function ChatScreen() {
 
     // Session-scoped composer prefs (model pick, thinking level, unsent
     // draft) — restore them before the first render's worth of sends.
-    void useComposerPrefs.getState().load().then(() => {
-      const prefs = useComposerPrefs.getState();
-      const modelPref = prefs.models[sessionId];
-      const thinkingPref = prefs.thinking[sessionId];
-      if (modelPref && !pickedModelRef.current) {
-        pickedModelRef.current = modelPref;
-        setSelectedModel(modelPref);
-      }
-      if (thinkingPref) {
-        setThinkingMode(thinkingPref.mode);
-        if (thinkingPref.level) setThinkingLevel(thinkingPref.level);
-      }
-      const draft = prefs.drafts[sessionId];
-      if (draft) setInput(draft);
-    });
+    void useComposerPrefs
+      .getState()
+      .load()
+      .then(() => {
+        const prefs = useComposerPrefs.getState();
+        const modelPref = prefs.models[sessionId];
+        const thinkingPref = prefs.thinking[sessionId];
+        if (modelPref && !pickedModelRef.current) {
+          pickedModelRef.current = modelPref;
+          setSelectedModel(modelPref);
+        }
+        if (thinkingPref) {
+          setThinkingMode(thinkingPref.mode);
+          if (thinkingPref.level) setThinkingLevel(thinkingPref.level);
+        }
+        const draft = prefs.drafts[sessionId];
+        if (draft) setInput(draft);
+      });
 
     const unsubAck = wsService.on('ack', (raw) => {
       const m = raw as { type: 'ack'; messageId: string; status: 'ok' | 'error'; error?: string };
@@ -581,10 +587,7 @@ export default function ChatScreen() {
 
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
-        setStatus(
-          msg.status as string,
-          (msg as { detail?: StatusDetail }).detail,
-        );
+        setStatus(msg.status as string, (msg as { detail?: StatusDetail }).detail);
       }
     });
 
@@ -1129,7 +1132,11 @@ export default function ChatScreen() {
 
   // Feature 2: Continuous Prompt Queue auto-dispatch effect
   useEffect(() => {
-    if (!running && (agentStatus === 'idle' || agentStatus === 'unknown') && promptQueue.length > 0) {
+    if (
+      !running &&
+      (agentStatus === 'idle' || agentStatus === 'unknown') &&
+      promptQueue.length > 0
+    ) {
       const nextPrompt = dequeuePrompt();
       if (nextPrompt) {
         sendQueuedPrompt(nextPrompt);
@@ -1512,24 +1519,18 @@ export default function ChatScreen() {
                     session list + new-chat surface, so a second "back" chevron
                     pointed at the same place; two nav controls in the leading
                     corner also reads wrong on iOS. */}
-                <Pressable
+                <ScalePressable
+                  pressedScale={0.9}
                   onPress={isWide ? toggleSidebar : openSidebar}
-                  style={({ pressed }) => [
-                    styles.headerAction,
-                    styles.headerBack,
-                    {
-                      opacity: pressed ? 0.55 : 1,
-                      transform: [{ scale: pressed ? 0.9 : 1 }],
-                    },
-                  ]}
+                  style={[styles.headerAction, styles.headerBack, {}]}
                   hitSlop={4}
                   accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
                 >
                   <Ionicons name="reorder-three" size={26} color={c.textPrimary} />
-                </Pressable>
-                <Pressable
+                </ScalePressable>
+                <ScalePressable
                   onPress={() => setShowDiffReview(true)}
-                  style={({ pressed }) => [styles.headerTitles, { opacity: pressed ? 0.7 : 1 }]}
+                  style={[styles.headerTitles]}
                 >
                   <View style={styles.headerNameRow}>
                     <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
@@ -1540,7 +1541,10 @@ export default function ChatScreen() {
                       {headerLabel}
                     </Text>
                   </View>
-                  <Text style={[styles.headerSubtitle, { color: c.textTertiary }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.headerSubtitle, { color: c.textTertiary }]}
+                    numberOfLines={1}
+                  >
                     {!wsConnected ? (
                       <Text style={{ color: Colors.warning[400] }}>Reconnecting…</Text>
                     ) : activity ? (
@@ -1557,24 +1561,23 @@ export default function ChatScreen() {
                       ? `  \u2022  ${Math.round(contextFraction * 100)}%`
                       : ''}
                   </Text>
-                </Pressable>
+                </ScalePressable>
 
                 {/* iOS 26 merged button group — one chrome capsule, hairline lenses. */}
-                <GlassCapsule c={c} style={styles.headerGroup} contentStyle={styles.headerGroupContent}>
-                  <Pressable
+                <GlassCapsule
+                  c={c}
+                  style={styles.headerGroup}
+                  contentStyle={styles.headerGroupContent}
+                >
+                  <ScalePressable
+                    pressedScale={0.9}
                     onPress={() => router.navigate('/(tabs)')}
-                    style={({ pressed }) => [
-                      styles.headerGroupBtn,
-                      {
-                        opacity: pressed ? 0.55 : 1,
-                        transform: [{ scale: pressed ? 0.9 : 1 }],
-                      },
-                    ]}
+                    style={[styles.headerGroupBtn, {}]}
                     hitSlop={4}
                     accessibilityLabel="New chat"
                   >
                     <Ionicons name="create-outline" size={16} color={c.textSecondary} />
-                  </Pressable>
+                  </ScalePressable>
                   <View
                     style={[
                       styles.groupDivider,
@@ -1585,51 +1588,17 @@ export default function ChatScreen() {
                       },
                     ]}
                   />
-                  <Pressable
+                  <ScalePressable
+                    pressedScale={0.9}
                     onPress={() => {
                       setFindOpen(true);
                     }}
-                style={({ pressed }) => [
-                  styles.headerGroupBtn,
-                  {
-                    opacity: pressed ? 0.55 : 1,
-                    transform: [{ scale: pressed ? 0.9 : 1 }],
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Find in conversation"
-              >
-                <Ionicons name="search" size={15} color={c.textSecondary} />
-              </Pressable>
-              <View
-                style={[
-                  styles.groupDivider,
-                  {
-                    backgroundColor: c.isDark
-                      ? Glass.opacity.dark.border
-                      : Glass.opacity.light.border,
-                  },
-                ]}
-              />
-              {gitStatus.trim().length > 0 && (
-                <>
-                  <Pressable
-                    onPress={() => setShowDiffReview(true)}
-                    style={({ pressed }) => [
-                      styles.headerGroupBtn,
-                      {
-                        opacity: pressed ? 0.55 : 1,
-                        transform: [{ scale: pressed ? 0.9 : 1 }],
-                      },
-                    ]}
+                    style={[styles.headerGroupBtn, {}]}
                     hitSlop={4}
-                    accessibilityLabel="Review changes"
+                    accessibilityLabel="Find in conversation"
                   >
-                    <Ionicons name="git-compare-outline" size={15} color={c.textSecondary} />
-                    <Text style={[styles.headerGroupCount, { color: c.textSecondary }]}>
-                      {gitStatus.split('\n').filter(Boolean).length}
-                    </Text>
-                  </Pressable>
+                    <Ionicons name="search" size={15} color={c.textSecondary} />
+                  </ScalePressable>
                   <View
                     style={[
                       styles.groupDivider,
@@ -1640,35 +1609,73 @@ export default function ChatScreen() {
                       },
                     ]}
                   />
-                </>
-              )}
-              <Pressable
-                onPress={toggleSessionControl}
-                style={({ pressed }) => [
-                  styles.headerGroupBtn,
-                  {
-                    opacity: pressed ? 0.55 : 1,
-                    transform: [{ scale: pressed ? 0.9 : 1 }],
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel={
-                  sessionOwner === 'remote' ? 'Yield control to desktop' : 'Take control'
-                }
-              >
-                <Ionicons
-                  name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
-                  size={15}
-                  color={
-                    sessionOwner === 'remote'
-                      ? Colors.success[400]
-                      : c.textSecondary
-                  }
-                />
-              </Pressable>
+                  {gitStatus.trim().length > 0 && (
+                    <>
+                      <ScalePressable
+                        pressedScale={0.9}
+                        onPress={() => setShowDiffReview(true)}
+                        style={[styles.headerGroupBtn, {}]}
+                        hitSlop={4}
+                        accessibilityLabel="Review changes"
+                      >
+                        <Ionicons name="git-compare-outline" size={15} color={c.textSecondary} />
+                        <Text style={[styles.headerGroupCount, { color: c.textSecondary }]}>
+                          {gitStatus.split('\n').filter(Boolean).length}
+                        </Text>
+                      </ScalePressable>
+                      <View
+                        style={[
+                          styles.groupDivider,
+                          {
+                            backgroundColor: c.isDark
+                              ? Glass.opacity.dark.border
+                              : Glass.opacity.light.border,
+                          },
+                        ]}
+                      />
+                    </>
+                  )}
+                  <ScalePressable
+                    pressedScale={0.9}
+                    onPress={toggleSessionControl}
+                    style={[styles.headerGroupBtn, {}]}
+                    hitSlop={4}
+                    accessibilityLabel={
+                      sessionOwner === 'remote' ? 'Yield control to desktop' : 'Take control'
+                    }
+                  >
+                    <Ionicons
+                      name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
+                      size={15}
+                      color={sessionOwner === 'remote' ? Colors.success[400] : c.textSecondary}
+                    />
+                  </ScalePressable>
+                  <View
+                    style={[
+                      styles.groupDivider,
+                      {
+                        backgroundColor: c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                      },
+                    ]}
+                  />
+                  <ScalePressable
+                    pressedScale={0.9}
+                    ref={moreBtnRef}
+                    onPress={openMoreMenu}
+                    style={[styles.headerGroupBtn, {}]}
+                    hitSlop={4}
+                    accessibilityLabel="More actions"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={15} color={c.textSecondary} />
+                  </ScalePressable>
+                </GlassCapsule>
+              </View>
+              {/* Hairline under the glass nav — separates it from scrolling content. */}
               <View
                 style={[
-                  styles.groupDivider,
+                  styles.headerHairline,
                   {
                     backgroundColor: c.isDark
                       ? Glass.opacity.dark.border
@@ -1676,752 +1683,756 @@ export default function ChatScreen() {
                   },
                 ]}
               />
-              <Pressable
-                ref={moreBtnRef}
-                onPress={openMoreMenu}
-                style={({ pressed }) => [
-                  styles.headerGroupBtn,
-                  {
-                    opacity: pressed ? 0.55 : 1,
-                    transform: [{ scale: pressed ? 0.9 : 1 }],
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="More actions"
-              >
-                <Ionicons name="ellipsis-horizontal" size={15} color={c.textSecondary} />
-              </Pressable>
-            </GlassCapsule>
+            </BlurView>
           </View>
-          {/* Hairline under the glass nav — separates it from scrolling content. */}
-          <View
-            style={[
-              styles.headerHairline,
-              {
-                backgroundColor: c.isDark
-                  ? Glass.opacity.dark.border
-                  : Glass.opacity.light.border,
-              },
-            ]}
-          />
-        </BlurView>
-      </View>
 
-      {/* In-chat find bar — floats just under the header glass. */}
-      {findOpen && (
-        <View style={[styles.findBarWrap, { top: insets.top + HEADER_HEIGHT + 6 }]} pointerEvents="box-none">
-          <ChatFindBar
-            query={findQuery}
-            onQueryChange={(q) => {
-              setFindQuery(q);
-              setFindIdx(0);
-            }}
-            status={findStatus}
-            canNavigate={findMatches.length > 0}
-            onNext={() => goToMatch(findIdx + 1)}
-            onPrevious={() => goToMatch(findIdx - 1)}
-            onClose={() => {
-              setFindOpen(false);
-              setFindQuery('');
-            }}
-            colors={c}
-          />
-        </View>
-      )}
-
-      <View style={styles.contentArea}>
-        {messages.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>What should we work on?</Text>
-          <Text style={[styles.emptySub, { color: c.textTertiary }]}>
-            Steer your coding agent from anywhere.
-          </Text>
-          <View style={styles.suggestionList}>
-            {EMPTY_SUGGESTIONS.map((s) => (
-              <Pressable
-                key={s.text}
-                onPress={() => {
-                  if (s.action === 'review') {
-                    setShowDiffReview(true);
-                  } else {
-                    setInput(s.text);
-                    inputRef.current?.focus();
-                  }
-                }}
-                style={({ pressed }) => [
-                  styles.suggestionItem,
-                  {
-                    opacity: pressed ? 0.7 : 1,
-                    transform: [{ scale: pressed ? 0.97 : 1 }],
-                  },
-                ]}
-              >
-                <View style={[styles.suggestionIconWrap, { backgroundColor: c.accentBg }]}>
-                  <Ionicons name={s.icon} size={13} color={Colors.primary[400]} />
-                </View>
-                <Text style={[styles.suggestionText, { color: c.textPrimary }]} numberOfLines={1}>
-                  {s.text}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={styles.listContainer}>
-          <LegendList
-            ref={flatRef}
-            data={groupedData}
-            keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
-            style={styles.transcriptColumn}
-            contentContainerStyle={[
-              styles.messageList,
-              {
-                paddingTop: insets.top + HEADER_HEIGHT,
-                paddingBottom: insets.bottom + 140,
-              },
-            ]}
-            renderItem={renderGroupedItem}
-            extraData={listExtraData}
-            estimatedItemSize={90}
-            initialScrollAtEnd
-            maintainScrollAtEnd={{ animated: true }}
-            maintainScrollAtEndThreshold={0.15}
-            maintainVisibleContentPosition
-            alignItemsAtEnd
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={
-              hasMore ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.loadEarlierBtn,
-                    { opacity: pressed ? 0.6 : 1 },
-                  ]}
-                  onPress={loadEarlier}
-                >
-                  <Ionicons name="chevron-up" size={14} color={c.textTertiary} />
-                  <Text style={[styles.loadEarlierText, { color: c.textTertiary }]}>
-                    Load earlier messages
-                  </Text>
-                </Pressable>
-              ) : undefined
-            }
-          />
-          <Animated.View
-            style={[styles.scrollToBottomBtn, scrollBtnStyle, { bottom: insets.bottom + 140 }]}
-            pointerEvents={isNearBottom ? 'none' : 'auto'}
-          >
-            <GlassCapsule c={c} style={styles.scrollToBottomGlass} contentStyle={styles.scrollPillContent}>
-              <Pressable
-                onPress={scrollToBottom}
-                hitSlop={4}
-                style={[StyleSheet.absoluteFill, styles.scrollPillInner]}
-                accessibilityLabel={unread > 0 ? `Scroll to latest, ${unread} new` : 'Scroll to latest'}
-              >
-                <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
-                {unread > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>
-                      {unread > 99 ? '99+' : unread}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-            </GlassCapsule>
-          </Animated.View>
-        </View>
-        )}
-      </View>
-
-      {(activePermission || waitingApproval) && (
-        <Animated.View entering={FadeInDown.duration(Glass.morph.fast)} style={styles.dockedCardWrapper}>
-          <AgentQuestionCard
-            permission={
-              activePermission ?? {
-                requestId: 'legacy',
-                tool: approvalDetail?.toolName ?? 'Action',
-                action: approvalDetail?.detail ?? 'Command approval requested',
-                description: approvalDetail?.detail ?? 'The agent needs your approval to proceed.',
-              }
-            }
-            onApprove={() => approveAction(activePermission?.requestId)}
-            onReject={() => rejectAction(activePermission?.requestId)}
-            compact
-          />
-        </Animated.View>
-      )}
-
-      {activePrompt && activePrompt.questions?.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(Glass.morph.fast)} style={styles.dockedCardWrapper}>
-          <AgentQuestionCard
-            question={activePrompt.questions[0]}
-            onAnswer={answerQuestion}
-            compact
-          />
-        </Animated.View>
-      )}
-
-      {promptQueue.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(Glass.morph.fast)}>
-          <GlassCapsule
-            c={c}
-            intensity={Glass.blur.card}
-            style={styles.queueStrip}
-            contentStyle={styles.queueStripContent}
-          >
-            <View style={styles.queueHeaderRow}>
-              <View style={styles.queueTitleGroup}>
-                <Ionicons name="time-outline" size={13} color={Colors.primary[400]} />
-                <Text style={[styles.queueTag, { color: Colors.primary[400] }]}>Queued</Text>
-                <Text style={[styles.queueCountText, { color: c.textTertiary }]}>
-                  {promptQueue.length}
-                </Text>
-              </View>
-              <Pressable
-                onPress={clearQueue}
-                hitSlop={6}
-                style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
-              >
-                <Text
-                  style={[
-                    Typography.caption2,
-                    { color: c.isDark ? Colors.primary[300] : Colors.primary[500], fontWeight: '600' },
-                  ]}
-                >
-                  Clear
-                </Text>
-              </Pressable>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.queueChipsContainer}
-            >
-              {promptQueue.map((item, idx) => (
-                <Pressable
-                  key={idx}
-                  onPress={() =>
-                    showActionSheet(
-                      'Queued message',
-                      ['Send now (steer)', 'Edit', 'Remove', 'Cancel'],
-                      3,
-                      (action) => {
-                        if (action === 0) {
-                          removeQueuedPrompt(idx);
-                          sendSteer(item);
-                        } else if (action === 1) {
-                          removeQueuedPrompt(idx);
-                          setInput(item);
-                          if (sessionId) {
-                            useComposerPrefs.getState().setDraft(sessionId, item);
-                          }
-                          inputRef.current?.focus();
-                        } else if (action === 2) {
-                          removeQueuedPrompt(idx);
-                        }
-                      },
-                    )
-                  }
-                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <View style={[styles.queueChip, { backgroundColor: c.subtle }]}>
-                    <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>#{idx + 1}</Text>
-                    <Text style={[styles.queueChipText, { color: c.textPrimary }]} numberOfLines={1}>
-                      {item}
-                    </Text>
-                    <Pressable
-                      onPress={() => removeQueuedPrompt(idx)}
-                      hitSlop={6}
-                      style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
-                    >
-                      <Ionicons name="close-circle" size={14} color={c.textTertiary} />
-                    </Pressable>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </GlassCapsule>
-        </Animated.View>
-      )}
-
-      <Animated.View style={[composerStyle, styles.contentColumn]}>
-        {autocomplete && (
-          <AgentInputAutocomplete
-            type={autocomplete.type}
-            query={autocomplete.query}
-            projectPath={projectPath}
-            colors={c}
-            onSelect={handleAutocompleteSelect}
-            onClose={() => setInputFocused(false)}
-          />
-        )}
-
-        {/* Live activity pill — ticks during active operations or recording */}
-        {watching && (voiceState !== 'idle' || !wsConnected || activity) && (
-          <View style={styles.activityBanner}>
+          {/* In-chat find bar — floats just under the header glass. */}
+          {findOpen && (
             <View
-              style={[
-                styles.activityDot,
-                voiceState === 'recording'
-                  ? { backgroundColor: Colors.danger[400] }
-                  : !wsConnected || voiceState === 'transcribing'
-                    ? { backgroundColor: Colors.warning[400] }
-                    : { backgroundColor: activityToneColor },
-              ]}
-            />
-            <Text
-              style={[
-                styles.activityText,
-                {
-                  color:
-                    voiceState === 'recording'
-                      ? Colors.danger[400]
-                      : !wsConnected || voiceState === 'transcribing'
-                        ? Colors.warning[400]
-                        : activityToneColor,
-                },
-              ]}
-              numberOfLines={1}
+              style={[styles.findBarWrap, { top: insets.top + HEADER_HEIGHT + 6 }]}
+              pointerEvents="box-none"
             >
-              {voiceState === 'recording'
-                ? `Recording — ${formatElapsed(Date.now() - voiceStartRef.current)} · tap mic to stop`
-                : voiceState === 'transcribing'
-                  ? 'Transcribing…'
-                  : !wsConnected
-                    ? 'Reconnecting…'
-                    : activity?.text}
-            </Text>
-          </View>
-        )}
+              <ChatFindBar
+                query={findQuery}
+                onQueryChange={(q) => {
+                  setFindQuery(q);
+                  setFindIdx(0);
+                }}
+                status={findStatus}
+                canNavigate={findMatches.length > 0}
+                onNext={() => goToMatch(findIdx + 1)}
+                onPrevious={() => goToMatch(findIdx - 1)}
+                onClose={() => {
+                  setFindOpen(false);
+                  setFindQuery('');
+                }}
+                colors={c}
+              />
+            </View>
+          )}
 
-        {/* Unified Messages-grade glass card: attachments · input · integrated toolbar */}
-        <GlassCapsule c={c} radius={22} style={styles.composerCard} contentStyle={styles.composerCardContent}>
-          <AttachmentStrip
-            images={attachments}
-            onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
-            colors={c}
-          />
-
-          <TextInput
-            ref={inputRef}
-            style={[styles.composerInput, { color: c.textPrimary }]}
-            value={input}
-            onChangeText={(text) => {
-              setInput(text);
-              if (sessionId) useComposerPrefs.getState().setDraft(sessionId, text);
-            }}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => setInputFocused(false)}
-            onSubmitEditing={() => {
-              if (running) {
-                if (input.trim()) {
-                  enqueuePrompt(input.trim());
-                  setInput('');
-                }
-              } else {
-                sendChat();
-              }
-            }}
-            returnKeyType="send"
-            placeholder={running ? 'Queue a message…' : 'Message'}
-            placeholderTextColor={c.textTertiary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            multiline
-          />
-
-          {/* Integrated action toolbar */}
-          <View style={styles.composerToolbar}>
-            <View style={styles.toolbarLeft}>
-              <Pressable
-                onPress={pickAttachments}
-                style={({ pressed }) => [
-                  styles.toolbarCircleBtn,
-                  {
-                    backgroundColor:
-                      attachments.length > 0
-                        ? c.isDark
-                          ? 'rgba(74,136,255,0.18)'
-                          : 'rgba(38,102,235,0.12)'
-                        : c.isDark
-                          ? 'rgba(255,255,255,0.08)'
-                          : 'rgba(60,60,67,0.06)',
-                    borderColor:
-                      attachments.length > 0
-                        ? Colors.primary[400]
-                        : c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                    opacity: pressed ? 0.6 : 1,
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Attach images"
-              >
-                <Ionicons
-                  name={attachments.length > 0 ? 'image' : 'add'}
-                  size={16}
-                  color={
-                    attachments.length > 0
-                      ? c.isDark
-                        ? Colors.primary[300]
-                        : Colors.primary[600]
-                      : c.textSecondary
+          <View style={styles.contentArea}>
+            {messages.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyTitle, { color: c.textPrimary }]}>
+                  What should we work on?
+                </Text>
+                <Text style={[styles.emptySub, { color: c.textTertiary }]}>
+                  Steer your coding agent from anywhere.
+                </Text>
+                <View style={styles.suggestionList}>
+                  {EMPTY_SUGGESTIONS.map((s) => (
+                    <ScalePressable
+                      pressedScale={0.97}
+                      key={s.text}
+                      onPress={() => {
+                        if (s.action === 'review') {
+                          setShowDiffReview(true);
+                        } else {
+                          setInput(s.text);
+                          inputRef.current?.focus();
+                        }
+                      }}
+                      style={[styles.suggestionItem, {}]}
+                    >
+                      <View style={[styles.suggestionIconWrap, { backgroundColor: c.accentBg }]}>
+                        <Ionicons name={s.icon} size={13} color={Colors.primary[400]} />
+                      </View>
+                      <Text
+                        style={[styles.suggestionText, { color: c.textPrimary }]}
+                        numberOfLines={1}
+                      >
+                        {s.text}
+                      </Text>
+                    </ScalePressable>
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <View style={styles.listContainer}>
+                <LegendList
+                  ref={flatRef}
+                  data={groupedData}
+                  keyExtractor={(item) => (item.type === 'message' ? item.msg.id : item.id)}
+                  style={styles.transcriptColumn}
+                  contentContainerStyle={[
+                    styles.messageList,
+                    {
+                      paddingTop: insets.top + HEADER_HEIGHT,
+                      paddingBottom: insets.bottom + 140,
+                    },
+                  ]}
+                  renderItem={renderGroupedItem}
+                  extraData={listExtraData}
+                  estimatedItemSize={90}
+                  initialScrollAtEnd
+                  maintainScrollAtEnd={{ animated: true }}
+                  maintainScrollAtEndThreshold={0.15}
+                  maintainVisibleContentPosition
+                  alignItemsAtEnd
+                  onScroll={handleScroll}
+                  scrollEventThrottle={16}
+                  keyboardDismissMode="interactive"
+                  keyboardShouldPersistTaps="handled"
+                  ListHeaderComponent={
+                    hasMore ? (
+                      <ScalePressable style={[styles.loadEarlierBtn]} onPress={loadEarlier}>
+                        <Ionicons name="chevron-up" size={14} color={c.textTertiary} />
+                        <Text style={[styles.loadEarlierText, { color: c.textTertiary }]}>
+                          Load earlier messages
+                        </Text>
+                      </ScalePressable>
+                    ) : undefined
                   }
                 />
-              </Pressable>
+                <Animated.View
+                  style={[
+                    styles.scrollToBottomBtn,
+                    scrollBtnStyle,
+                    { bottom: insets.bottom + 140 },
+                  ]}
+                  pointerEvents={isNearBottom ? 'none' : 'auto'}
+                >
+                  <GlassCapsule
+                    c={c}
+                    style={styles.scrollToBottomGlass}
+                    contentStyle={styles.scrollPillContent}
+                  >
+                    <Pressable
+                      onPress={scrollToBottom}
+                      hitSlop={4}
+                      style={[StyleSheet.absoluteFill, styles.scrollPillInner]}
+                      accessibilityLabel={
+                        unread > 0 ? `Scroll to latest, ${unread} new` : 'Scroll to latest'
+                      }
+                    >
+                      <Ionicons name="chevron-down" size={16} color={c.textSecondary} />
+                      {unread > 0 && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadBadgeText}>{unread > 99 ? '99+' : unread}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  </GlassCapsule>
+                </Animated.View>
+              </View>
+            )}
+          </View>
 
-              <Pressable
-                ref={modelPillRef}
-                onPress={openModelMenu}
-                style={({ pressed }) => [
-                  styles.toolbarPill,
-                  {
-                    backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
-                    borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                    opacity: pressed ? 0.6 : 1,
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Switch model"
-              >
-                <Ionicons name="cube-outline" size={11} color={c.textSecondary} />
-                <Text style={[styles.toolbarPillText, { color: c.textSecondary }]} numberOfLines={1}>
-                  {selectedModel ? getModelLabel(selectedModel, true) : 'Model'}
-                </Text>
-                <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-              </Pressable>
-
-              <Pressable
-                ref={thinkPillRef}
-                onPress={openThinkingMenu}
-                style={({ pressed }) => [
-                  styles.toolbarPill,
-                  {
-                    backgroundColor:
-                      thinkingMode !== 'none'
-                        ? c.isDark
-                          ? 'rgba(74,136,255,0.14)'
-                          : 'rgba(38,102,235,0.10)'
-                        : c.isDark
-                          ? 'rgba(255,255,255,0.07)'
-                          : 'rgba(60,60,67,0.06)',
-                    borderColor:
-                      thinkingMode !== 'none'
-                        ? c.isDark
-                          ? 'rgba(74,136,255,0.35)'
-                          : 'rgba(38,102,235,0.25)'
-                        : c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                    opacity: pressed ? 0.6 : 1,
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Thinking level"
-              >
-                <Ionicons
-                  name="bulb-outline"
-                  size={11}
-                  color={
-                    thinkingMode !== 'none'
-                      ? c.isDark
-                        ? Colors.primary[300]
-                        : Colors.primary[500]
-                      : c.textSecondary
+          {(activePermission || waitingApproval) && (
+            <Animated.View
+              entering={FadeInDown.duration(Glass.morph.fast)}
+              style={styles.dockedCardWrapper}
+            >
+              <AgentQuestionCard
+                permission={
+                  activePermission ?? {
+                    requestId: 'legacy',
+                    tool: approvalDetail?.toolName ?? 'Action',
+                    action: approvalDetail?.detail ?? 'Command approval requested',
+                    description:
+                      approvalDetail?.detail ?? 'The agent needs your approval to proceed.',
                   }
+                }
+                onApprove={() => approveAction(activePermission?.requestId)}
+                onReject={() => rejectAction(activePermission?.requestId)}
+                compact
+              />
+            </Animated.View>
+          )}
+
+          {activePrompt && activePrompt.questions?.length > 0 && (
+            <Animated.View
+              entering={FadeInDown.duration(Glass.morph.fast)}
+              style={styles.dockedCardWrapper}
+            >
+              <AgentQuestionCard
+                question={activePrompt.questions[0]}
+                onAnswer={answerQuestion}
+                compact
+              />
+            </Animated.View>
+          )}
+
+          {promptQueue.length > 0 && (
+            <Animated.View entering={FadeInDown.duration(Glass.morph.fast)}>
+              <GlassCapsule
+                c={c}
+                intensity={Glass.blur.card}
+                style={styles.queueStrip}
+                contentStyle={styles.queueStripContent}
+              >
+                <View style={styles.queueHeaderRow}>
+                  <View style={styles.queueTitleGroup}>
+                    <Ionicons name="time-outline" size={13} color={Colors.primary[400]} />
+                    <Text style={[styles.queueTag, { color: Colors.primary[400] }]}>Queued</Text>
+                    <Text style={[styles.queueCountText, { color: c.textTertiary }]}>
+                      {promptQueue.length}
+                    </Text>
+                  </View>
+                  <ScalePressable onPress={clearQueue} hitSlop={6} style={[]}>
+                    <Text
+                      style={[
+                        Typography.caption2,
+                        {
+                          color: c.isDark ? Colors.primary[300] : Colors.primary[500],
+                          fontWeight: '600',
+                        },
+                      ]}
+                    >
+                      Clear
+                    </Text>
+                  </ScalePressable>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.queueChipsContainer}
+                >
+                  {promptQueue.map((item, idx) => (
+                    <HighlightPressable
+                      key={idx}
+                      onPress={() =>
+                        showActionSheet(
+                          'Queued message',
+                          ['Send now (steer)', 'Edit', 'Remove', 'Cancel'],
+                          3,
+                          (action) => {
+                            if (action === 0) {
+                              removeQueuedPrompt(idx);
+                              sendSteer(item);
+                            } else if (action === 1) {
+                              removeQueuedPrompt(idx);
+                              setInput(item);
+                              if (sessionId) {
+                                useComposerPrefs.getState().setDraft(sessionId, item);
+                              }
+                              inputRef.current?.focus();
+                            } else if (action === 2) {
+                              removeQueuedPrompt(idx);
+                            }
+                          },
+                        )
+                      }
+                      style={[]}
+                    >
+                      <View style={[styles.queueChip, { backgroundColor: c.subtle }]}>
+                        <Text style={[styles.queueChipNum, { color: Colors.primary[500] }]}>
+                          #{idx + 1}
+                        </Text>
+                        <Text
+                          style={[styles.queueChipText, { color: c.textPrimary }]}
+                          numberOfLines={1}
+                        >
+                          {item}
+                        </Text>
+                        <ScalePressable
+                          onPress={() => removeQueuedPrompt(idx)}
+                          hitSlop={6}
+                          style={[]}
+                        >
+                          <Ionicons name="close-circle" size={14} color={c.textTertiary} />
+                        </ScalePressable>
+                      </View>
+                    </HighlightPressable>
+                  ))}
+                </ScrollView>
+              </GlassCapsule>
+            </Animated.View>
+          )}
+
+          <Animated.View style={[composerStyle, styles.contentColumn]}>
+            {autocomplete && (
+              <AgentInputAutocomplete
+                type={autocomplete.type}
+                query={autocomplete.query}
+                projectPath={projectPath}
+                colors={c}
+                onSelect={handleAutocompleteSelect}
+                onClose={() => setInputFocused(false)}
+              />
+            )}
+
+            {/* Live activity pill — ticks during active operations or recording */}
+            {watching && (voiceState !== 'idle' || !wsConnected || activity) && (
+              <View style={styles.activityBanner}>
+                <View
+                  style={[
+                    styles.activityDot,
+                    voiceState === 'recording'
+                      ? { backgroundColor: Colors.danger[400] }
+                      : !wsConnected || voiceState === 'transcribing'
+                        ? { backgroundColor: Colors.warning[400] }
+                        : { backgroundColor: activityToneColor },
+                  ]}
                 />
                 <Text
                   style={[
-                    styles.toolbarPillText,
+                    styles.activityText,
                     {
                       color:
-                        thinkingMode !== 'none'
-                          ? c.isDark
-                            ? Colors.primary[300]
-                            : Colors.primary[500]
-                          : c.textSecondary,
+                        voiceState === 'recording'
+                          ? Colors.danger[400]
+                          : !wsConnected || voiceState === 'transcribing'
+                            ? Colors.warning[400]
+                            : activityToneColor,
                     },
                   ]}
                   numberOfLines={1}
                 >
-                  {thinkingBadge}
+                  {voiceState === 'recording'
+                    ? `Recording — ${formatElapsed(Date.now() - voiceStartRef.current)} · tap mic to stop`
+                    : voiceState === 'transcribing'
+                      ? 'Transcribing…'
+                      : !wsConnected
+                        ? 'Reconnecting…'
+                        : activity?.text}
                 </Text>
-              </Pressable>
+              </View>
+            )}
 
-              <Pressable
-                onPress={() => {
-                  wsService.send({ type: 'model_list_request', sessionId });
-                  setSettingsOpen(true);
-                }}
-                style={({ pressed }) => [
-                  styles.toolbarCircleBtn,
-                  {
-                    backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
-                    borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                    opacity: pressed ? 0.6 : 1,
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel="Composer settings"
-              >
-                <Ionicons name="options-outline" size={13} color={c.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.toolbarRight}>
-              <Pressable
-                onPress={() => void toggleVoice()}
-                style={({ pressed }) => [
-                  styles.toolbarCircleBtn,
-                  {
-                    backgroundColor:
-                      voiceState === 'recording'
-                        ? 'rgba(235,77,85,0.18)'
-                        : c.isDark
-                          ? 'rgba(255,255,255,0.08)'
-                          : 'rgba(60,60,67,0.06)',
-                    borderColor:
-                      voiceState === 'recording'
-                        ? Colors.danger[400]
-                        : c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                    opacity: pressed ? 0.6 : 1,
-                  },
-                ]}
-                hitSlop={4}
-                accessibilityLabel={voiceState === 'recording' ? 'Stop recording' : 'Dictate message'}
-              >
-                {voiceState === 'transcribing' ? (
-                  <ActivityIndicator size="small" color={Colors.warning[400]} />
-                ) : (
-                  <Ionicons
-                    name={voiceState === 'recording' ? 'stop' : 'mic-outline'}
-                    size={15}
-                    color={
-                      voiceState === 'recording'
-                        ? Colors.danger[400]
-                        : voiceState !== 'idle'
-                          ? Colors.warning[400]
-                          : c.textSecondary
-                    }
-                  />
-                )}
-              </Pressable>
-
-              {running && input.trim().length === 0 ? (
-                <Pressable
-                  onPress={cancelTurn}
-                  style={({ pressed }) => [
-                    styles.sendActionBtn,
-                    {
-                      backgroundColor: c.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(60,60,67,0.10)',
-                      opacity: pressed ? 0.7 : 1,
-                      transform: [{ scale: pressed ? 0.88 : 1 }],
-                    },
-                  ]}
-                  hitSlop={4}
-                  accessibilityLabel="Stop"
-                >
-                  <Ionicons name="stop" size={14} color={Colors.danger[400]} />
-                </Pressable>
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    if (running) {
-                      if (input.trim()) {
-                        sendSteer();
-                      }
-                    } else {
-                      sendChat();
-                    }
-                  }}
-                  style={({ pressed }) => [
-                    styles.sendActionBtn,
-                    {
-                      backgroundColor:
-                        running || !sendDisabled
-                          ? Colors.primary[500]
-                          : c.isDark
-                            ? 'rgba(255,255,255,0.07)'
-                            : 'rgba(60,60,67,0.06)',
-                      opacity: pressed ? 0.75 : 1,
-                      transform: [{ scale: pressed ? 0.88 : 1 }],
-                    },
-                  ]}
-                  disabled={!running && sendDisabled}
-                  hitSlop={4}
-                  accessibilityLabel={running ? 'Steer now' : 'Send'}
-                >
-                  <Ionicons
-                    name={running ? 'flash' : 'arrow-up'}
-                    size={16}
-                    color={running || !sendDisabled ? '#ffffff' : c.textTertiary}
-                  />
-                </Pressable>
-              )}
-            </View>
-          </View>
-        </GlassCapsule>
-      </Animated.View>
-
-      <ComposerSettingsSheet
-        visible={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        colors={c}
-        models={Array.from(new Set([...providerModels, ...models]))}
-        modelDetails={modelDetails}
-        selectedModel={selectedModel}
-        onSelectModel={(m) => {
-          pickedModelRef.current = m;
-          setSelectedModel(m);
-          wsService.send({ type: 'model_select', sessionId, model: m });
-          if (sessionId) useComposerPrefs.getState().setModel(sessionId, m);
-        }}
-        thinkingMode={thinkingMode}
-        thinkingLevel={thinkingLevel}
-        onThinking={(mode, level) => {
-          setThinkingMode(mode);
-          if (level) setThinkingLevel(level);
-          sendThinkingConfig(mode, level);
-          if (sessionId) {
-            useComposerPrefs.getState().setThinking(sessionId, { mode, level });
-          }
-        }}
-        serviceTier={serviceTier}
-        onServiceTier={(tier) => {
-          setServiceTier(tier);
-          wsService.send({ type: 'service_tier_select', sessionId, tier });
-        }}
-        accessMode={accessMode}
-        onAccessMode={(mode) => {
-          setAccessMode(mode);
-          wsService.send({ type: 'access_mode_select', sessionId, mode });
-        }}
-        onInsertFile={() => {
-          setInput((prev) => (prev.trim() ? prev.replace(/\s+$/, '') + ' @' : '@'));
-          inputRef.current?.focus();
-        }}
-        onReview={() => setShowDiffReview(true)}
-        onCommand={(command) => enqueuePrompt(command)}
-      />
-
-      {promptModal?.visible && (
-        <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
-          <Pressable style={styles.modalOverlay} onPress={() => setPromptModal(null)}>
-            <Pressable
-              style={[styles.promptSheet, { backgroundColor: c.isDark ? '#2c2e33' : '#f2f2f6' }]}
-              onPress={() => {}}
+            {/* Unified Messages-grade glass card: attachments · input · integrated toolbar */}
+            <GlassCapsule
+              c={c}
+              radius={22}
+              style={styles.composerCard}
+              contentStyle={styles.composerCardContent}
             >
-              <BlurView
-                tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-                intensity={Glass.blur.sheet}
-                style={StyleSheet.absoluteFill}
+              <AttachmentStrip
+                images={attachments}
+                onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+                colors={c}
               />
-              <Text style={[styles.promptTitle, { color: c.textPrimary }]}>
-                {promptModal.title}
-              </Text>
+
               <TextInput
-                autoFocus
-                style={[
-                  styles.promptInput,
-                  {
-                    color: c.textPrimary,
-                    backgroundColor: c.isDark ? 'rgba(255,255,255,0.10)' : '#ffffff',
-                  },
-                ]}
-                placeholder={promptModal.placeholder}
-                placeholderTextColor={c.textTertiary}
-                onSubmitEditing={(e) => {
-                  const text = e.nativeEvent.text;
-                  if (text.trim()) {
-                    promptModal.onSubmit(text.trim());
-                    setPromptModal(null);
+                ref={inputRef}
+                style={[styles.composerInput, { color: c.textPrimary }]}
+                value={input}
+                onChangeText={(text) => {
+                  setInput(text);
+                  if (sessionId) useComposerPrefs.getState().setDraft(sessionId, text);
+                }}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                onSubmitEditing={() => {
+                  if (running) {
+                    if (input.trim()) {
+                      enqueuePrompt(input.trim());
+                      setInput('');
+                    }
+                  } else {
+                    sendChat();
                   }
                 }}
-                returnKeyType="done"
+                returnKeyType="send"
+                placeholder={running ? 'Queue a message…' : 'Message'}
+                placeholderTextColor={c.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                multiline
               />
-              {/* UIAlertController-style stacked actions — hairline separated. */}
-              <View style={[styles.promptActions, { borderTopColor: c.separator }]}>
-                <Pressable
-                  onPress={() => setPromptModal(null)}
-                  style={({ pressed }) => [
-                    styles.promptActionBtn,
-                    { opacity: pressed ? 0.5 : 1 },
-                  ]}
-                >
-                  <Text
+
+              {/* Integrated action toolbar */}
+              <View style={styles.composerToolbar}>
+                <View style={styles.toolbarLeft}>
+                  <ScalePressable
+                    onPress={pickAttachments}
                     style={[
-                      styles.promptActionText,
+                      styles.toolbarCircleBtn,
                       {
-                        color: c.isDark ? Colors.primary[300] : Colors.primary[500],
-                        fontWeight: '400',
+                        backgroundColor:
+                          attachments.length > 0
+                            ? c.isDark
+                              ? 'rgba(74,136,255,0.18)'
+                              : 'rgba(38,102,235,0.12)'
+                            : c.isDark
+                              ? 'rgba(255,255,255,0.08)'
+                              : 'rgba(60,60,67,0.06)',
+                        borderColor:
+                          attachments.length > 0
+                            ? Colors.primary[400]
+                            : c.isDark
+                              ? Glass.opacity.dark.border
+                              : Glass.opacity.light.border,
                       },
                     ]}
+                    hitSlop={4}
+                    accessibilityLabel="Attach images"
                   >
-                    Cancel
-                  </Text>
-                </Pressable>
-                <View style={[styles.promptActionDivider, { backgroundColor: c.separator }]} />
-                <Pressable
-                  onPress={() => setPromptModal(null)}
-                  style={({ pressed }) => [
-                    styles.promptActionBtn,
-                    { opacity: pressed ? 0.5 : 1 },
-                  ]}
-                >
-                  <Text
+                    <Ionicons
+                      name={attachments.length > 0 ? 'image' : 'add'}
+                      size={16}
+                      color={
+                        attachments.length > 0
+                          ? c.isDark
+                            ? Colors.primary[300]
+                            : Colors.primary[600]
+                          : c.textSecondary
+                      }
+                    />
+                  </ScalePressable>
+
+                  <ScalePressable
+                    ref={modelPillRef}
+                    onPress={openModelMenu}
                     style={[
-                      styles.promptActionText,
+                      styles.toolbarPill,
                       {
-                        color: c.isDark ? Colors.primary[300] : Colors.primary[500],
-                        fontWeight: '600',
+                        backgroundColor: c.isDark
+                          ? 'rgba(255,255,255,0.07)'
+                          : 'rgba(60,60,67,0.06)',
+                        borderColor: c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
                       },
                     ]}
+                    hitSlop={4}
+                    accessibilityLabel="Switch model"
                   >
-                    Done
-                  </Text>
-                </Pressable>
+                    <Ionicons name="cube-outline" size={11} color={c.textSecondary} />
+                    <Text
+                      style={[styles.toolbarPillText, { color: c.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      {selectedModel ? getModelLabel(selectedModel, true) : 'Model'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
+                  </ScalePressable>
+
+                  <ScalePressable
+                    ref={thinkPillRef}
+                    onPress={openThinkingMenu}
+                    style={[
+                      styles.toolbarPill,
+                      {
+                        backgroundColor:
+                          thinkingMode !== 'none'
+                            ? c.isDark
+                              ? 'rgba(74,136,255,0.14)'
+                              : 'rgba(38,102,235,0.10)'
+                            : c.isDark
+                              ? 'rgba(255,255,255,0.07)'
+                              : 'rgba(60,60,67,0.06)',
+                        borderColor:
+                          thinkingMode !== 'none'
+                            ? c.isDark
+                              ? 'rgba(74,136,255,0.35)'
+                              : 'rgba(38,102,235,0.25)'
+                            : c.isDark
+                              ? Glass.opacity.dark.border
+                              : Glass.opacity.light.border,
+                      },
+                    ]}
+                    hitSlop={4}
+                    accessibilityLabel="Thinking level"
+                  >
+                    <Ionicons
+                      name="bulb-outline"
+                      size={11}
+                      color={
+                        thinkingMode !== 'none'
+                          ? c.isDark
+                            ? Colors.primary[300]
+                            : Colors.primary[500]
+                          : c.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.toolbarPillText,
+                        {
+                          color:
+                            thinkingMode !== 'none'
+                              ? c.isDark
+                                ? Colors.primary[300]
+                                : Colors.primary[500]
+                              : c.textSecondary,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {thinkingBadge}
+                    </Text>
+                  </ScalePressable>
+
+                  <ScalePressable
+                    onPress={() => {
+                      wsService.send({ type: 'model_list_request', sessionId });
+                      setSettingsOpen(true);
+                    }}
+                    style={[
+                      styles.toolbarCircleBtn,
+                      {
+                        backgroundColor: c.isDark
+                          ? 'rgba(255,255,255,0.07)'
+                          : 'rgba(60,60,67,0.06)',
+                        borderColor: c.isDark
+                          ? Glass.opacity.dark.border
+                          : Glass.opacity.light.border,
+                      },
+                    ]}
+                    hitSlop={4}
+                    accessibilityLabel="Composer settings"
+                  >
+                    <Ionicons name="options-outline" size={13} color={c.textSecondary} />
+                  </ScalePressable>
+                </View>
+
+                <View style={styles.toolbarRight}>
+                  <ScalePressable
+                    onPress={() => void toggleVoice()}
+                    style={[
+                      styles.toolbarCircleBtn,
+                      {
+                        backgroundColor:
+                          voiceState === 'recording'
+                            ? 'rgba(235,77,85,0.18)'
+                            : c.isDark
+                              ? 'rgba(255,255,255,0.08)'
+                              : 'rgba(60,60,67,0.06)',
+                        borderColor:
+                          voiceState === 'recording'
+                            ? Colors.danger[400]
+                            : c.isDark
+                              ? Glass.opacity.dark.border
+                              : Glass.opacity.light.border,
+                      },
+                    ]}
+                    hitSlop={4}
+                    accessibilityLabel={
+                      voiceState === 'recording' ? 'Stop recording' : 'Dictate message'
+                    }
+                  >
+                    {voiceState === 'transcribing' ? (
+                      <ActivityIndicator size="small" color={Colors.warning[400]} />
+                    ) : (
+                      <Ionicons
+                        name={voiceState === 'recording' ? 'stop' : 'mic-outline'}
+                        size={15}
+                        color={
+                          voiceState === 'recording'
+                            ? Colors.danger[400]
+                            : voiceState !== 'idle'
+                              ? Colors.warning[400]
+                              : c.textSecondary
+                        }
+                      />
+                    )}
+                  </ScalePressable>
+
+                  {running && input.trim().length === 0 ? (
+                    <ScalePressable
+                      pressedScale={0.88}
+                      onPress={cancelTurn}
+                      style={[
+                        styles.sendActionBtn,
+                        {
+                          backgroundColor: c.isDark
+                            ? 'rgba(255,255,255,0.12)'
+                            : 'rgba(60,60,67,0.10)',
+                        },
+                      ]}
+                      hitSlop={4}
+                      accessibilityLabel="Stop"
+                    >
+                      <Ionicons name="stop" size={14} color={Colors.danger[400]} />
+                    </ScalePressable>
+                  ) : (
+                    <ScalePressable
+                      pressedScale={0.88}
+                      onPress={() => {
+                        if (running) {
+                          if (input.trim()) {
+                            sendSteer();
+                          }
+                        } else {
+                          sendChat();
+                        }
+                      }}
+                      style={[
+                        styles.sendActionBtn,
+                        {
+                          backgroundColor:
+                            running || !sendDisabled
+                              ? Colors.primary[500]
+                              : c.isDark
+                                ? 'rgba(255,255,255,0.07)'
+                                : 'rgba(60,60,67,0.06)',
+                        },
+                      ]}
+                      disabled={!running && sendDisabled}
+                      hitSlop={4}
+                      accessibilityLabel={running ? 'Steer now' : 'Send'}
+                    >
+                      <Ionicons
+                        name={running ? 'flash' : 'arrow-up'}
+                        size={16}
+                        color={running || !sendDisabled ? '#ffffff' : c.textTertiary}
+                      />
+                    </ScalePressable>
+                  )}
+                </View>
               </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
+            </GlassCapsule>
+          </Animated.View>
 
-      {errorToast && (
-        <View style={styles.errorToast} pointerEvents="box-none">
-          <GlassCapsule c={c} style={styles.errorToastCapsule} contentStyle={styles.errorToastContent}>
-            <Ionicons name="warning-outline" size={14} color={Colors.danger[400]} />
-            <Text style={[styles.errorToastText, { color: Colors.danger[400] }]}>{errorToast}</Text>
-          </GlassCapsule>
-        </View>
-      )}
+          <ComposerSettingsSheet
+            visible={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            colors={c}
+            models={Array.from(new Set([...providerModels, ...models]))}
+            modelDetails={modelDetails}
+            selectedModel={selectedModel}
+            onSelectModel={(m) => {
+              pickedModelRef.current = m;
+              setSelectedModel(m);
+              wsService.send({ type: 'model_select', sessionId, model: m });
+              if (sessionId) useComposerPrefs.getState().setModel(sessionId, m);
+            }}
+            thinkingMode={thinkingMode}
+            thinkingLevel={thinkingLevel}
+            onThinking={(mode, level) => {
+              setThinkingMode(mode);
+              if (level) setThinkingLevel(level);
+              sendThinkingConfig(mode, level);
+              if (sessionId) {
+                useComposerPrefs.getState().setThinking(sessionId, { mode, level });
+              }
+            }}
+            serviceTier={serviceTier}
+            onServiceTier={(tier) => {
+              setServiceTier(tier);
+              wsService.send({ type: 'service_tier_select', sessionId, tier });
+            }}
+            accessMode={accessMode}
+            onAccessMode={(mode) => {
+              setAccessMode(mode);
+              wsService.send({ type: 'access_mode_select', sessionId, mode });
+            }}
+            onInsertFile={() => {
+              setInput((prev) => (prev.trim() ? prev.replace(/\s+$/, '') + ' @' : '@'));
+              inputRef.current?.focus();
+            }}
+            onReview={() => setShowDiffReview(true)}
+            onCommand={(command) => enqueuePrompt(command)}
+          />
 
-      <PopoverMenu
-        visible={!!menu}
-        title={menu?.title}
-        options={menu?.options ?? []}
-        anchor={menu?.anchor}
-        colors={c}
-        onSelect={(i) => {
-          menu?.onSelect(i);
-          setMenu(null);
-        }}
-        onClose={() => setMenu(null)}
-      />
+          {promptModal?.visible && (
+            <Modal transparent animationType="fade" onRequestClose={() => setPromptModal(null)}>
+              <Pressable style={styles.modalOverlay} onPress={() => setPromptModal(null)}>
+                <Pressable
+                  style={[
+                    styles.promptSheet,
+                    { backgroundColor: c.isDark ? '#2c2e33' : '#f2f2f6' },
+                  ]}
+                  onPress={() => {}}
+                >
+                  <BlurView
+                    tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+                    intensity={Glass.blur.sheet}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <Text style={[styles.promptTitle, { color: c.textPrimary }]}>
+                    {promptModal.title}
+                  </Text>
+                  <TextInput
+                    autoFocus
+                    style={[
+                      styles.promptInput,
+                      {
+                        color: c.textPrimary,
+                        backgroundColor: c.isDark ? 'rgba(255,255,255,0.10)' : '#ffffff',
+                      },
+                    ]}
+                    placeholder={promptModal.placeholder}
+                    placeholderTextColor={c.textTertiary}
+                    onSubmitEditing={(e) => {
+                      const text = e.nativeEvent.text;
+                      if (text.trim()) {
+                        promptModal.onSubmit(text.trim());
+                        setPromptModal(null);
+                      }
+                    }}
+                    returnKeyType="done"
+                  />
+                  {/* UIAlertController-style stacked actions — hairline separated. */}
+                  <View style={[styles.promptActions, { borderTopColor: c.separator }]}>
+                    <ScalePressable
+                      onPress={() => setPromptModal(null)}
+                      style={[styles.promptActionBtn]}
+                    >
+                      <Text
+                        style={[
+                          styles.promptActionText,
+                          {
+                            color: c.isDark ? Colors.primary[300] : Colors.primary[500],
+                            fontWeight: '400',
+                          },
+                        ]}
+                      >
+                        Cancel
+                      </Text>
+                    </ScalePressable>
+                    <View style={[styles.promptActionDivider, { backgroundColor: c.separator }]} />
+                    <ScalePressable
+                      onPress={() => setPromptModal(null)}
+                      style={[styles.promptActionBtn]}
+                    >
+                      <Text
+                        style={[
+                          styles.promptActionText,
+                          {
+                            color: c.isDark ? Colors.primary[300] : Colors.primary[500],
+                            fontWeight: '600',
+                          },
+                        ]}
+                      >
+                        Done
+                      </Text>
+                    </ScalePressable>
+                  </View>
+                </Pressable>
+              </Pressable>
+            </Modal>
+          )}
 
-      <AllFilesDiffView
-        visible={showDiffReview}
-        sessionId={sessionId ?? ''}
-        projectPath={projectPath}
-        onClose={() => setShowDiffReview(false)}
-        onCommitSuccess={() => {
-          wsService.send({ type: 'git_status_request', sessionId });
-        }}
-      />
+          {errorToast && (
+            <View style={styles.errorToast} pointerEvents="box-none">
+              <GlassCapsule
+                c={c}
+                style={styles.errorToastCapsule}
+                contentStyle={styles.errorToastContent}
+              >
+                <Ionicons name="warning-outline" size={14} color={Colors.danger[400]} />
+                <Text style={[styles.errorToastText, { color: Colors.danger[400] }]}>
+                  {errorToast}
+                </Text>
+              </GlassCapsule>
+            </View>
+          )}
+
+          <PopoverMenu
+            visible={!!menu}
+            title={menu?.title}
+            options={menu?.options ?? []}
+            anchor={menu?.anchor}
+            colors={c}
+            onSelect={(i) => {
+              menu?.onSelect(i);
+              setMenu(null);
+            }}
+            onClose={() => setMenu(null)}
+          />
+
+          <AllFilesDiffView
+            visible={showDiffReview}
+            sessionId={sessionId ?? ''}
+            projectPath={projectPath}
+            onClose={() => setShowDiffReview(false)}
+            onCommitSuccess={() => {
+              wsService.send({ type: 'git_status_request', sessionId });
+            }}
+          />
         </Animated.View>
       )}
     </SidebarLayout>
@@ -2583,7 +2594,10 @@ function TurnEndActions({
                 body: JSON.stringify({ checkpointId }),
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              Alert.alert('Rolled Back', `Workspace successfully reverted to checkpoint ${checkpointId}.`);
+              Alert.alert(
+                'Rolled Back',
+                `Workspace successfully reverted to checkpoint ${checkpointId}.`,
+              );
             } catch (err) {
               Alert.alert('Rollback Failed', err instanceof Error ? err.message : String(err));
             }
@@ -2657,11 +2671,7 @@ function MessageBubble({
     const q: QuestionItem = rawQuestions?.[0] ?? { question: msg.content };
     return (
       <View style={styles.systemRow}>
-        <AgentQuestionCard
-          question={q}
-          onAnswer={onAnswerQuestion}
-          style={{ width: '100%' }}
-        />
+        <AgentQuestionCard question={q} onAnswer={onAnswerQuestion} style={{ width: '100%' }} />
       </View>
     );
   }
@@ -2688,11 +2698,7 @@ function MessageBubble({
     const isLong = msg.content.length > 360 || (msg.content.match(/\n/g) ?? []).length > 8;
     const images = msg.meta?.images as ChatImage[] | undefined;
     return (
-      <Pressable
-        onLongPress={onLongPress}
-        delayLongPress={300}
-        style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-      >
+      <ScalePressable pressedScale={0.98} onLongPress={onLongPress} delayLongPress={300} style={[]}>
         <View style={styles.userRow}>
           <View
             style={[
@@ -2752,7 +2758,7 @@ function MessageBubble({
             {formatTimeOfDay(msg.timestamp)}
           </Text>
         )}
-      </Pressable>
+      </ScalePressable>
     );
   }
 

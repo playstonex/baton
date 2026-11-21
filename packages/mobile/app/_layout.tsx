@@ -7,9 +7,7 @@ LogBox.ignoreAllLogs(true);
 import { useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { useFonts } from 'expo-font';
-import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import {
   JetBrainsMono_400Regular,
   JetBrainsMono_600SemiBold,
@@ -77,10 +75,8 @@ export default function RootLayout() {
   // first-launch redirect to /onboarding doesn't flash the wrong screen.
   const [booted, setBooted] = useState(false);
 
-  // Display + mono faces for titles and machine data (see theme.FontFamily).
+  // Mono face for machine data (see theme.FontFamily); titles use the system font.
   const [fontsLoaded] = useFonts({
-    Inter_500Medium,
-    Inter_600SemiBold,
     JetBrainsMono_400Regular,
     JetBrainsMono_600SemiBold,
   });
@@ -206,21 +202,17 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerTintColor: c.textPrimary,
+            // Screens lay out under the bar (they pad by useHeaderHeight). On iOS
+            // the bar uses the real UINavigationBar material instead of a BlurView
+            // painted behind it; Android gets a plain bar in the canvas color.
             headerTransparent: true,
-            headerBackground: () => (
-              <BlurView
-                tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
-                intensity={c.isDark ? 60 : 75}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: c.glassNav,
-                }}
-              />
-            ),
+            ...(Platform.OS === 'ios'
+              ? {
+                  headerBlurEffect: c.isDark
+                    ? ('systemChromeMaterialDark' as const)
+                    : ('systemChromeMaterialLight' as const),
+                }
+              : { headerStyle: { backgroundColor: c.bg } }),
             headerTitleStyle: {
               ...Typography.headline,
               color: c.textPrimary,
@@ -229,6 +221,24 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="settings"
+            options={{
+              title: 'Settings',
+              headerLargeTitle: true,
+              headerLargeTitleShadowVisible: false,
+              headerBackTitle: 'Back',
+            }}
+          />
+          <Stack.Screen
+            name="pipelines"
+            options={{
+              title: 'Pipelines',
+              headerLargeTitle: true,
+              headerLargeTitleShadowVisible: false,
+              headerBackTitle: 'Back',
+            }}
+          />
           <Stack.Screen
             name="connect"
             options={{

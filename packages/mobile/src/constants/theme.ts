@@ -1,9 +1,8 @@
 import { Platform, type TextStyle } from 'react-native';
 
-// ── Linear Design Tokens ──────────────────────────────────────
-// Derived from the "linear-app" design system (Open Design library):
-// darkness as the native medium, luminance-stepped surfaces,
-// semi-transparent hairline borders, a single indigo-violet accent.
+// ── Design Tokens ─────────────────────────────────────────────
+// Dark-first palette with luminance-stepped surfaces and a single
+// indigo-violet accent. Type and controls follow platform conventions.
 export const Glass = {
   /** BlurView intensity tiers for different UI layers */
   blur: {
@@ -216,14 +215,15 @@ export const Spacing = {
 } as const;
 
 /**
- * Display face for large titles / big numerals; mono for machine data
- * (URLs, ids, counters). Loaded via useFonts in app/_layout.tsx — falls
- * back to the system font until ready. Inter is the Linear identity face;
- * body text keeps the SF Pro system stack.
+ * Titles and numerals use the platform system face (SF Pro on iOS, Roboto on
+ * Android): it pairs with the system CJK fallback (PingFang / Noto), applies
+ * optical sizing and tracking per point size, and follows Dynamic Type.
+ * `undefined` means "system font" to React Native. Mono stays a bundled face
+ * for machine data (URLs, ids, code), loaded via useFonts in app/_layout.tsx.
  */
 export const FontFamily = {
-  display: 'Inter_600SemiBold',
-  displayMedium: 'Inter_500Medium',
+  display: undefined,
+  displayMedium: undefined,
   mono: 'JetBrainsMono_400Regular',
   monoSemiBold: 'JetBrainsMono_600SemiBold',
 } as const;
@@ -238,20 +238,13 @@ export const Typography = {
   title3: { fontSize: 20, lineHeight: 25, fontWeight: '600' as const },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700' as const },
   title1: { fontSize: 28, lineHeight: 34, fontWeight: '700' as const },
-  largeTitle: {
-    fontSize: 34,
-    lineHeight: 40,
-    fontWeight: '600' as const,
-    letterSpacing: -0.8,
-    fontFamily: FontFamily.display,
-  },
+  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' as const },
   /** Big numerals (stats, counters) — tabular so they don't jitter. */
   statValue: {
     fontSize: 28,
-    lineHeight: 32,
-    fontFamily: FontFamily.display,
+    lineHeight: 34,
+    fontWeight: '600' as const,
     fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
-    letterSpacing: -0.5,
   },
   /** Machine data: daemon URLs, session ids, timestamps. */
   mono: { fontSize: 13, lineHeight: 18, fontFamily: FontFamily.mono },

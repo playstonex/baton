@@ -190,7 +190,8 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
           style={[
             styles.header,
             {
-              paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md,
+              paddingTop:
+                Platform.OS === 'ios' || insets.top === 0 ? Spacing.md : insets.top + Spacing.xs,
               borderBottomColor: c.separator,
             },
           ]}
@@ -426,7 +427,10 @@ export const AllFilesDiffView: React.FC<AllFilesDiffViewProps> = ({
               style={[
                 styles.header,
                 {
-                  paddingTop: insets.top > 0 ? insets.top + Spacing.xs : Spacing.md,
+                  paddingTop:
+                    Platform.OS === 'ios' || insets.top === 0
+                      ? Spacing.md
+                      : insets.top + Spacing.xs,
                   borderBottomColor: c.separator,
                 },
               ]}

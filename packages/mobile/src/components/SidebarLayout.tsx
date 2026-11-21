@@ -1,26 +1,28 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  Pressable,
-  useWindowDimensions,
-} from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withTiming,
   withSpring,
   interpolate,
-  Easing,
+  Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatSidebar } from './ChatSidebar';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useLayoutStore } from '../stores/layout';
 
 const DUO_WIDE_BREAKPOINT = 600;
-const SPRING_CONFIG = { damping: 24, stiffness: 300, mass: 0.9 };
+// One spring for open and close so the drawer moves the same way in both
+// directions; overshoot is clamped so it never pulls past either edge.
+const SPRING_CONFIG = { damping: 26, stiffness: 260, mass: 0.9, overshootClamping: true };
+/** Fling speed (pt/s) that decides open/close regardless of position. */
+const FLING_VELOCITY = 500;
+/** Width of the left-edge strip that starts an open-drag on the root screen. */
+const EDGE_WIDTH = 20;
 
 interface SidebarLayoutProps {
   currentSessionId?: string;
@@ -48,7 +50,9 @@ export function SidebarLayout({
   const isWide = width >= DUO_WIDE_BREAKPOINT;
 
   // Responsive sidebar width: on Duo (951pt), ~310pt fits standard list-detail sizing while leaving fold (475.5pt) clear.
-  const sidebarWidth = isWide ? Math.min(320, Math.max(280, Math.floor(width * 0.33))) : Math.min(320, width * 0.82);
+  const sidebarWidth = isWide
+    ? Math.min(320, Math.max(280, Math.floor(width * 0.33)))
+    : Math.min(320, width * 0.82);
 
   const sidebarOpen = useLayoutStore((s) => s.sidebarOpen);
   const setSidebarOpen = useLayoutStore((s) => s.setSidebarOpen);
@@ -57,26 +61,74 @@ export function SidebarLayout({
 
   const [drawerRendered, setDrawerRendered] = useState(false);
   const drawerProgress = useSharedValue(0);
+  const dragStart = useSharedValue(0);
+  // Set when a drag already started the settle animation, so the store-driven
+  // effect below doesn't restart it (and drop the fling velocity).
+  const settledByGesture = useRef(false);
+
+  // On a pushed screen the left edge belongs to the native back-swipe.
+  const router = useRouter();
+  const edgeSwipeToOpen = !router.canGoBack();
 
   // Animate drawer progress for compact mode
   useEffect(() => {
-    if (!isWide) {
-      if (sidebarOpen) {
-        setDrawerRendered(true);
-        drawerProgress.value = withSpring(1, SPRING_CONFIG);
-      } else {
-        drawerProgress.value = withTiming(
-          0,
-          { duration: 200, easing: Easing.in(Easing.cubic) },
-          (finished) => {
-            if (finished) {
-              runOnJS(setDrawerRendered)(false);
-            }
-          },
-        );
-      }
+    if (isWide) return;
+    if (sidebarOpen) setDrawerRendered(true);
+    if (settledByGesture.current) {
+      settledByGesture.current = false;
+      return;
     }
+    drawerProgress.value = withSpring(sidebarOpen ? 1 : 0, SPRING_CONFIG, (finished) => {
+      if (finished && !sidebarOpen) runOnJS(setDrawerRendered)(false);
+    });
   }, [sidebarOpen, isWide, drawerProgress]);
+
+  const finishDrag = useCallback(
+    (open: boolean) => {
+      if (open !== useLayoutStore.getState().sidebarOpen) settledByGesture.current = true;
+      setSidebarOpen(open);
+      if (!open) setDrawerRendered(false);
+    },
+    [setSidebarOpen],
+  );
+
+  // Horizontal drag that follows the finger, then settles by fling velocity or
+  // by how far it got. Vertical movement fails it so list scrolling still works.
+  const dragConfig = {
+    activeOffsetX: [-10, 10],
+    failOffsetY: [-15, 15],
+    onActivate: () => {
+      'worklet';
+      dragStart.value = drawerProgress.value;
+      runOnJS(setDrawerRendered)(true);
+    },
+    onUpdate: (e) => {
+      'worklet';
+      const next = dragStart.value + e.translationX / sidebarWidth;
+      drawerProgress.value = Math.min(1, Math.max(0, next));
+    },
+    onDeactivate: (e) => {
+      'worklet';
+      const open =
+        e.velocityX > FLING_VELOCITY
+          ? true
+          : e.velocityX < -FLING_VELOCITY
+            ? false
+            : drawerProgress.value > 0.5;
+      drawerProgress.value = withSpring(
+        open ? 1 : 0,
+        { ...SPRING_CONFIG, velocity: e.velocityX / sidebarWidth },
+        (finished) => {
+          if (finished) runOnJS(finishDrag)(open);
+        },
+      );
+      if (open) runOnJS(finishDrag)(true);
+    },
+  } satisfies Parameters<typeof usePanGesture>[0];
+  // Two instances: a gesture object can only be attached to one detector, and
+  // the edge strip stays mounted while its drag brings the drawer in.
+  const edgeGesture = usePanGesture(dragConfig);
+  const drawerGesture = usePanGesture(dragConfig);
 
   const openSidebar = useCallback(() => {
     if (isWide) {
@@ -111,7 +163,12 @@ export function SidebarLayout({
     return {
       transform: [
         {
-          translateX: interpolate(drawerProgress.value, [0, 1], [-sidebarWidth, 0]),
+          translateX: interpolate(
+            drawerProgress.value,
+            [0, 1],
+            [-sidebarWidth, 0],
+            Extrapolation.CLAMP,
+          ),
         },
       ],
     };
@@ -171,40 +228,59 @@ export function SidebarLayout({
             sidebarOpen,
           })}
 
+          {/* Left-edge strip: drag right to pull the drawer out. */}
+          {edgeSwipeToOpen && !sidebarOpen && (
+            <GestureDetector gesture={edgeGesture}>
+              <View style={[styles.edgeStrip, { width: EDGE_WIDTH + insets.left }]} />
+            </GestureDetector>
+          )}
+
           {/* Slide-out Drawer Overlay */}
           {drawerRendered && (
-            <View style={StyleSheet.absoluteFill} pointerEvents={sidebarOpen ? 'auto' : 'none'}>
-              {/* Dimmed Backdrop */}
-              <Animated.View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { backgroundColor: 'rgba(0, 0, 0, 0.45)' },
-                  backdropAnimatedStyle,
-                ]}
+            <GestureDetector gesture={drawerGesture}>
+              <View
+                style={StyleSheet.absoluteFill}
+                pointerEvents={sidebarOpen ? 'auto' : 'box-none'}
               >
-                <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} />
-              </Animated.View>
+                {/* Dimmed Backdrop */}
+                <Animated.View
+                  pointerEvents={sidebarOpen ? 'auto' : 'none'}
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+                    backdropAnimatedStyle,
+                  ]}
+                >
+                  <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onPress={closeDrawer}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close sidebar"
+                  />
+                </Animated.View>
 
-              {/* Drawer Content */}
-              <Animated.View
-                style={[
-                  styles.drawerSheet,
-                  {
-                    width: sidebarWidth,
-                    borderRightColor: c.separator,
-                  },
-                  drawerAnimatedStyle,
-                ]}
-              >
-                <ChatSidebar
-                  currentSessionId={currentSessionId}
-                  onSelectSession={onSelectSession}
-                  onNewChat={onNewChat}
-                  onClose={closeDrawer}
-                  isWide={false}
-                />
-              </Animated.View>
-            </View>
+                {/* Drawer Content */}
+                <Animated.View
+                  pointerEvents={sidebarOpen ? 'auto' : 'none'}
+                  style={[
+                    styles.drawerSheet,
+                    {
+                      width: sidebarWidth,
+                      borderRightColor: c.separator,
+                    },
+                    drawerAnimatedStyle,
+                  ]}
+                >
+                  <ChatSidebar
+                    currentSessionId={currentSessionId}
+                    onSelectSession={onSelectSession}
+                    onNewChat={onNewChat}
+                    onClose={closeDrawer}
+                    isWide={false}
+                  />
+                </Animated.View>
+              </View>
+            </GestureDetector>
           )}
         </View>
       )}
@@ -230,6 +306,12 @@ const styles = StyleSheet.create({
   },
   singlePaneContainer: {
     flex: 1,
+  },
+  edgeStrip: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
   },
   drawerSheet: {
     position: 'absolute',

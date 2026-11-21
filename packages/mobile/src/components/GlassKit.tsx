@@ -1,69 +1,60 @@
+import React from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  Pressable,
+  ActivityIndicator,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from '../hooks/useThemeColors';
-import { Typography, Spacing, Glass, Colors, Shadows } from '../constants/theme';
+import { Typography, Spacing, Colors, InsetGrouped, iOSGroupedRadius } from '../constants/theme';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import { HighlightPressable, ScalePressable } from './Pressables';
 
 /**
- * Shared liquid-glass primitives. Every card/button/pill in the app renders
- * through here so surface treatment (borders, blur, press feedback, type)
+ * Shared surface primitives. Every card/button/pill in the app renders
+ * through here so surface treatment (fills, borders, press feedback, type)
  * stays consistent across screens.
+ *
+ * Cards are opaque surfaces. They sit on a static canvas, so a blur behind
+ * them has nothing to show; material blur is reserved for bars and overlays
+ * that content actually scrolls under.
  */
+
+/** Dark cards need a faint edge against the near-black canvas; light ones don't. */
+function cardEdge(c: ThemeColors) {
+  return c.isDark
+    ? { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.07)' }
+    : null;
+}
 
 export function GlassCard({
   c,
   style,
   children,
-  blurIntensity,
   overlay,
 }: {
   c: ThemeColors;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
-  blurIntensity?: number;
-  /** Painted edge-to-edge inside the card (above surface+tint, under content) —
-   * attention rails/tints sit flush with the card border, not the content padding. */
+  /** Painted edge-to-edge inside the card (under content) — attention
+   * rails/tints sit flush with the card border, not the content padding. */
   overlay?: React.ReactNode;
 }) {
   return (
-    <BlurView
-      tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-      intensity={blurIntensity ?? Glass.blur.card}
-      style={[styles.glassCard, Shadows.card, style]}
-    >
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: c.isDark ? Glass.opacity.dark.surface : Glass.opacity.light.surface,
-            borderRadius: 16,
-          },
-        ]}
-        pointerEvents="none"
-      />
-      {/* 1px inner border — gives the glass sheet a visible edge. */}
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            borderRadius: 16,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-          },
-        ]}
-        pointerEvents="none"
-      />
+    <View style={[styles.glassCard, { backgroundColor: c.card }, cardEdge(c), style]}>
       {overlay}
       <View style={styles.glassCardContent}>{children}</View>
-    </BlurView>
+    </View>
   );
 }
 
@@ -81,24 +72,23 @@ export function GlassSectionHeader({
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionHeaderLeft}>
-        <View style={[styles.sectionAccent, { backgroundColor: Colors.primary[500] }]} />
-        <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>{title}</Text>
+        <Text style={[styles.sectionTitle, { color: c.textTertiary }]} accessibilityRole="header">
+          {title}
+        </Text>
         {count !== undefined && (
-          <View style={[styles.countBadge, { backgroundColor: c.subtle }]}>
-            <Text style={[styles.countText, { color: c.textTertiary }]}>{count}</Text>
-          </View>
+          <Text style={[styles.countText, { color: c.textTertiary }]}>{count}</Text>
         )}
       </View>
       {action && (
-        <Pressable
+        <ScalePressable
           onPress={action.onPress}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={({ pressed }) => [styles.sectionAction, { opacity: pressed ? 0.6 : 1 }]}
+          accessibilityRole="button"
         >
           <Text style={[styles.sectionActionText, { color: Colors.primary[500] }]}>
             {action.label}
           </Text>
-        </Pressable>
+        </ScalePressable>
       )}
     </View>
   );
@@ -119,42 +109,15 @@ export function GlassStatCard({
 }) {
   const accent = color ?? Colors.primary[500];
   return (
-    <BlurView
-      tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-      intensity={Glass.blur.card}
-      style={styles.statCard}
-    >
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: c.isDark ? Glass.opacity.dark.surface : Glass.opacity.light.surface,
-            borderRadius: 14,
-          },
-        ]}
-        pointerEvents="none"
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            borderRadius: 14,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-          },
-        ]}
-        pointerEvents="none"
-      />
-      {/* Top accent hairline — quiet color cue tied to the stat's meaning. */}
-      <View style={[styles.statAccent, { backgroundColor: accent + '55' }]} />
+    <View style={[styles.statCard, { backgroundColor: c.card }, cardEdge(c)]}>
       <Text style={[styles.statValue, { color: c.textPrimary }]}>{value}</Text>
       <View style={styles.statBottom}>
-        {icon && <Ionicons name={icon as any} size={11} color={accent} />}
+        {icon && <Ionicons name={icon as any} size={12} color={accent} />}
         <Text style={[styles.statLabel, { color: c.textTertiary }]} numberOfLines={1}>
           {label}
         </Text>
       </View>
-    </BlurView>
+    </View>
   );
 }
 
@@ -178,64 +141,39 @@ export function GlassButton({
   style?: StyleProp<ViewStyle>;
 }) {
   const isDisabled = disabled || loading;
-  const accentColor =
-    variant === 'danger'
-      ? Colors.danger[400]
-      : variant === 'secondary'
-        ? c.textSecondary
-        : Colors.primary[300];
+  const fg =
+    variant === 'primary' ? '#ffffff' : variant === 'danger' ? Colors.danger[400] : c.textPrimary;
+  const bg =
+    variant === 'primary'
+      ? Colors.primary[500]
+      : variant === 'danger'
+        ? Colors.danger[400] + '1f'
+        : c.isDark
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(0,0,0,0.05)';
   return (
-    <Pressable
+    <ScalePressable
       onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
+      style={[
         styles.btnBase,
+        { backgroundColor: bg, opacity: isDisabled && !loading ? 0.4 : 1 },
         style,
-        { opacity: isDisabled ? 0.4 : pressed ? 0.55 : 1 },
       ]}
     >
-      <BlurView
-        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-        intensity={Glass.blur.card}
-        style={StyleSheet.absoluteFill}
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor:
-              variant === 'primary'
-                ? Colors.primary[500]
-                : variant === 'danger'
-                  ? Colors.danger[400] + '1a'
-                  : c.isDark
-                    ? Glass.opacity.dark.subtle
-                    : Glass.opacity.light.subtle,
-            borderRadius: 12,
-          },
-        ]}
-        pointerEvents="none"
-      />
       <View style={styles.btnContent}>
-        {icon && !loading && <Ionicons name={icon as any} size={18} color={accentColor} />}
-        <Text
-          style={[
-            Typography.subhead,
-            {
-              color:
-                variant === 'primary'
-                  ? '#ffffff'
-                  : variant === 'danger'
-                    ? Colors.danger[400]
-                    : c.textPrimary,
-              fontWeight: '600',
-            },
-          ]}
-        >
-          {loading ? '...' : label}
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="small" color={fg} />
+        ) : (
+          icon && <Ionicons name={icon as any} size={18} color={fg} />
+        )}
+        {!!label && (
+          <Text style={[Typography.subhead, { color: fg, fontWeight: '600' }]}>{label}</Text>
+        )}
       </View>
-    </Pressable>
+    </ScalePressable>
   );
 }
 
@@ -251,30 +189,22 @@ export function GlassSearchBar({
   placeholder?: string;
 }) {
   return (
-    <BlurView
-      tint={c.isDark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
-      intensity={Glass.blur.card}
-      style={styles.searchBar}
+    <View
+      style={[
+        styles.searchBar,
+        { backgroundColor: c.isDark ? 'rgba(118,118,128,0.24)' : 'rgba(118,118,128,0.12)' },
+      ]}
     >
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: c.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
-            borderRadius: 12,
-          },
-        ]}
-        pointerEvents="none"
-      />
       <Ionicons name="search" size={16} color={c.textTertiary} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder ?? 'Search'}
         placeholderTextColor={c.textTertiary}
+        clearButtonMode="while-editing"
         style={[styles.searchInput, { color: c.textPrimary }]}
       />
-    </BlurView>
+    </View>
   );
 }
 
@@ -293,15 +223,11 @@ export function GlassPill({
 }) {
   const accent = color ?? Colors.primary[500];
   return (
-    <Pressable
+    <ScalePressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.pill,
-        {
-          backgroundColor: active ? accent + '20' : c.subtle,
-          opacity: pressed ? 0.55 : 1,
-        },
-      ]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+      style={[styles.pill, { backgroundColor: active ? accent + '20' : c.subtle }]}
     >
       <Text
         style={[
@@ -311,24 +237,17 @@ export function GlassPill({
       >
         {label}
       </Text>
-    </Pressable>
+    </ScalePressable>
   );
 }
 
 export function GlassDivider({ c }: { c: ThemeColors }) {
-  return (
-    <View
-      style={[
-        styles.divider,
-        { backgroundColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border },
-      ]}
-    />
-  );
+  return <View style={[styles.divider, { backgroundColor: c.separator }]} />;
 }
 
 /**
- * Skeleton block for async list content — matches the glass surface so
- * loading states keep the layout shape instead of collapsing into a spinner.
+ * Skeleton block for async list content — keeps the layout shape instead of
+ * collapsing into a spinner, with a slow pulse so it reads as loading.
  */
 export function GlassSkeleton({
   c,
@@ -339,23 +258,164 @@ export function GlassSkeleton({
   height?: number;
   radius?: number;
 }) {
+  const pulse = useSharedValue(0.55);
+  React.useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [pulse]);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
   return (
-    <View
+    <Animated.View
       style={[
         styles.skeleton,
         {
           height,
           borderRadius: radius,
-          backgroundColor: c.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(60,60,67,0.06)',
+          backgroundColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.08)',
         },
+        pulseStyle,
       ]}
     />
   );
 }
 
+// ── iOS inset-grouped list ──────────────────────────────────────────────
+
+/**
+ * A titled group of rows on a rounded surface, as in iOS Settings. Rows are
+ * separated by inset hairlines that start at the text, not the icon.
+ */
+export function GroupedSection({
+  c,
+  header,
+  footer,
+  children,
+  style,
+  iconRows,
+}: {
+  c: ThemeColors;
+  header?: string;
+  footer?: string;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  /** Rows carry icon tiles: separators start at the title, as in iOS. */
+  iconRows?: boolean;
+}) {
+  const rows = React.Children.toArray(children).filter(Boolean);
+  return (
+    <View style={[styles.groupWrap, style]}>
+      {header ? (
+        <Text style={[styles.groupHeader, { color: c.textTertiary }]} accessibilityRole="header">
+          {header}
+        </Text>
+      ) : null}
+      <View style={[styles.groupCard, { backgroundColor: c.card }, cardEdge(c)]}>
+        {rows.map((row, i) => (
+          <React.Fragment key={i}>
+            {row}
+            {i < rows.length - 1 && (
+              <View
+                style={[
+                  styles.groupSeparator,
+                  { backgroundColor: c.separator, marginLeft: iconRows ? 57 : Spacing.lg },
+                ]}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </View>
+      {footer ? (
+        <Text style={[styles.groupFooter, { color: c.textTertiary }]}>{footer}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * One row in a `GroupedSection`: optional tinted icon tile, title + subtitle,
+ * trailing value or accessory, and a chevron when it navigates.
+ */
+export function GroupedRow({
+  c,
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  value,
+  accessory,
+  onPress,
+  chevron,
+  destructive,
+  selected,
+  accessibilityHint,
+}: {
+  c: ThemeColors;
+  icon?: string;
+  iconColor?: string;
+  title: string;
+  subtitle?: string;
+  value?: string;
+  accessory?: React.ReactNode;
+  onPress?: () => void;
+  /** Show a disclosure chevron. Defaults to true when the row is pressable. */
+  chevron?: boolean;
+  destructive?: boolean;
+  /** Shows a checkmark, for single-choice lists. */
+  selected?: boolean;
+  accessibilityHint?: string;
+}) {
+  const tint = iconColor ?? Colors.primary[500];
+  const showChevron = chevron ?? (!!onPress && selected === undefined && !destructive);
+  const content = (
+    <>
+      {icon ? (
+        <View style={[styles.rowIcon, { backgroundColor: tint }]}>
+          <Ionicons name={icon as any} size={16} color="#ffffff" />
+        </View>
+      ) : null}
+      <View style={styles.rowText}>
+        <Text
+          style={[Typography.body, { color: destructive ? Colors.danger[400] : c.textPrimary }]}
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[Typography.footnote, { color: c.textTertiary }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {value ? (
+        <Text style={[Typography.body, { color: c.textTertiary }]} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
+      {accessory}
+      {selected ? <Ionicons name="checkmark" size={20} color={Colors.primary[500]} /> : null}
+      {showChevron ? <Ionicons name="chevron-forward" size={17} color={c.textTertiary} /> : null}
+    </>
+  );
+  if (!onPress) return <View style={styles.row}>{content}</View>;
+  return (
+    <HighlightPressable
+      onPress={onPress}
+      style={styles.row}
+      accessibilityRole="button"
+      accessibilityState={selected !== undefined ? { selected } : undefined}
+      accessibilityHint={accessibilityHint}
+    >
+      {content}
+    </HighlightPressable>
+  );
+}
+
 const styles = StyleSheet.create({
   glassCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     borderCurve: 'continuous',
   },
@@ -365,43 +425,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 2,
-    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 6,
     marginTop: Spacing.lg,
   },
   sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  sectionAccent: { width: 3, height: 14, borderRadius: 2 },
-  sectionTitle: { ...Typography.overline },
-  countBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  countText: { ...Typography.caption2, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  sectionAction: {},
+  sectionTitle: { ...Typography.footnote, textTransform: 'uppercase' },
+  countText: { ...Typography.footnote, fontVariant: ['tabular-nums'] },
   sectionActionText: { ...Typography.footnote, fontWeight: '600' },
 
   statCard: {
     flex: 1,
     borderRadius: 14,
-    overflow: 'hidden',
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
+    borderCurve: 'continuous',
+    paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.md,
     gap: 2,
     alignItems: 'flex-start',
   },
-  statAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-  },
-  statValue: { ...Typography.statValue, fontWeight: '600' },
+  statValue: { ...Typography.statValue },
   statBottom: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statLabel: { ...Typography.caption2 },
+  statLabel: { ...Typography.caption1 },
 
   btnBase: {
     minHeight: 48,
     borderRadius: 12,
-    overflow: 'hidden',
+    borderCurve: 'continuous',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -416,18 +465,53 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    overflow: 'hidden',
-    paddingHorizontal: Spacing.md,
-    minHeight: 40,
-    gap: Spacing.sm,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.sm,
+    minHeight: 36,
+    gap: 6,
   },
-  searchInput: { flex: 1, ...Typography.subhead, paddingVertical: Spacing.sm },
+  searchInput: { flex: 1, ...Typography.body, paddingVertical: 7 },
 
   pill: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs + 2, borderRadius: 16 },
-  pillText: { ...Typography.caption1 },
+  pillText: { ...Typography.footnote },
 
   divider: { height: StyleSheet.hairlineWidth },
 
-  skeleton: { overflow: 'hidden', opacity: 0.8 },
+  skeleton: { overflow: 'hidden' },
+
+  groupWrap: { marginTop: InsetGrouped.sectionGap },
+  groupHeader: {
+    ...Typography.footnote,
+    textTransform: 'uppercase',
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 6,
+  },
+  groupCard: {
+    borderRadius: iOSGroupedRadius,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+  },
+  groupFooter: {
+    ...Typography.footnote,
+    paddingHorizontal: Spacing.lg,
+    marginTop: 6,
+  },
+  groupSeparator: { height: StyleSheet.hairlineWidth },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: InsetGrouped.rowMinHeight,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 10,
+    gap: Spacing.md,
+  },
+  rowIcon: {
+    width: 29,
+    height: 29,
+    borderRadius: 7,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowText: { flex: 1, minWidth: 0, gap: 1 },
 });

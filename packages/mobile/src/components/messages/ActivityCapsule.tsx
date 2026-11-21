@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import * as Haptics from 'expo-haptics';
 import type { ChatMessage } from '../../stores/chat';
@@ -13,6 +13,7 @@ import {
 import { HighlightedText } from './HighlightedText';
 import { DiffRenderer } from './DiffRenderer';
 import { liveActivityService } from '../../services/live-activity';
+import { HighlightPressable, ScalePressable } from '../Pressables';
 
 export interface ActivityCapsuleProps {
   messages: ChatMessage[];
@@ -81,8 +82,8 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
       ]}
     >
       {/* ── Capsule Header ── */}
-      <Pressable
-        style={({ pressed }) => [styles.header, { opacity: pressed ? 0.75 : 1 }]}
+      <HighlightPressable
+        style={[styles.header]}
         onPress={handleToggleCapsule}
         hitSlop={6}
         accessibilityRole="button"
@@ -164,7 +165,7 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
             style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}
           />
         </View>
-      </Pressable>
+      </HighlightPressable>
 
       {/* ── Expanded Step Timeline ── */}
       {isExpanded && (
@@ -202,13 +203,12 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
 
           {/* Diff Review Pill Footer */}
           {summary.hasFileChanges && onReviewDiff && (
-            <Pressable
-              style={({ pressed }) => [
+            <ScalePressable
+              style={[
                 styles.reviewDiffPill,
                 {
                   backgroundColor: c.isDark ? 'rgba(94,106,210,0.12)' : 'rgba(94,106,210,0.08)',
                   borderColor: c.isDark ? 'rgba(94,106,210,0.25)' : 'rgba(94,106,210,0.2)',
-                  opacity: pressed ? 0.75 : 1,
                 },
               ]}
               onPress={onReviewDiff}
@@ -220,7 +220,7 @@ export const ActivityCapsule = React.memo(function ActivityCapsule({
                 {summary.fileChangesCount !== 1 ? 's' : ''}
               </Text>
               <Ionicons name="arrow-forward" size={11} color={Colors.primary[400]} />
-            </Pressable>
+            </ScalePressable>
           )}
         </View>
       )}
@@ -288,8 +288,9 @@ const TimelineStepRow = React.memo(function TimelineStepRow({
       )}
 
       {/* Row Header */}
-      <Pressable
-        style={({ pressed }) => [styles.stepHeader, { opacity: pressed && hasDetails ? 0.75 : 1 }]}
+      <HighlightPressable
+        style={styles.stepHeader}
+        disabled={!hasDetails}
         onPress={hasDetails ? onToggle : undefined}
         hitSlop={4}
       >
@@ -335,7 +336,7 @@ const TimelineStepRow = React.memo(function TimelineStepRow({
             />
           )}
         </View>
-      </Pressable>
+      </HighlightPressable>
 
       {/* Step Detail Content Drawer */}
       {isExpanded && hasDetails && (

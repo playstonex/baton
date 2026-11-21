@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Glass, Spacing } from '../constants/theme';
 import type { ThemeColors } from './messages';
+import { ScalePressable } from './Pressables';
 
 /**
  * In-chat find bar — the native adaptation of paseo's PaneFind: query field
@@ -79,14 +80,14 @@ export function ChatFindBar({
       >
         <Ionicons name="chevron-down" size={15} color={colors.textSecondary} />
       </Pressable>
-      <Pressable
+      <ScalePressable
         onPress={onClose}
         hitSlop={4}
         accessibilityLabel="Close find"
-        style={({ pressed }) => [styles.btn, pressed && { opacity: 0.4 }]}
+        style={[styles.btn]}
       >
         <Ionicons name="close" size={15} color={colors.textSecondary} />
-      </Pressable>
+      </ScalePressable>
     </View>
   );
 }

@@ -31,6 +31,7 @@ import {
 } from '../src/components/GlassKit';
 import { Typography, Spacing, Colors } from '../src/constants/theme';
 import { QrScannerModal, type ScannedPairingData } from '../src/components/QrScannerModal';
+import { HighlightPressable, ScalePressable } from '../src/components/Pressables';
 
 function formatTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -72,9 +73,7 @@ export default function ConnectScreen() {
   const setActiveHost = useConnectionStore((s) => s.setActiveHost);
 
   const [mode, setMode] = useState<'local' | 'remote'>('local');
-  const [inputLocalHttp, setInputLocalHttp] = useState(
-    __DEV__ ? 'http://127.0.0.1:3210' : '',
-  );
+  const [inputLocalHttp, setInputLocalHttp] = useState(__DEV__ ? 'http://127.0.0.1:3210' : '');
   const [inputLocalWs, setInputLocalWs] = useState('');
   const [inputRelayUrl, setInputRelayUrl] = useState('');
   const [inputPairingCode, setInputPairingCode] = useState('');
@@ -120,8 +119,7 @@ export default function ConnectScreen() {
       setMode('local');
       setInputLocalHttp(data.localHttpUrl);
       const wsUrl =
-        data.localWsUrl ||
-        data.localHttpUrl.replace(/^http/, 'ws').replace(/:\d+$/, ':3211');
+        data.localWsUrl || data.localHttpUrl.replace(/^http/, 'ws').replace(/:\d+$/, ':3211');
       setInputLocalWs(wsUrl);
       setLoading(true);
       setError('');
@@ -158,7 +156,11 @@ export default function ConnectScreen() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code: data.pairingCode.trim() }),
           });
-          const authData = (await res.json()) as { token?: string; hostId?: string; error?: string };
+          const authData = (await res.json()) as {
+            token?: string;
+            hostId?: string;
+            error?: string;
+          };
           if (!res.ok) {
             setError(authData.error ?? 'Pairing failed');
             return;
@@ -342,16 +344,15 @@ export default function ConnectScreen() {
                 const isActive = host.id === activeHostId;
                 return (
                   <View key={host.id}>
-                    <Pressable
+                    <HighlightPressable
                       onPress={() => connectToHost(host)}
-                      style={({ pressed }) => ({
+                      style={{
                         flexDirection: 'row',
                         alignItems: 'center',
                         paddingVertical: 10,
                         paddingHorizontal: Spacing.lg,
                         gap: Spacing.sm,
-                        opacity: pressed ? 0.7 : 1,
-                      })}
+                      }}
                     >
                       <View
                         style={{
@@ -409,7 +410,7 @@ export default function ConnectScreen() {
                       >
                         <Ionicons name="close" size={14} color={c.textTertiary} />
                       </Pressable>
-                    </Pressable>
+                    </HighlightPressable>
                     {i < sortedHosts.length - 1 && <GlassDivider c={c} />}
                   </View>
                 );
@@ -419,9 +420,9 @@ export default function ConnectScreen() {
         )}
 
         <GlassSectionHeader c={c} title="New Server" />
-        <Pressable
+        <ScalePressable
           onPress={() => setScannerVisible(true)}
-          style={({ pressed }) => ({
+          style={{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
@@ -432,15 +433,14 @@ export default function ConnectScreen() {
             backgroundColor: c.isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)',
             borderWidth: 1,
             borderColor: 'rgba(59, 130, 246, 0.3)',
-            opacity: pressed ? 0.8 : 1,
             marginBottom: Spacing.xs,
-          })}
+          }}
         >
           <Ionicons name="qr-code-outline" size={20} color={Colors.primary[500]} />
           <Text style={[Typography.subhead, { color: Colors.primary[500], fontWeight: '600' }]}>
             Scan Pairing QR Code
           </Text>
-        </Pressable>
+        </ScalePressable>
         <GlassCard c={c} style={{ gap: Spacing.md }}>
           <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
             {(['local', 'remote'] as const).map((m) => (

@@ -1,11 +1,12 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Linking, ScrollView, Pressable, Clipboard } from 'react-native';
+import { View, Text, StyleSheet, Linking, ScrollView, Clipboard } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './TypingIndicator';
 import { findMatchRanges, toHighlightSegments } from './HighlightedText';
 import { Colors, FontFamily, MessageText } from '../../constants/theme';
 import { useRevealedText } from '../../hooks/useRevealedText';
+import { ScalePressable } from '../Pressables';
 
 interface Props {
   content: string;
@@ -85,10 +86,10 @@ const CodeBlock = React.memo(function CodeBlock({
         ]}
       >
         <Text style={[styles.codeLang, { color: colors.textTertiary }]}>{cleanLang}</Text>
-        <Pressable
+        <ScalePressable
           onPress={handleCopy}
           hitSlop={8}
-          style={({ pressed }) => [styles.copyBtn, { opacity: pressed ? 0.6 : 1 }]}
+          style={[styles.copyBtn]}
           accessibilityLabel={copied ? 'Copied code' : 'Copy code'}
         >
           <Ionicons
@@ -116,7 +117,7 @@ const CodeBlock = React.memo(function CodeBlock({
           >
             {copied ? 'Copied' : 'Copy'}
           </Text>
-        </Pressable>
+        </ScalePressable>
       </View>
       <ScrollView
         horizontal

@@ -1,19 +1,11 @@
 import React, { useEffect } from 'react';
-import {
-  LayoutAnimation,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { LayoutAnimation, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontFamily, Glass, Radius, Spacing, Typography } from '../constants/theme';
 import type { ThemeColors } from './messages';
 import { formatModelName, type ModelInfo } from '@baton/shared/utils';
+import { HighlightPressable, ScalePressable } from './Pressables';
 
 export type ThinkingMode = 'none' | 'auto' | 'level';
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -67,13 +59,12 @@ function Segmented<T extends string>({
       {options.map((opt) => {
         const active = opt.value === value;
         return (
-          <Pressable
+          <ScalePressable
             key={opt.value}
             onPress={() => onChange(opt.value)}
-            style={({ pressed }) => [
+            style={[
               styles.segment,
               active && [styles.segmentActive, { backgroundColor: Colors.primary[500] }],
-              !active && pressed && { opacity: 0.6 },
             ]}
             hitSlop={2}
             accessibilityRole="button"
@@ -88,7 +79,7 @@ function Segmented<T extends string>({
             >
               {opt.label}
             </Text>
-          </Pressable>
+          </ScalePressable>
         );
       })}
     </View>
@@ -106,7 +97,7 @@ function Group({ colors, children }: { colors: ThemeColors; children: React.Reac
       style={[
         styles.group,
         {
-          backgroundColor: colors.isDark ? Glass.opacity.dark.subtle : Glass.opacity.light.subtle,
+          backgroundColor: colors.card,
         },
       ]}
     >
@@ -139,10 +130,7 @@ function Row({
   trailing?: React.ReactNode;
 }) {
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={onPress}
-    >
+    <HighlightPressable style={[styles.row]} onPress={onPress}>
       {icon ? (
         <View style={[styles.rowIconWrap, { backgroundColor: Colors.primary[500] + '1f' }]}>
           <Ionicons name={icon} size={14} color={Colors.primary[400]} />
@@ -176,7 +164,7 @@ function Row({
         <Ionicons name="warning" size={15} color={Colors.warning[400]} />
       ) : null}
       {trailing ?? (selected ? <Checkmark colors={colors} /> : null)}
-    </Pressable>
+    </HighlightPressable>
   );
 }
 
@@ -199,9 +187,8 @@ const ACTION_TILES: Array<{
 ];
 
 /**
- * Liquid-glass bottom sheet behind the composer's tune control — Linear
- * surfaces (Open Design "linear-app"), inset-grouped rows, segmented
- * controls for mutually exclusive settings. Every control maps to a real
+ * Native page sheet behind the composer's tune control — inset-grouped rows
+ * and segmented controls for mutually exclusive settings. Every control maps to a real
  * protocol message or a real slash command.
  */
 export function ComposerSettingsSheet({
@@ -231,47 +218,141 @@ export function ComposerSettingsSheet({
   }, [thinkingMode]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <BlurView
-            tint={colors.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-            intensity={Glass.blur.sheet}
-            style={styles.sheetBlur}
-          >
-            {/* Surface tint + hairline edge — same glass recipe as cards/nav. */}
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: colors.isDark
-                    ? Glass.opacity.dark.elevated
-                    : Glass.opacity.light.elevated,
-                },
-              ]}
-              pointerEvents="none"
-            />
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: colors.isDark
-                    ? Glass.opacity.dark.border
-                    : Glass.opacity.light.border,
-                },
-              ]}
-              pointerEvents="none"
-            />
+    // Native page sheet on iOS: system card presentation, the presenting
+    // screen recedes behind it, and a downward drag tracks the finger and
+    // dismisses (onRequestClose fires on swipe-dismiss too).
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <View style={[styles.sheetRoot, { backgroundColor: colors.bg }]}>
+        <View style={styles.titleRow}>
+          <View style={styles.titleSide} />
+          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
+            Chat Settings
+          </Text>
+          <View style={[styles.titleSide, { alignItems: 'flex-end' }]}>
+            <ScalePressable
+              onPress={onClose}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={[styles.doneText, { color: Colors.primary[400] }]}>Done</Text>
+            </ScalePressable>
+          </View>
+        </View>
 
-            <View style={[styles.handle, { backgroundColor: colors.separator }]} />
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.md }}
+        >
+          <SectionHeader title="Model" colors={colors} />
+          <Group colors={colors}>
+            {models.length === 0 && (
+              <Text style={[styles.emptyHint, { color: colors.textTertiary }]}>
+                No models reported by the agent yet
+              </Text>
+            )}
+            {models.map((m, i) => (
+              <React.Fragment key={m}>
+                {i > 0 && <Separator colors={colors} inset={Spacing.lg} />}
+                <Row
+                  label={formatModelName(m, { modelDetails })}
+                  selected={m === selectedModel}
+                  colors={colors}
+                  onPress={() => {
+                    onSelectModel(m);
+                    onClose();
+                  }}
+                />
+              </React.Fragment>
+            ))}
+          </Group>
 
-            <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Chat Settings</Text>
-              <Pressable
-                onPress={onClose}
-                style={({ pressed }) => [
-                  styles.closeLens,
+          <SectionHeader title="Thinking & Speed" colors={colors} />
+          <Group colors={colors}>
+            <View style={styles.configRow}>
+              <Text style={[styles.configLabel, { color: colors.textPrimary }]}>Thinking</Text>
+              <Segmented<ThinkingMode>
+                value={thinkingMode}
+                onChange={(mode) => onThinking(mode)}
+                options={[
+                  { label: 'Off', value: 'none' },
+                  { label: 'Auto', value: 'auto' },
+                  { label: 'Manual', value: 'level' },
+                ]}
+                colors={colors}
+              />
+            </View>
+            {thinkingMode === 'level' && (
+              <View style={styles.configRowSub}>
+                <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Level</Text>
+                <Segmented<ThinkingLevel>
+                  value={thinkingLevel}
+                  onChange={(level) => onThinking('level', level)}
+                  options={[
+                    { label: 'Min', value: 'minimal' },
+                    { label: 'Low', value: 'low' },
+                    { label: 'Med', value: 'medium' },
+                    { label: 'High', value: 'high' },
+                    { label: 'Max', value: 'xhigh' },
+                  ]}
+                  colors={colors}
+                />
+              </View>
+            )}
+            <Separator colors={colors} inset={Spacing.lg} />
+            <View style={styles.configRow}>
+              <Text style={[styles.configLabel, { color: colors.textPrimary }]}>Speed</Text>
+              <Segmented<ServiceTier>
+                value={serviceTier}
+                onChange={onServiceTier}
+                options={[
+                  { label: 'Normal', value: 'default' },
+                  { label: 'Fast', value: 'fast' },
+                ]}
+                colors={colors}
+              />
+            </View>
+          </Group>
+
+          <SectionHeader title="Access" colors={colors} />
+          <Group colors={colors}>
+            <Row
+              label="Ask before acting"
+              sub="Confirm each tool use"
+              selected={accessMode === 'on-request'}
+              colors={colors}
+              onPress={() => {
+                onAccessMode('on-request');
+                onClose();
+              }}
+            />
+            <Separator colors={colors} inset={Spacing.lg} />
+            <Row
+              label="Full access"
+              sub="Run without prompts"
+              warning={accessMode === 'full-access'}
+              selected={accessMode === 'full-access'}
+              colors={colors}
+              onPress={() => {
+                onAccessMode('full-access');
+                onClose();
+              }}
+            />
+          </Group>
+
+          <SectionHeader title="Quick Actions" colors={colors} />
+          <View style={styles.tileGrid}>
+            {ACTION_TILES.map((tile) => (
+              <ScalePressable
+                pressedScale={0.98}
+                key={tile.sub}
+                style={[
+                  styles.tile,
                   {
                     backgroundColor: colors.isDark
                       ? Glass.opacity.dark.subtle
@@ -279,220 +360,50 @@ export function ComposerSettingsSheet({
                     borderColor: colors.isDark
                       ? Glass.opacity.dark.border
                       : Glass.opacity.light.border,
-                    opacity: pressed ? 0.6 : 1,
-                    transform: [{ scale: pressed ? 0.92 : 1 }],
                   },
                 ]}
-                hitSlop={6}
-                accessibilityLabel="Close settings"
+                onPress={() => {
+                  if (tile.sub === '@') onInsertFile();
+                  else if (tile.sub === '/review') onReview();
+                  else onCommand(tile.sub as '/plan' | '/compact');
+                  onClose();
+                }}
               >
-                <Ionicons name="close" size={16} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.md }}
-            >
-              <SectionHeader title="Model" colors={colors} />
-              <Group colors={colors}>
-                {models.length === 0 && (
-                  <Text style={[styles.emptyHint, { color: colors.textTertiary }]}>
-                    No models reported by the agent yet
-                  </Text>
-                )}
-                {models.map((m, i) => (
-                  <React.Fragment key={m}>
-                    {i > 0 && <Separator colors={colors} inset={Spacing.lg} />}
-                    <Row
-                      label={formatModelName(m, { modelDetails })}
-                      selected={m === selectedModel}
-                      colors={colors}
-                      onPress={() => {
-                        onSelectModel(m);
-                        onClose();
-                      }}
-                    />
-                  </React.Fragment>
-                ))}
-              </Group>
-
-              <SectionHeader title="Thinking & Speed" colors={colors} />
-              <Group colors={colors}>
-                <View style={styles.configRow}>
-                  <Text style={[styles.configLabel, { color: colors.textPrimary }]}>Thinking</Text>
-                  <Segmented<ThinkingMode>
-                    value={thinkingMode}
-                    onChange={(mode) => onThinking(mode)}
-                    options={[
-                      { label: 'Off', value: 'none' },
-                      { label: 'Auto', value: 'auto' },
-                      { label: 'Manual', value: 'level' },
-                    ]}
-                    colors={colors}
-                  />
+                <View style={[styles.rowIconWrap, { backgroundColor: Colors.primary[500] + '1f' }]}>
+                  <Ionicons name={tile.icon} size={14} color={Colors.primary[400]} />
                 </View>
-                {thinkingMode === 'level' && (
-                  <View style={styles.configRowSub}>
-                    <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Level</Text>
-                    <Segmented<ThinkingLevel>
-                      value={thinkingLevel}
-                      onChange={(level) => onThinking('level', level)}
-                      options={[
-                        { label: 'Min', value: 'minimal' },
-                        { label: 'Low', value: 'low' },
-                        { label: 'Med', value: 'medium' },
-                        { label: 'High', value: 'high' },
-                        { label: 'Max', value: 'xhigh' },
-                      ]}
-                      colors={colors}
-                    />
-                  </View>
-                )}
-                <Separator colors={colors} inset={Spacing.lg} />
-                <View style={styles.configRow}>
-                  <Text style={[styles.configLabel, { color: colors.textPrimary }]}>Speed</Text>
-                  <Segmented<ServiceTier>
-                    value={serviceTier}
-                    onChange={onServiceTier}
-                    options={[
-                      { label: 'Normal', value: 'default' },
-                      { label: 'Fast', value: 'fast' },
-                    ]}
-                    colors={colors}
-                  />
-                </View>
-              </Group>
-
-              <SectionHeader title="Access" colors={colors} />
-              <Group colors={colors}>
-                <Row
-                  label="Ask before acting"
-                  sub="Confirm each tool use"
-                  selected={accessMode === 'on-request'}
-                  colors={colors}
-                  onPress={() => {
-                    onAccessMode('on-request');
-                    onClose();
-                  }}
-                />
-                <Separator colors={colors} inset={Spacing.lg} />
-                <Row
-                  label="Full access"
-                  sub="Run without prompts"
-                  warning={accessMode === 'full-access'}
-                  selected={accessMode === 'full-access'}
-                  colors={colors}
-                  onPress={() => {
-                    onAccessMode('full-access');
-                    onClose();
-                  }}
-                />
-              </Group>
-
-              <SectionHeader title="Quick Actions" colors={colors} />
-              <View style={styles.tileGrid}>
-                {ACTION_TILES.map((tile) => (
-                  <Pressable
-                    key={tile.sub}
-                    style={({ pressed }) => [
-                      styles.tile,
-                      {
-                        backgroundColor: colors.isDark
-                          ? Glass.opacity.dark.subtle
-                          : Glass.opacity.light.subtle,
-                        borderColor: colors.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                        opacity: pressed ? 0.7 : 1,
-                        transform: [{ scale: pressed ? 0.97 : 1 }],
-                      },
-                    ]}
-                    onPress={() => {
-                      if (tile.sub === '@') onInsertFile();
-                      else if (tile.sub === '/review') onReview();
-                      else onCommand(tile.sub as '/plan' | '/compact');
-                      onClose();
-                    }}
-                  >
-                    <View
-                      style={[styles.rowIconWrap, { backgroundColor: Colors.primary[500] + '1f' }]}
-                    >
-                      <Ionicons name={tile.icon} size={14} color={Colors.primary[400]} />
-                    </View>
-                    <Text
-                      style={[styles.tileLabel, { color: colors.textPrimary }]}
-                      numberOfLines={1}
-                    >
-                      {tile.label}
-                    </Text>
-                    <Text
-                      style={[styles.tileSub, { color: colors.textTertiary }]}
-                      numberOfLines={1}
-                    >
-                      {tile.sub}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </BlurView>
-        </Pressable>
-      </Pressable>
+                <Text style={[styles.tileLabel, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {tile.label}
+                </Text>
+                <Text style={[styles.tileSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                  {tile.sub}
+                </Text>
+              </ScalePressable>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  /** Floating glass card above the composer. */
-  sheet: {
-    maxHeight: '68%',
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  sheetBlur: {
-    borderRadius: 24,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-    shadowColor: '#08090a',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.4,
-    shadowRadius: 50,
-    elevation: 12,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 5,
-    borderRadius: 3,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
+  sheetRoot: { flex: 1 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xs,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
+  titleSide: { width: 64 },
   title: { ...Typography.headline },
-  closeLens: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  doneText: { ...Typography.body, fontWeight: '600' },
 
   sectionHeader: {
-    ...Typography.overline,
+    ...Typography.footnote,
+    textTransform: 'uppercase',
     paddingHorizontal: Spacing.lg + 2,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,

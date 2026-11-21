@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontFamily } from '../../constants/theme';
 import type { ThemeColors } from './TypingIndicator';
+import { HighlightPressable } from '../Pressables';
 
 interface Props {
   /** Total tool/file/command messages captured by this run. */
@@ -44,8 +45,8 @@ export const ToolBurstGroup = React.memo(function ToolBurstGroup({
         },
       ]}
     >
-      <Pressable
-        style={({ pressed }) => [styles.header, { opacity: pressed ? 0.7 : 1 }]}
+      <HighlightPressable
+        style={[styles.header]}
         onPress={onToggle}
         hitSlop={4}
         accessibilityLabel={isExpanded ? 'Collapse tool activity' : 'Expand tool activity'}
@@ -67,7 +68,7 @@ export const ToolBurstGroup = React.memo(function ToolBurstGroup({
           color={colors.textTertiary}
           style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}
         />
-      </Pressable>
+      </HighlightPressable>
       {isExpanded && (
         <View style={[styles.body, { borderTopColor: colors.separator }]}>{children}</View>
       )}

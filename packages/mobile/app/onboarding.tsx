@@ -15,12 +15,8 @@ import { useRouter } from 'expo-router';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors } from '../src/hooks/useThemeColors';
-import {
-  GlassCard,
-  GlassButton,
-  GlassDivider,
-} from '../src/components/GlassKit';
-import { Typography, Spacing, Glass, Colors, FontFamily } from '../src/constants/theme';
+import { GlassCard, GlassButton, GlassDivider } from '../src/components/GlassKit';
+import { Typography, Spacing, Glass, Colors } from '../src/constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -62,13 +58,7 @@ const SLIDES = [
   },
 ];
 
-function Slide({
-  item,
-  c,
-}: {
-  item: (typeof SLIDES)[0];
-  c: ReturnType<typeof useThemeColors>;
-}) {
+function Slide({ item, c }: { item: (typeof SLIDES)[0]; c: ReturnType<typeof useThemeColors> }) {
   return (
     <View style={[styles.slide, { width: SCREEN_WIDTH }]}>
       <View style={styles.slideContent}>
@@ -134,7 +124,11 @@ export default function OnboardingScreen() {
               styles.dot,
               {
                 backgroundColor:
-                  i === currentIndex ? Colors.primary[500] : c.isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+                  i === currentIndex
+                    ? Colors.primary[500]
+                    : c.isDark
+                      ? 'rgba(255,255,255,0.2)'
+                      : 'rgba(0,0,0,0.15)',
                 width: i === currentIndex ? 24 : 8,
               },
             ]}
@@ -151,14 +145,18 @@ export default function OnboardingScreen() {
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: c.isDark ? Glass.opacity.dark.surface : Glass.opacity.light.surface },
+            {
+              backgroundColor: c.isDark ? Glass.opacity.dark.surface : Glass.opacity.light.surface,
+            },
           ]}
           pointerEvents="none"
         />
         <View style={styles.bottomRow}>
           {!isLast ? (
             <Pressable onPress={skip} hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}>
-              <Text style={[Typography.subhead, { color: c.textSecondary, fontWeight: '500' }]}>Skip</Text>
+              <Text style={[Typography.subhead, { color: c.textSecondary, fontWeight: '500' }]}>
+                Skip
+              </Text>
             </Pressable>
           ) : (
             <View />
@@ -195,9 +193,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.title1,
-    fontFamily: FontFamily.display,
     fontWeight: '700',
-    letterSpacing: -0.5,
     textAlign: 'center',
   },
   subtitle: {

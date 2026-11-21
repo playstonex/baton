@@ -12,7 +12,14 @@ import { useLocalSearchParams, useRouter, Stack, type Href } from 'expo-router';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { BlurView } from 'expo-blur';
 import { wsService } from '../../src/services/websocket';
-import { FontFamily, STATUS_COLORS, Colors, Typography, CornerRadius, Spacing } from '../../src/constants/theme';
+import {
+  FontFamily,
+  STATUS_COLORS,
+  Colors,
+  Typography,
+  CornerRadius,
+  Spacing,
+} from '../../src/constants/theme';
 import { useThemeColors } from '../../src/hooks/useThemeColors';
 import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWebView';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -20,11 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTerminalSettingsStore } from '../../src/stores/terminal-settings';
 import { useChatStore } from '../../src/stores/chat';
 import { AgentQuestionCard } from '../../src/components/AgentQuestionCard';
-import {
-  GlassCard,
-  GlassButton,
-  GlassPill,
-} from '../../src/components/GlassKit';
+import { GlassCard, GlassButton, GlassPill } from '../../src/components/GlassKit';
 
 const SHORTCUT_KEYS: { label: string; data: string }[] = [
   { label: '\u2191', data: '\x1b[A' },
@@ -89,12 +92,8 @@ function WaitingOverlay({ wsConnected, attached }: { wsConnected: boolean; attac
       </Animated.View>
       <View style={waitingStyles.textWrap}>
         <Ionicons name={iconName as any} size={16} color={c.textTertiary} />
-        <Text style={[waitingStyles.label, { color: c.textSecondary }]}>
-          {label}
-        </Text>
-        <Text style={[waitingStyles.dots, { color: c.textTertiary }]}>
-          {'.'.repeat(dotCount)}
-        </Text>
+        <Text style={[waitingStyles.label, { color: c.textSecondary }]}>{label}</Text>
+        <Text style={[waitingStyles.dots, { color: c.textTertiary }]}>{'.'.repeat(dotCount)}</Text>
       </View>
     </View>
   );
@@ -123,13 +122,7 @@ const waitingStyles = StyleSheet.create({
   },
 });
 
-function StatusDot({
-  color,
-  active,
-}: {
-  color: string;
-  active: boolean;
-}) {
+function StatusDot({ color, active }: { color: string; active: boolean }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -232,15 +225,16 @@ export default function TerminalScreen() {
     });
 
     const unsubStatus = wsService.on('status_update', (msg) => {
-      if (
-        msg.type === 'status_update' &&
-        msg.sessionId === sessionId &&
-        'status' in msg
-      ) {
+      if (msg.type === 'status_update' && msg.sessionId === sessionId && 'status' in msg) {
         const next = msg.status as string;
         setStatus(next);
-        if (next === 'running' || next === 'idle' || next === 'thinking' ||
-            next === 'executing' || next === 'waiting_input') {
+        if (
+          next === 'running' ||
+          next === 'idle' ||
+          next === 'thinking' ||
+          next === 'executing' ||
+          next === 'waiting_input'
+        ) {
           setHasReceivedOutput(true);
         }
       }
@@ -253,9 +247,7 @@ export default function TerminalScreen() {
     const unsubError = wsService.on('error', (msg) => {
       if ('message' in msg) {
         const message = (msg as { message: string }).message;
-        xtermRef.current?.write(
-          `\x1b[31mError: ${message}\x1b[0m\r\n`,
-        );
+        xtermRef.current?.write(`\x1b[31mError: ${message}\x1b[0m\r\n`);
         if (message.includes('not found') || message.includes('Not found')) {
           setSessionError(message);
         }
@@ -328,8 +320,7 @@ export default function TerminalScreen() {
   );
 
   const statusColor = STATUS_COLORS[status] ?? Colors.surface[400];
-  const isActive =
-    status === 'running' || status === 'thinking' || status === 'executing';
+  const isActive = status === 'running' || status === 'thinking' || status === 'executing';
 
   const topPad = fullscreen ? insets.top : Math.max(headerHeight, insets.top);
   const bottomSafePad = insets.bottom;
@@ -343,301 +334,329 @@ export default function TerminalScreen() {
           style={{ flex: 1, overflow: 'hidden' }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-
-      {/* Compact nav bar with status + actions */}
-      {!fullscreen && (
-        <BlurView
-          tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-          intensity={80}
-          style={styles.navBar}
-        >
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.navBack}
-          >
-            <Ionicons name="chevron-back" size={22} color={Colors.primary[500]} />
-            <Text style={[Typography.body, { color: Colors.primary[500], marginLeft: -2 }]}>
-              Back
-            </Text>
-          </Pressable>
-
-          <View style={styles.navStatus}>
-            <StatusDot color={statusColor} active={isActive} />
-            <View style={[styles.statusChip, { backgroundColor: statusColor + '18' }]}>
-              <Text style={[styles.statusChipText, { color: statusColor }]}>
-                {status}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.navActions}>
-            <Pressable
-              onPress={() => router.push(`/terminal-settings/${sessionId}` as Href)}
-              style={styles.navIconButton}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          {/* Compact nav bar with status + actions */}
+          {!fullscreen && (
+            <BlurView
+              tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+              intensity={80}
+              style={styles.navBar}
             >
-              <Ionicons name="settings-outline" size={18} color={c.textSecondary} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push(`/files/${sessionId}` as Href)}
-              style={styles.navIconButton}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-            >
-              <Ionicons name="folder-outline" size={18} color={c.textSecondary} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push(`/git/${sessionId}` as Href)}
-              style={styles.navIconButton}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-            >
-              <Ionicons name="git-branch-outline" size={18} color={c.textSecondary} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                if (sessionOwner === 'remote') {
-                  wsService.send({ type: 'control', action: 'release_session', sessionId });
-                  setSessionOwner('local');
-                } else {
-                  wsService.send({ type: 'control', action: 'claim_session', sessionId });
-                  setSessionOwner('remote');
-                }
-              }}
-              style={[
-                styles.navIconButton,
-                {
-                  backgroundColor: sessionOwner === 'remote' ? 'rgba(34,197,94,0.15)' : c.elevated,
-                  borderRadius: CornerRadius.small,
-                },
-              ]}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-            >
-              <Ionicons
-                name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
-                size={16}
-                color={sessionOwner === 'remote' ? Colors.success[400] : c.textSecondary}
-              />
-            </Pressable>
-
-            <Pressable
-              onPress={() => setFullscreen(true)}
-              style={[styles.navIconButton, { backgroundColor: c.elevated, borderRadius: CornerRadius.small }]}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-            >
-              <Ionicons name="expand-outline" size={16} color={Colors.primary[500]} />
-            </Pressable>
-          </View>
-        </BlurView>
-      )}
-
-      <XtermWebView
-        ref={xtermRef}
-        onInput={handleInput}
-        onResize={handleResize}
-        onStatus={(loaded, error) => {
-          setXtermStatus(loaded ? 'xterm loaded' : `xterm error: ${error}`);
-        }}
-        termFontSize={termSettings.fontSize}
-        termFontFamily={termSettings.fontFamily}
-        termThemeName={termSettings.theme}
-        termScrollback={termSettings.scrollback}
-        termCursorBlink={termSettings.cursorBlink}
-      />
-
-      {!hasReceivedOutput && !sessionError && (
-        <WaitingOverlay wsConnected={wsConnected} attached={attachSent.current} />
-      )}
-
-      {!!sessionError && (
-        <View style={[waitingStyles.overlay]} pointerEvents="auto">
-          <GlassCard c={c} style={{ alignItems: 'center', gap: Spacing.md, maxWidth: 320, width: '85%' }}>
-            <Ionicons name="alert-circle-outline" size={36} color={Colors.danger[400]} />
-            <Text style={[Typography.headline, { color: c.textPrimary, fontWeight: '700', textAlign: 'center' }]}>
-              Session Unavailable
-            </Text>
-            <Text style={[Typography.subhead, { color: c.textTertiary, textAlign: 'center', lineHeight: 22 }]}>
-              {sessionError}
-            </Text>
-            <GlassButton c={c} label="Go Back" onPress={() => router.back()} variant="secondary" />
-            <GlassButton c={c} label="Dashboard" onPress={() => router.replace('/(tabs)')} variant="primary" />
-          </GlassCard>
-        </View>
-      )}
-
-      {activePermission && (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
-          <AgentQuestionCard
-            permission={activePermission}
-            onApprove={() => {
-              if (sessionId) {
-                wsService.send({
-                  type: 'control',
-                  action: 'permission_response',
-                  sessionId,
-                  payload: { requestId: activePermission.requestId, approved: true },
-                });
-                wsService.send({ type: 'terminal_input', sessionId, data: 'y\r' });
-              }
-              useChatStore.getState().setActivePermission(null);
-            }}
-            onReject={() => {
-              if (sessionId) {
-                wsService.send({
-                  type: 'control',
-                  action: 'permission_response',
-                  sessionId,
-                  payload: { requestId: activePermission.requestId, approved: false },
-                });
-                wsService.send({ type: 'terminal_input', sessionId, data: 'n\r' });
-              }
-              useChatStore.getState().setActivePermission(null);
-            }}
-            compact
-          />
-        </View>
-      )}
-
-      {activePrompt && activePrompt.questions?.length > 0 && (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
-          <AgentQuestionCard
-            question={activePrompt.questions[0]}
-            onAnswer={(ans) => {
-              if (sessionId) {
-                wsService.send({ type: 'terminal_input', sessionId, data: ans + '\r' });
-              }
-              useChatStore.getState().setActivePrompt(null);
-            }}
-            compact
-          />
-        </View>
-      )}
-
-      <View style={[styles.inputBar, { borderTopColor: c.separator }]}>
-        <TextInput
-          ref={textInputRef}
-          style={{
-            flex: 1,
-            height: 40,
-            paddingHorizontal: 12,
-            borderRadius: CornerRadius.medium,
-            borderWidth: 1,
-            backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
-            borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
-            color: c.textPrimary,
-            ...Typography.subhead,
-            fontFamily: FontFamily.mono,
-          }}
-          value={inputText}
-          onChangeText={setInputText}
-          onSubmitEditing={handleSubmitEditing}
-          returnKeyType="send"
-          placeholder="Type command..."
-          placeholderTextColor={c.textTertiary}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {inputText.length > 0 && (
-          <>
-            <GlassButton
-              c={c}
-              label="Send"
-              onPress={handleTextInput}
-              variant="secondary"
-            />
-            <Pressable
-              onPress={handleTextInputSend}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: CornerRadius.small,
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: Colors.primary[500],
-              }}
-            >
-              <Text style={{ ...Typography.subhead, fontWeight: '700', color: '#FFFFFF' }}>{'\u21B5'}</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-
-      <BlurView
-        tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-        intensity={80}
-        style={[styles.shortcutBar, { paddingBottom: 6 + bottomSafePad }]}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.shortcutScroll}
-        >
-          {SHORTCUT_KEYS.map((key) => (
-            <GlassPill
-              key={key.label}
-              c={c}
-              label={key.label}
-              onPress={() => handleInput(key.data)}
-            />
-          ))}
-          <GlassPill
-            c={c}
-            label={fullscreen ? '\u2715' : '\u26F6'}
-            color={Colors.primary[500]}
-            onPress={() => setFullscreen((f) => !f)}
-          />
-        </ScrollView>
-      </BlurView>
-
-      {fullscreen && (
-        <Pressable
-          onPress={() => setFullscreen(false)}
-          style={{
-            position: 'absolute',
-            right: Spacing.lg,
-            top: insets.top + Spacing.md,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-            borderRadius: CornerRadius.medium,
-            borderCurve: 'continuous',
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: 'rgba(255,255,255,0.1)',
-            backgroundColor: c.card,
-          }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Text style={[Typography.caption1, { color: c.textSecondary, fontWeight: '600' }]}>
-            {'\u2715'} Exit
-          </Text>
-        </Pressable>
-      )}
-
-      {!wsConnected && (
-        <View style={{ position: 'absolute', left: 16, right: 16, bottom: bottomSafePad + 16 }}>
-          <GlassCard c={c}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text style={Typography.subhead}>{'\u26A0'}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '700' }]}>
-                  Not Connected
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.navBack}
+              >
+                <Ionicons name="chevron-back" size={22} color={Colors.primary[500]} />
+                <Text style={[Typography.body, { color: Colors.primary[500], marginLeft: -2 }]}>
+                  Back
                 </Text>
-                <Text style={[Typography.caption1, { color: Colors.danger[400], opacity: 0.75, marginTop: 2 }]}>
-                  Go to Settings and configure your daemon connection
-                </Text>
+              </Pressable>
+
+              <View style={styles.navStatus}>
+                <StatusDot color={statusColor} active={isActive} />
+                <View style={[styles.statusChip, { backgroundColor: statusColor + '18' }]}>
+                  <Text style={[styles.statusChipText, { color: statusColor }]}>{status}</Text>
+                </View>
               </View>
-              <GlassButton
+
+              <View style={styles.navActions}>
+                <Pressable
+                  onPress={() => router.push(`/terminal-settings/${sessionId}` as Href)}
+                  style={styles.navIconButton}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Ionicons name="settings-outline" size={18} color={c.textSecondary} />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => router.push(`/files/${sessionId}` as Href)}
+                  style={styles.navIconButton}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Ionicons name="folder-outline" size={18} color={c.textSecondary} />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => router.push(`/git/${sessionId}` as Href)}
+                  style={styles.navIconButton}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Ionicons name="git-branch-outline" size={18} color={c.textSecondary} />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    if (sessionOwner === 'remote') {
+                      wsService.send({ type: 'control', action: 'release_session', sessionId });
+                      setSessionOwner('local');
+                    } else {
+                      wsService.send({ type: 'control', action: 'claim_session', sessionId });
+                      setSessionOwner('remote');
+                    }
+                  }}
+                  style={[
+                    styles.navIconButton,
+                    {
+                      backgroundColor:
+                        sessionOwner === 'remote' ? 'rgba(34,197,94,0.15)' : c.elevated,
+                      borderRadius: CornerRadius.small,
+                    },
+                  ]}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Ionicons
+                    name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
+                    size={16}
+                    color={sessionOwner === 'remote' ? Colors.success[400] : c.textSecondary}
+                  />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setFullscreen(true)}
+                  style={[
+                    styles.navIconButton,
+                    { backgroundColor: c.elevated, borderRadius: CornerRadius.small },
+                  ]}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Ionicons name="expand-outline" size={16} color={Colors.primary[500]} />
+                </Pressable>
+              </View>
+            </BlurView>
+          )}
+
+          <XtermWebView
+            ref={xtermRef}
+            onInput={handleInput}
+            onResize={handleResize}
+            onStatus={(loaded, error) => {
+              setXtermStatus(loaded ? 'xterm loaded' : `xterm error: ${error}`);
+            }}
+            termFontSize={termSettings.fontSize}
+            termFontFamily={termSettings.fontFamily}
+            termThemeName={termSettings.theme}
+            termScrollback={termSettings.scrollback}
+            termCursorBlink={termSettings.cursorBlink}
+          />
+
+          {!hasReceivedOutput && !sessionError && (
+            <WaitingOverlay wsConnected={wsConnected} attached={attachSent.current} />
+          )}
+
+          {!!sessionError && (
+            <View style={[waitingStyles.overlay]} pointerEvents="auto">
+              <GlassCard
                 c={c}
-                label="Settings"
-                onPress={() => router.push('/(tabs)/settings')}
-                variant="danger"
+                style={{ alignItems: 'center', gap: Spacing.md, maxWidth: 320, width: '85%' }}
+              >
+                <Ionicons name="alert-circle-outline" size={36} color={Colors.danger[400]} />
+                <Text
+                  style={[
+                    Typography.headline,
+                    { color: c.textPrimary, fontWeight: '700', textAlign: 'center' },
+                  ]}
+                >
+                  Session Unavailable
+                </Text>
+                <Text
+                  style={[
+                    Typography.subhead,
+                    { color: c.textTertiary, textAlign: 'center', lineHeight: 22 },
+                  ]}
+                >
+                  {sessionError}
+                </Text>
+                <GlassButton
+                  c={c}
+                  label="Go Back"
+                  onPress={() => router.back()}
+                  variant="secondary"
+                />
+                <GlassButton
+                  c={c}
+                  label="Dashboard"
+                  onPress={() => router.replace('/(tabs)')}
+                  variant="primary"
+                />
+              </GlassCard>
+            </View>
+          )}
+
+          {activePermission && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
+              <AgentQuestionCard
+                permission={activePermission}
+                onApprove={() => {
+                  if (sessionId) {
+                    wsService.send({
+                      type: 'control',
+                      action: 'permission_response',
+                      sessionId,
+                      payload: { requestId: activePermission.requestId, approved: true },
+                    });
+                    wsService.send({ type: 'terminal_input', sessionId, data: 'y\r' });
+                  }
+                  useChatStore.getState().setActivePermission(null);
+                }}
+                onReject={() => {
+                  if (sessionId) {
+                    wsService.send({
+                      type: 'control',
+                      action: 'permission_response',
+                      sessionId,
+                      payload: { requestId: activePermission.requestId, approved: false },
+                    });
+                    wsService.send({ type: 'terminal_input', sessionId, data: 'n\r' });
+                  }
+                  useChatStore.getState().setActivePermission(null);
+                }}
+                compact
               />
             </View>
-          </GlassCard>
-        </View>
-      )}
-    </KeyboardAvoidingView>
+          )}
+
+          {activePrompt && activePrompt.questions?.length > 0 && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 6 }}>
+              <AgentQuestionCard
+                question={activePrompt.questions[0]}
+                onAnswer={(ans) => {
+                  if (sessionId) {
+                    wsService.send({ type: 'terminal_input', sessionId, data: ans + '\r' });
+                  }
+                  useChatStore.getState().setActivePrompt(null);
+                }}
+                compact
+              />
+            </View>
+          )}
+
+          <View style={[styles.inputBar, { borderTopColor: c.separator }]}>
+            <TextInput
+              ref={textInputRef}
+              style={{
+                flex: 1,
+                height: 40,
+                paddingHorizontal: 12,
+                borderRadius: CornerRadius.medium,
+                borderWidth: 1,
+                backgroundColor: c.isDark ? 'rgba(58,58,60,0.55)' : c.elevated,
+                borderColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(60,60,67,0.04)',
+                color: c.textPrimary,
+                ...Typography.subhead,
+                fontFamily: FontFamily.mono,
+              }}
+              value={inputText}
+              onChangeText={setInputText}
+              onSubmitEditing={handleSubmitEditing}
+              returnKeyType="send"
+              placeholder="Type command..."
+              placeholderTextColor={c.textTertiary}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {inputText.length > 0 && (
+              <>
+                <GlassButton c={c} label="Send" onPress={handleTextInput} variant="secondary" />
+                <Pressable
+                  onPress={handleTextInputSend}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: CornerRadius.small,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: Colors.primary[500],
+                  }}
+                >
+                  <Text style={{ ...Typography.subhead, fontWeight: '700', color: '#FFFFFF' }}>
+                    {'\u21B5'}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+
+          <BlurView
+            tint={c.isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+            intensity={80}
+            style={[styles.shortcutBar, { paddingBottom: 6 + bottomSafePad }]}
+          >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.shortcutScroll}
+            >
+              {SHORTCUT_KEYS.map((key) => (
+                <GlassPill
+                  key={key.label}
+                  c={c}
+                  label={key.label}
+                  onPress={() => handleInput(key.data)}
+                />
+              ))}
+              <GlassPill
+                c={c}
+                label={fullscreen ? '\u2715' : '\u26F6'}
+                color={Colors.primary[500]}
+                onPress={() => setFullscreen((f) => !f)}
+              />
+            </ScrollView>
+          </BlurView>
+
+          {fullscreen && (
+            <Pressable
+              onPress={() => setFullscreen(false)}
+              style={{
+                position: 'absolute',
+                right: Spacing.lg,
+                top: insets.top + Spacing.md,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: CornerRadius.medium,
+                borderCurve: 'continuous',
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: 'rgba(255,255,255,0.1)',
+                backgroundColor: c.card,
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={[Typography.caption1, { color: c.textSecondary, fontWeight: '600' }]}>
+                {'\u2715'} Exit
+              </Text>
+            </Pressable>
+          )}
+
+          {!wsConnected && (
+            <View style={{ position: 'absolute', left: 16, right: 16, bottom: bottomSafePad + 16 }}>
+              <GlassCard c={c}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={Typography.subhead}>{'\u26A0'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[Typography.subhead, { color: Colors.danger[400], fontWeight: '700' }]}
+                    >
+                      Not Connected
+                    </Text>
+                    <Text
+                      style={[
+                        Typography.caption1,
+                        { color: Colors.danger[400], opacity: 0.75, marginTop: 2 },
+                      ]}
+                    >
+                      Go to Settings and configure your daemon connection
+                    </Text>
+                  </View>
+                  <GlassButton
+                    c={c}
+                    label="Settings"
+                    onPress={() => router.push('/settings')}
+                    variant="danger"
+                  />
+                </View>
+              </GlassCard>
+            </View>
+          )}
+        </KeyboardAvoidingView>
       </View>
     </>
   );

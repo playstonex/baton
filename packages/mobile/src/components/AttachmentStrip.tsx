@@ -1,8 +1,9 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, Glass, Spacing } from '../constants/theme';
 import type { ThemeColors } from './messages';
+import { ScalePressable } from './Pressables';
 
 /** A picked-but-unsent image attachment, base64 payload ready for the wire. */
 export interface PendingAttachment {
@@ -49,14 +50,14 @@ export function AttachmentStrip({
             style={styles.image}
             resizeMode="cover"
           />
-          <Pressable
+          <ScalePressable
             onPress={() => onRemove(img.id)}
             hitSlop={6}
-            style={({ pressed }) => [styles.remove, pressed && { opacity: 0.6 }]}
+            style={[styles.remove]}
             accessibilityLabel="Remove attachment"
           >
             <Ionicons name="close" size={11} color="#ffffff" />
-          </Pressable>
+          </ScalePressable>
         </View>
       ))}
     </ScrollView>

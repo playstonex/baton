@@ -24,6 +24,7 @@ import { wsService } from '../services/websocket';
 import { Typography, Spacing, CornerRadius, Glass, Colors } from '../constants/theme';
 import { DirectoryPicker } from './DirectoryPicker';
 import { PopoverMenu, type MenuOption, type AnchorRect } from './messages/PopoverMenu';
+import { ScalePressable } from './Pressables';
 
 const AGENT_OPTIONS: {
   type: AgentType;
@@ -39,8 +40,20 @@ const AGENT_OPTIONS: {
     icon: 'sparkles',
     color: '#D97757',
   },
-  { type: 'codex', label: 'Codex', desc: 'Fast execution & coding', icon: 'terminal', color: '#10A37F' },
-  { type: 'opencode', label: 'OpenCode', desc: 'Open multi-provider stack', icon: 'code-slash', color: '#6366F1' },
+  {
+    type: 'codex',
+    label: 'Codex',
+    desc: 'Fast execution & coding',
+    icon: 'terminal',
+    color: '#10A37F',
+  },
+  {
+    type: 'opencode',
+    label: 'OpenCode',
+    desc: 'Open multi-provider stack',
+    icon: 'code-slash',
+    color: '#6366F1',
+  },
   {
     type: 'kiro',
     label: 'Kiro',
@@ -138,7 +151,9 @@ export function NewChatView({
   useEffect(() => {
     async function fetchModels() {
       try {
-        const data = await apiFetch<{ models: string[] }>(`/api/agents/models?type=${selectedAgent}`);
+        const data = await apiFetch<{ models: string[] }>(
+          `/api/agents/models?type=${selectedAgent}`,
+        );
         if (data?.models?.length) {
           setAvailableModels(data.models);
           if (!selectedModel) {
@@ -178,20 +193,17 @@ export function NewChatView({
     return thinkingLevel.charAt(0).toUpperCase() + thinkingLevel.slice(1);
   }, [thinkingMode, thinkingLevel]);
 
-  const measureAnchor = useCallback(
-    (ref: React.RefObject<any>): Promise<AnchorRect> => {
-      return new Promise((resolve) => {
-        if (ref.current) {
-          ref.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-            resolve({ x, y, width, height });
-          });
-        } else {
-          resolve({ x: 0, y: 0, width: 0, height: 0 });
-        }
-      });
-    },
-    [],
-  );
+  const measureAnchor = useCallback((ref: React.RefObject<any>): Promise<AnchorRect> => {
+    return new Promise((resolve) => {
+      if (ref.current) {
+        ref.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+          resolve({ x, y, width, height });
+        });
+      } else {
+        resolve({ x: 0, y: 0, width: 0, height: 0 });
+      }
+    });
+  }, []);
 
   const openModelMenu = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -298,14 +310,14 @@ export function NewChatView({
       {/* Top Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.xs }]}>
         <View style={styles.headerLeft}>
-          <Pressable
+          <ScalePressable
             onPress={isWide ? onToggleSidebar : onOpenSidebar}
             hitSlop={8}
-            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
+            style={[styles.headerBtn]}
             accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
           >
             <Ionicons name="reorder-three" size={24} color={c.textPrimary} />
-          </Pressable>
+          </ScalePressable>
 
           {/* Agent Selector Chip */}
           <View style={styles.agentChip}>
@@ -315,14 +327,13 @@ export function NewChatView({
         </View>
 
         {/* Directory Picker Button */}
-        <Pressable
+        <ScalePressable
           onPress={() => setPickerOpen(true)}
-          style={({ pressed }) => [
+          style={[
             styles.dirPickerBtn,
             {
               backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
               borderColor: c.cardBorder,
-              opacity: pressed ? 0.7 : 1,
             },
           ]}
         >
@@ -331,7 +342,7 @@ export function NewChatView({
             {folderName}
           </Text>
           <Ionicons name="chevron-down" size={11} color={c.textTertiary} />
-        </Pressable>
+        </ScalePressable>
       </View>
 
       {/* Main Body */}
@@ -347,9 +358,13 @@ export function NewChatView({
             <View style={[styles.heroIconBadge, { backgroundColor: activeMeta.color + '22' }]}>
               <Ionicons name={activeMeta.icon as any} size={32} color={activeMeta.color} />
             </View>
-            <Text style={[styles.heroTitle, { color: c.textPrimary }]}>How can I help you code?</Text>
+            <Text style={[styles.heroTitle, { color: c.textPrimary }]}>
+              How can I help you code?
+            </Text>
             <Text style={[styles.heroSubtitle, { color: c.textTertiary }]}>
-              Selected: <Text style={{ color: activeMeta.color, fontWeight: '600' }}>{activeMeta.label}</Text> · {activeMeta.desc}
+              Selected:{' '}
+              <Text style={{ color: activeMeta.color, fontWeight: '600' }}>{activeMeta.label}</Text>{' '}
+              · {activeMeta.desc}
             </Text>
           </View>
 
@@ -360,13 +375,13 @@ export function NewChatView({
               {AGENT_OPTIONS.map((a) => {
                 const isPicked = a.type === selectedAgent;
                 return (
-                  <Pressable
+                  <ScalePressable
                     key={a.type}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setSelectedAgent(a.type);
                     }}
-                    style={({ pressed }) => [
+                    style={[
                       styles.agentOptionCard,
                       {
                         backgroundColor: isPicked
@@ -378,7 +393,6 @@ export function NewChatView({
                             : 'rgba(0, 0, 0, 0.02)',
                         borderColor: isPicked ? a.color : c.cardBorder,
                         borderWidth: isPicked ? 1.5 : StyleSheet.hairlineWidth,
-                        opacity: pressed ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -395,11 +409,14 @@ export function NewChatView({
                       >
                         {a.label}
                       </Text>
-                      <Text style={[styles.agentOptionDesc, { color: c.textTertiary }]} numberOfLines={2}>
+                      <Text
+                        style={[styles.agentOptionDesc, { color: c.textTertiary }]}
+                        numberOfLines={2}
+                      >
                         {a.desc}
                       </Text>
                     </View>
-                  </Pressable>
+                  </ScalePressable>
                 );
               })}
             </View>
@@ -410,17 +427,17 @@ export function NewChatView({
             <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>SUGGESTIONS</Text>
             <View style={styles.promptsGrid}>
               {STARTER_PROMPTS.map((p) => (
-                <Pressable
+                <ScalePressable
+                  pressedScale={0.98}
                   key={p.title}
                   onPress={() => handleSelectPrompt(p.prompt)}
-                  style={({ pressed }) => [
+                  style={[
                     styles.promptCard,
                     {
                       backgroundColor: c.isDark
                         ? 'rgba(255, 255, 255, 0.05)'
                         : 'rgba(0, 0, 0, 0.03)',
                       borderColor: c.cardBorder,
-                      opacity: pressed ? 0.75 : 1,
                     },
                   ]}
                 >
@@ -431,7 +448,7 @@ export function NewChatView({
                   <Text style={[styles.promptDesc, { color: c.textTertiary }]} numberOfLines={2}>
                     {p.desc}
                   </Text>
-                </Pressable>
+                </ScalePressable>
               ))}
             </View>
           </View>
@@ -451,15 +468,14 @@ export function NewChatView({
       >
         {/* Toolbar with model & thinking pills */}
         <View style={styles.toolbarRow}>
-          <Pressable
+          <ScalePressable
             ref={modelPillRef}
             onPress={openModelMenu}
-            style={({ pressed }) => [
+            style={[
               styles.toolbarPill,
               {
                 backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(60,60,67,0.06)',
                 borderColor: c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border,
-                opacity: pressed ? 0.6 : 1,
               },
             ]}
             hitSlop={4}
@@ -469,12 +485,12 @@ export function NewChatView({
               {selectedModel ? formatModelName(selectedModel, { compact: true }) : 'Model'}
             </Text>
             <Ionicons name="chevron-down" size={9} color={c.textTertiary} />
-          </Pressable>
+          </ScalePressable>
 
-          <Pressable
+          <ScalePressable
             ref={thinkPillRef}
             onPress={openThinkingMenu}
-            style={({ pressed }) => [
+            style={[
               styles.toolbarPill,
               {
                 backgroundColor:
@@ -493,7 +509,6 @@ export function NewChatView({
                     : c.isDark
                       ? Glass.opacity.dark.border
                       : Glass.opacity.light.border,
-                opacity: pressed ? 0.6 : 1,
               },
             ]}
             hitSlop={4}
@@ -501,24 +516,42 @@ export function NewChatView({
             <Ionicons
               name="bulb-outline"
               size={11}
-              color={thinkingMode !== 'none' ? (c.isDark ? Colors.primary[300] : Colors.primary[500]) : c.textSecondary}
+              color={
+                thinkingMode !== 'none'
+                  ? c.isDark
+                    ? Colors.primary[300]
+                    : Colors.primary[500]
+                  : c.textSecondary
+              }
             />
             <Text
               style={[
                 styles.toolbarPillText,
                 {
-                  color: thinkingMode !== 'none' ? (c.isDark ? Colors.primary[300] : Colors.primary[500]) : c.textSecondary,
+                  color:
+                    thinkingMode !== 'none'
+                      ? c.isDark
+                        ? Colors.primary[300]
+                        : Colors.primary[500]
+                      : c.textSecondary,
                 },
               ]}
               numberOfLines={1}
             >
               {thinkingBadge}
             </Text>
-          </Pressable>
+          </ScalePressable>
         </View>
 
         {startError ? (
-          <Text style={{ color: Colors.danger[400], fontSize: 12, paddingHorizontal: 20, paddingBottom: 6 }}>
+          <Text
+            style={{
+              color: Colors.danger[400],
+              fontSize: 12,
+              paddingHorizontal: 20,
+              paddingBottom: 6,
+            }}
+          >
             {startError}
           </Text>
         ) : null}
@@ -542,14 +575,18 @@ export function NewChatView({
               multiline
               maxLength={4000}
             />
-            <Pressable
+            <ScalePressable
               onPress={() => handleStart()}
               disabled={!input.trim() || starting}
-              style={({ pressed }) => [
+              style={[
                 styles.sendBtn,
                 {
-                  backgroundColor: input.trim() && !starting ? c.accentBg : c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                  opacity: pressed ? 0.7 : 1,
+                  backgroundColor:
+                    input.trim() && !starting
+                      ? c.accentBg
+                      : c.isDark
+                        ? 'rgba(255,255,255,0.1)'
+                        : 'rgba(0,0,0,0.1)',
                 },
               ]}
             >
@@ -562,7 +599,7 @@ export function NewChatView({
                   color={input.trim() ? '#ffffff' : c.textTertiary}
                 />
               )}
-            </Pressable>
+            </ScalePressable>
           </View>
         </View>
       </View>

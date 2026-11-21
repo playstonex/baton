@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import type { ThemeColors } from './messages/TypingIndicator';
 import { apiFetch } from '../services/api';
 import { useAgentStore } from '../stores/agents';
 import { Typography, Spacing, Radius, Colors, Glass, FontFamily } from '../constants/theme';
+import { ScalePressable } from './Pressables';
 
 export interface WorktreeInfo {
   id: string;
@@ -73,10 +74,11 @@ export function WorktreeTabStrip({
         const isMain = w.path === w.basePath;
         const branch = isMain ? 'main checkout' : w.branch;
         return (
-          <Pressable
+          <ScalePressable
+            pressedScale={0.97}
             key={w.id}
             onPress={() => onSelect(w)}
-            style={({ pressed }) => [
+            style={[
               styles.tab,
               {
                 backgroundColor: selected
@@ -91,8 +93,6 @@ export function WorktreeTabStrip({
                   : c.isDark
                     ? Glass.opacity.dark.border
                     : Glass.opacity.light.border,
-                opacity: pressed ? 0.75 : 1,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
               },
             ]}
           >
@@ -118,7 +118,7 @@ export function WorktreeTabStrip({
                 <Text style={[styles.badgeText, { color: Colors.success[400] }]}>{running}</Text>
               </View>
             )}
-          </Pressable>
+          </ScalePressable>
         );
       })}
     </ScrollView>

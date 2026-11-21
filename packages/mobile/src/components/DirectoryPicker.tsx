@@ -15,6 +15,7 @@ import { apiFetch } from '../services/api';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { FileIconTile } from './FileIconTile';
 import { Typography, CornerRadius } from '../constants/theme';
+import { ScalePressable } from './Pressables';
 
 interface DirEntry {
   name: string;
@@ -123,16 +124,13 @@ export function DirectoryPicker({ visible, onClose, onSelect, initialPath }: Dir
             {folderName}
           </Text>
 
-          <Pressable
+          <ScalePressable
             onPress={() => onSelect(currentPath)}
-            style={({ pressed }) => [
-              styles.selectPill,
-              { backgroundColor: c.accentBg, opacity: pressed ? 0.75 : 1 },
-            ]}
+            style={[styles.selectPill, { backgroundColor: c.accentBg }]}
             hitSlop={8}
           >
             <Text style={styles.selectPillText}>Select</Text>
-          </Pressable>
+          </ScalePressable>
         </View>
 
         {/* Path Breadcrumb */}
