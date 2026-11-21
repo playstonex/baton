@@ -220,7 +220,7 @@ export class Transport {
 
       case 'approve_input': {
         try {
-          void this.agentManager.approve(msg.sessionId, msg.reason);
+          void this.agentManager.approve(msg.sessionId, msg.reason, msg.remember);
         } catch (err) {
           this.send(clientId, {
             type: 'error',
@@ -765,7 +765,7 @@ export class Transport {
           else if (msg.type === 'steer_input') this.agentManager.steer(msg.sessionId, msg.content);
           else if (msg.type === 'cancel_turn') void this.agentManager.cancelTurn(msg.sessionId);
           else if (msg.type === 'approve_input')
-            void this.agentManager.approve(msg.sessionId, msg.reason);
+            void this.agentManager.approve(msg.sessionId, msg.reason, msg.remember);
           else void this.agentManager.reject(msg.sessionId, msg.reason);
         } catch (err) {
           reply({

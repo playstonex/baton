@@ -104,6 +104,7 @@ const approveInputSchema = z.object({
   type: z.literal('approve_input'),
   sessionId: z.string().min(1),
   reason: z.string().optional(),
+  remember: z.boolean().optional(),
 });
 
 const rejectInputSchema = z.object({

@@ -1349,11 +1349,11 @@ export class AgentManager {
     managed.sdkAdapter = adapter;
   }
 
-  async approve(id: string, reason?: string): Promise<void> {
+  async approve(id: string, reason?: string, remember?: boolean): Promise<void> {
     const managed = this.agents.get(id);
     if (!managed) return;
     if (managed.sdkAdapter?.approve) {
-      await managed.sdkAdapter.approve(reason);
+      await managed.sdkAdapter.approve(reason, remember);
     } else if (managed.pty) {
       managed.pty.write('y\n');
     }

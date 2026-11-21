@@ -8,13 +8,40 @@ export interface ChatMessage {
   timestamp: number;
   eventType?: string;
   meta?: Record<string, unknown>;
+  /** Full text behind a one-line summary (tool args, command output, diff). */
+  detail?: string;
+  /** Provider item id, used to update a message in place. */
+  itemId?: string;
+  /** Thinking blocks: true once the agent moved on to something else. */
+  done?: boolean;
+  /** A turn ended here; the next assistant text starts a new bubble. */
+  sealed?: boolean;
+}
+
+export interface ApprovalDetail {
+  requestId?: string;
+  toolName: string;
+  detail: string;
+  input?: Record<string, unknown>;
+  canRemember?: boolean;
+}
+
+export interface PendingQuestion {
+  questions: Array<{
+    id: string;
+    header: string;
+    question: string;
+    options?: Array<{ label: string; description: string }>;
+  }>;
 }
 
 interface ChatState {
   messages: ChatMessage[];
   agentStatus: string;
   pendingApproval: boolean;
-  approvalDetail: { toolName: string; detail: string } | null;
+  approvalDetail: ApprovalDetail | null;
+  approvalQueue: ApprovalDetail[];
+  pendingQuestion: PendingQuestion | null;
   addEvent: (event: ParsedEvent) => void;
   addUserMessage: (content: string) => void;
   setStatus: (status: string) => void;
@@ -40,16 +67,52 @@ function push(messages: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
   return combined.length > MAX_MESSAGES ? combined.slice(-MAX_MESSAGES) : combined;
 }
 
+/** Mark every open thinking block finished. */
+function closeThinking(messages: ChatMessage[]): ChatMessage[] {
+  if (!messages.some((m) => m.eventType === 'thinking' && !m.done)) return messages;
+  return messages.map((m) => (m.eventType === 'thinking' && !m.done ? { ...m, done: true } : m));
+}
+
+function sealLast(messages: ChatMessage[]): ChatMessage[] {
+  const last = messages[messages.length - 1];
+  if (!last || last.sealed) return messages;
+  return [...messages.slice(0, -1), { ...last, sealed: true }];
+}
+
+function stringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function approvalState(queue: ApprovalDetail[]) {
+  return {
+    approvalQueue: queue,
+    pendingApproval: queue.length > 0,
+    approvalDetail: queue[0] ?? null,
+  };
+}
+
 export const useChatStore = create<ChatState>()((set) => ({
   messages: [],
   agentStatus: 'unknown',
   pendingApproval: false,
   approvalDetail: null,
+  approvalQueue: [],
+  pendingQuestion: null,
 
-  addEvent: (event) =>
-    set((state) => {
+  addEvent: (rawEvent) =>
+    set((current) => {
       const id = `msg-${++msgCounter}`;
+      const event = rawEvent;
       const ts = event.timestamp;
+      // Anything other than more reasoning ends the open thinking block.
+      const state =
+        event.type === 'thinking' || event.type === 'status_change'
+          ? current
+          : { ...current, messages: closeThinking(current.messages) };
 
       // Status comes only from the daemon's `status_update` (see setStatus);
       // raw status_change events can disagree with the authoritative value.
@@ -59,7 +122,7 @@ export const useChatStore = create<ChatState>()((set) => ({
         if (event.role === 'user') {
           const last = state.messages[state.messages.length - 1];
           if (last?.role === 'user' && last?.content === event.content) {
-            return state;
+            return state.pendingQuestion ? { pendingQuestion: null } : state;
           }
         } else {
           // Streaming providers emit assistant text in arbitrary fragments —
@@ -69,18 +132,18 @@ export const useChatStore = create<ChatState>()((set) => ({
           // below; a message per event shatters one reply into dozens.
           const messages = [...state.messages];
           const last = messages[messages.length - 1];
-          if (last?.eventType === 'chat_message' && last.role === event.role) {
+          if (last?.eventType === 'chat_message' && last.role === event.role && !last.sealed) {
             messages[messages.length - 1] = {
               ...last,
               content: last.content + event.content,
             };
             return {
-              messages:
-                messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages,
+              messages: messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages,
             };
           }
         }
         return {
+          pendingQuestion: event.role === 'user' ? null : state.pendingQuestion,
           messages: push(state.messages, [
             {
               id,
@@ -98,7 +161,7 @@ export const useChatStore = create<ChatState>()((set) => ({
         if (!cleanContent.trim()) return state;
         const messages = [...state.messages];
         const last = messages[messages.length - 1];
-        if (last?.eventType === 'raw_output') {
+        if (last?.eventType === 'raw_output' && !last.sealed) {
           messages[messages.length - 1] = {
             ...last,
             content: last.content + cleanContent,
@@ -119,22 +182,30 @@ export const useChatStore = create<ChatState>()((set) => ({
 
       if (event.type === 'waiting_approval' || event.type === 'permission_request') {
         const meta = (event as ParsedEvent & { meta?: Record<string, unknown> }).meta;
-        const toolName =
-          event.type === 'permission_request'
-            ? event.tool || event.action || 'action'
-            : ((meta?.toolName ?? 'action') as string);
-        const detail =
-          event.type === 'permission_request'
-            ? event.description || ''
-            : ((meta?.detail ?? '') as string);
+        const isPerm = event.type === 'permission_request';
+        const toolName = isPerm
+          ? event.tool || event.action || 'action'
+          : ((meta?.toolName ?? 'action') as string);
+        const detail = isPerm ? event.description || '' : ((meta?.detail ?? '') as string);
+        const entry: ApprovalDetail = {
+          requestId: isPerm ? event.requestId : undefined,
+          toolName,
+          detail,
+          input: isPerm ? event.input : undefined,
+          canRemember: isPerm ? event.canRemember : undefined,
+        };
+        const queue = [
+          ...state.approvalQueue.filter((a) => !entry.requestId || a.requestId !== entry.requestId),
+          entry,
+        ];
         return {
-          pendingApproval: true,
-          approvalDetail: { toolName, detail },
+          ...approvalState(queue),
           messages: push(state.messages, [
             {
               id,
               role: 'system' as const,
               content: `Approval required: ${toolName}${detail ? ` — ${detail}` : ''}`,
+              detail: entry.input ? stringify(entry.input) : undefined,
               timestamp: ts,
               eventType: 'waiting_approval',
             },
@@ -163,9 +234,10 @@ export const useChatStore = create<ChatState>()((set) => ({
       }
 
       if (event.type === 'permission_response') {
+        const idx = state.approvalQueue.findIndex((a) => a.requestId === event.requestId);
+        const queue = state.approvalQueue.filter((_, i) => (idx >= 0 ? i !== idx : i !== 0));
         return {
-          pendingApproval: false,
-          approvalDetail: null,
+          ...approvalState(queue),
           messages: push(state.messages, [
             {
               id,
@@ -184,6 +256,7 @@ export const useChatStore = create<ChatState>()((set) => ({
           .map((q) => `${q.header ? `[${q.header}] ` : ''}${q.question}`)
           .join('\n');
         return {
+          pendingQuestion: questions.length > 0 ? { questions } : null,
           messages: push(state.messages, [
             {
               id,
@@ -191,6 +264,7 @@ export const useChatStore = create<ChatState>()((set) => ({
               content: content || 'Question from agent',
               timestamp: ts,
               eventType: 'user_input_prompt',
+              sealed: true,
             },
           ]),
         };
@@ -206,6 +280,7 @@ export const useChatStore = create<ChatState>()((set) => ({
               content: `${event.tool}${hint ? ` — ${hint}` : ''}`,
               timestamp: ts,
               eventType: 'tool_call_start',
+              detail: stringify(event.args),
               meta: event.args as Record<string, unknown>,
             },
           ]),
@@ -221,6 +296,7 @@ export const useChatStore = create<ChatState>()((set) => ({
               id,
               role: 'system' as const,
               content: summary,
+              detail: event.steps?.map((st) => `- ${st.step}`).join('\n'),
               timestamp: ts,
               eventType: 'plan',
             },
@@ -235,6 +311,7 @@ export const useChatStore = create<ChatState>()((set) => ({
               id,
               role: 'system' as const,
               content: `Diff: ${event.path || 'changes'}`,
+              detail: event.diff,
               timestamp: ts,
               eventType: 'diff',
             },
@@ -243,13 +320,25 @@ export const useChatStore = create<ChatState>()((set) => ({
       }
 
       if (event.type === 'thinking') {
-        const last = state.messages[state.messages.length - 1];
-        if (last?.eventType === 'thinking') {
-          return state;
+        const last = current.messages[current.messages.length - 1];
+        if (last?.eventType === 'thinking' && !last.done) {
+          const messages = [...current.messages];
+          messages[messages.length - 1] = {
+            ...last,
+            content: last.content + (event.content ?? ''),
+          };
+          return { messages };
         }
         return {
-          messages: push(state.messages, [
-            { id, role: 'system', content: 'Thinking...', timestamp: ts, eventType: 'thinking' },
+          messages: push(closeThinking(current.messages), [
+            {
+              id,
+              role: 'system',
+              content: event.content ?? '',
+              timestamp: ts,
+              eventType: 'thinking',
+              done: false,
+            },
           ]),
         };
       }
@@ -286,17 +375,31 @@ export const useChatStore = create<ChatState>()((set) => ({
       }
 
       if (event.type === 'command_exec') {
-        return {
-          messages: push(state.messages, [
-            {
-              id,
-              role: 'system',
-              content: `$ ${event.command}`,
-              timestamp: ts,
-              eventType: 'command_exec',
-            },
-          ]),
+        const next: ChatMessage = {
+          id,
+          role: 'system',
+          content: `$ ${event.command}`,
+          detail: event.output,
+          itemId: event.itemId,
+          timestamp: ts,
+          eventType: 'command_exec',
+          meta: event.exitCode !== undefined ? { exitCode: event.exitCode } : undefined,
         };
+        const at = event.itemId
+          ? state.messages.findIndex(
+              (m) => m.eventType === 'command_exec' && m.itemId === event.itemId,
+            )
+          : -1;
+        if (at >= 0) {
+          const messages = [...state.messages];
+          messages[at] = { ...next, id: messages[at].id };
+          return { messages };
+        }
+        return { messages: push(state.messages, [next]) };
+      }
+
+      if (event.type === 'turn_boundary') {
+        return { messages: sealLast(state.messages) };
       }
 
       if (event.type === 'error') {
@@ -324,14 +427,36 @@ export const useChatStore = create<ChatState>()((set) => ({
     })),
 
   setStatus: (status) =>
-    set((state) => ({
-      agentStatus: status,
-      pendingApproval: status === 'waiting_input' ? state.pendingApproval : false,
-      approvalDetail: status === 'waiting_input' ? state.approvalDetail : null,
-    })),
+    set((state) => {
+      const waiting = status === 'waiting_input';
+      const turnOver = !isBusy(status) && status !== 'unknown' && status !== 'starting';
+      let messages = state.messages;
+      if (status !== 'thinking') messages = closeThinking(messages);
+      if (turnOver) messages = sealLast(messages);
+      return {
+        agentStatus: status,
+        messages,
+        ...(waiting ? {} : approvalState([])),
+        pendingQuestion: waiting ? state.pendingQuestion : null,
+      };
+    }),
 
-  resolveApproval: () => set({ pendingApproval: false, approvalDetail: null }),
+  resolveApproval: () => set((state) => approvalState(state.approvalQueue.slice(1))),
 
   clear: () =>
-    set({ messages: [], agentStatus: 'unknown', pendingApproval: false, approvalDetail: null }),
+    set({
+      messages: [],
+      agentStatus: 'unknown',
+      pendingQuestion: null,
+      ...approvalState([]),
+    }),
 }));
+
+function isBusy(status: string): boolean {
+  return (
+    status === 'running' ||
+    status === 'thinking' ||
+    status === 'executing' ||
+    status === 'waiting_input'
+  );
+}

@@ -6,14 +6,14 @@ import { useChatStore } from '../stores/chat.js';
 import { wsService } from '../services/websocket.js';
 import { Button } from '../lib/ui.js';
 import { UsagePill } from '../components/UsagePill.js';
-import { ThinkingStates, MatrixLoader, ReasoningStream } from '../components/index.js';
+import { ThinkingStates, MatrixLoader } from '../components/index.js';
+import { MessageBubble } from './chat/MessageBubble.js';
 import {
   IconAlertCircle,
   IconTerminal,
   IconFile,
   IconGitBranch,
   IconActivity,
-  IconRotateCcw,
 } from '../lib/icons.js';
 
 const PERMISSION_CONFIG: Record<string, { label: string; desc: string; tone: string }> = {
@@ -57,6 +57,8 @@ export function ChatScreen() {
     agentStatus,
     pendingApproval,
     approvalDetail,
+    approvalQueue,
+    pendingQuestion,
     addEvent,
     addUserMessage,
     setStatus,
@@ -74,6 +76,7 @@ export function ChatScreen() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isNearBottomRef = useRef(true);
+  const [fullscreen, setFullscreen] = useState(false);
 
   function handleSelectPermission(mode: PermissionMode) {
     setPermissionMode(mode);
@@ -115,6 +118,10 @@ export function ChatScreen() {
   useEffect(() => {
     if (!sessionId) return;
     clear();
+    // The store was just emptied, so a seq-based resume would deliver only
+    // what arrived after the last visit. Force a full attach on entry; later
+    // reconnects inside this mount still resume from lastSeq.
+    wsService.clearResume(sessionId);
 
     const unsubEvent = wsService.on('parsed_event', (msg) => {
       if (msg.type === 'parsed_event' && msg.sessionId === sessionId) {
@@ -182,6 +189,10 @@ export function ChatScreen() {
       unsubStatus();
       unsubModels();
       unsubState();
+      // Stop streaming into a page that's gone and drop the resume cursor so
+      // the next visit replays the whole conversation.
+      wsService.send({ type: 'control', action: 'detach_session', sessionId });
+      wsService.clearResume(sessionId);
     };
   }, [sessionId, addEvent, setStatus, clear, attachSession]);
 
@@ -190,6 +201,14 @@ export function ChatScreen() {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, pendingApproval]);
+
+  // Grow the textarea with its content (capped by max-h in the class list).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   function sendChat() {
     if (!input.trim() || !sessionId || isStopped) return;
@@ -216,10 +235,22 @@ export function ChatScreen() {
     wsService.send({ type: 'cancel_turn', sessionId });
   }
 
-  function approveAction() {
+  function approveAction(remember = false) {
     if (!sessionId) return;
-    wsService.send({ type: 'approve_input', sessionId, reason: 'Approved via Baton' });
+    wsService.send({
+      type: 'approve_input',
+      sessionId,
+      reason: 'Approved via Baton',
+      ...(remember ? { remember: true } : {}),
+    });
     resolveApproval();
+  }
+
+  function answerQuestion(answer: string) {
+    if (!sessionId || !answer.trim()) return;
+    addUserMessage(answer);
+    wsService.send({ type: 'chat_input', sessionId, content: answer });
+    isNearBottomRef.current = true;
   }
 
   function rejectAction() {
@@ -265,7 +296,9 @@ export function ChatScreen() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (isStopped) return;
-      if (running && !pendingApproval) {
+      if (pendingQuestion) {
+        sendChat();
+      } else if (running && !pendingApproval) {
         sendSteer();
       } else if (!pendingApproval) {
         sendChat();
@@ -307,12 +340,7 @@ export function ChatScreen() {
             <div className="hidden items-center gap-2 border-l border-line-soft pl-2.5 sm:flex">
               <MatrixLoader variant="scan" />
               <ThinkingStates
-                states={[
-                  agentStatus === 'thinking' ? 'Agent thinking…' : 'Agent executing…',
-                  'Analyzing context',
-                  'Checking workspace',
-                  'Synthesizing turn',
-                ]}
+                text={agentStatus === 'thinking' ? 'Agent thinking…' : 'Agent working…'}
                 className="font-mono text-xs text-meta"
               />
             </div>
@@ -473,12 +501,7 @@ export function ChatScreen() {
               <div className="flex items-center gap-2.5 rounded-md border border-accent/20 bg-accent-soft/30 px-3.5 py-2">
                 <MatrixLoader variant="orbit" />
                 <ThinkingStates
-                  states={[
-                    agentStatus === 'thinking' ? 'Claude is thinking…' : 'Executing command…',
-                    'Processing agent output',
-                    'Checking tool feedback',
-                    'Preparing response',
-                  ]}
+                  text={agentStatus === 'thinking' ? 'Agent is thinking…' : 'Agent is working…'}
                   className="text-xs font-medium text-fg-2"
                 />
               </div>
@@ -489,26 +512,72 @@ export function ChatScreen() {
       </div>
 
       {pendingApproval && (
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 rounded-md border border-warn/25 bg-warn-soft px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <IconAlertCircle className="h-4 w-4 shrink-0 text-warn" />
-            <div>
-              <p className="text-[13px] font-medium text-fg">
-                Agent requests approval: {approvalDetail?.toolName ?? 'action'}
-              </p>
-              {approvalDetail?.detail && (
-                <p className="mt-0.5 text-xs text-muted">{approvalDetail.detail}</p>
+        <div className="mx-auto w-full max-w-3xl rounded-md border border-warn/25 bg-warn-soft px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <IconAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-fg">
+                  Agent requests approval: {approvalDetail?.toolName ?? 'action'}
+                </p>
+                {approvalDetail?.detail && (
+                  <pre className="mt-1 max-h-40 select-text overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-fg-2">
+                    {approvalDetail.detail}
+                  </pre>
+                )}
+                {approvalQueue.length > 1 && (
+                  <p className="mt-1 text-[11px] text-meta">
+                    {approvalQueue.length - 1} more waiting
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <Button size="sm" variant="primary" onClick={() => approveAction()}>
+                Approve
+              </Button>
+              {approvalDetail?.canRemember && (
+                <Button size="sm" variant="secondary" onClick={() => approveAction(true)}>
+                  Always allow {approvalDetail.toolName}
+                </Button>
               )}
+              <Button size="sm" variant="error" onClick={rejectAction}>
+                Reject
+              </Button>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button size="sm" variant="primary" onClick={approveAction}>
-              Approve
-            </Button>
-            <Button size="sm" variant="error" onClick={rejectAction}>
-              Reject
-            </Button>
-          </div>
+        </div>
+      )}
+
+      {pendingQuestion && (
+        <div className="mx-auto w-full max-w-3xl space-y-3 rounded-md border border-accent/25 bg-accent-soft/30 px-4 py-3">
+          {pendingQuestion.questions.map((q) => (
+            <div key={q.id}>
+              <p className="text-[13px] font-medium text-fg">
+                {q.header ? `${q.header}: ` : ''}
+                {q.question}
+              </p>
+              {q.options && q.options.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {q.options.map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      title={o.description}
+                      onClick={() => answerQuestion(o.label)}
+                      className="rounded-md border border-line bg-field px-3 py-1.5 text-left text-xs text-fg transition-colors hover:border-accent"
+                    >
+                      <span className="font-medium">{o.label}</span>
+                      {o.description && (
+                        <span className="mt-0.5 block text-[11px] text-muted">{o.description}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <p className="text-[11px] text-meta">Pick an option or type your own answer below.</p>
         </div>
       )}
 
@@ -530,9 +599,9 @@ export function ChatScreen() {
             }
             rows={1}
             disabled={pendingApproval || isStopped}
-            className="flex-1 resize-none rounded-sm border border-line bg-field px-3 py-2 text-[13px] text-fg placeholder:text-meta transition-colors duration-150 focus:border-accent focus-visible:focus-ring focus:outline-none disabled:opacity-50"
+            className="max-h-60 flex-1 resize-none overflow-y-auto rounded-sm border border-line bg-field px-3 py-2 text-[13px] text-fg placeholder:text-meta transition-colors duration-150 focus:border-accent focus-visible:focus-ring focus:outline-none disabled:opacity-50"
           />
-          {running && !pendingApproval && (
+          {running && !pendingApproval && !pendingQuestion && (
             <Button size="sm" variant="secondary" onClick={sendSteer} disabled={!input.trim()}>
               <svg
                 className="mr-1 h-3.5 w-3.5"
@@ -549,12 +618,21 @@ export function ChatScreen() {
               Steer
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="tertiary"
+            onClick={() => setFullscreen(true)}
+            title="Edit in full screen"
+            aria-label="Edit in full screen"
+          >
+            ⤢
+          </Button>
           {running && !pendingApproval && (
             <Button size="sm" variant="secondary" onClick={cancelTurn}>
               Cancel
             </Button>
           )}
-          {!running && !isStopped && (
+          {((!running && !isStopped) || (pendingQuestion && !isStopped)) && (
             <Button size="sm" variant="primary" onClick={sendChat} disabled={!input.trim()}>
               <svg
                 className="mr-1 h-3.5 w-3.5"
@@ -577,121 +655,47 @@ export function ChatScreen() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function MessageBubble({
-  msg,
-  onRollback,
-}: {
-  msg: { role: string; content: string; eventType?: string; meta?: Record<string, unknown> };
-  onRollback?: (cpId: string) => void;
-}) {
-  if (msg.eventType === 'checkpoint_created') {
-    const cpId = msg.meta?.checkpointId as string | undefined;
-    return (
-      <div className="flex justify-center my-1.5">
-        <div className="inline-flex max-w-[90%] items-center gap-2.5 rounded-md border border-line-soft bg-surface/90 px-3.5 py-1.5 text-xs text-muted shadow-xs">
-          <IconGitBranch className="h-3.5 w-3.5 text-accent" />
-          <span className="font-mono text-fg-2">{msg.content}</span>
-          {cpId && (
-            <button
-              type="button"
-              onClick={() => onRollback?.(cpId)}
-              className="inline-flex items-center gap-1 rounded bg-raised px-2 py-0.5 text-[11px] font-medium text-warn hover:bg-warn/10 transition-colors"
-              title="Rollback workspace to this turn"
+      {fullscreen && (
+        <div className="fixed inset-0 z-50 flex flex-col gap-3 bg-canvas p-6">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-medium text-fg">Compose message</span>
+            <span className="text-[11px] text-meta">Esc to close · ⌘/Ctrl+Enter to send</span>
+          </div>
+          <textarea
+            autoFocus
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              if (e.key === 'Escape') setFullscreen(false);
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                setFullscreen(false);
+                if (pendingQuestion || !running) sendChat();
+                else sendSteer();
+              }
+            }}
+            className="flex-1 resize-none rounded-sm border border-line bg-field p-4 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+          />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setFullscreen(false)}>
+              Done
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={!input.trim() || isStopped || pendingApproval}
+              onClick={() => {
+                setFullscreen(false);
+                if (pendingQuestion || !running) sendChat();
+                else sendSteer();
+              }}
             >
-              <IconRotateCcw className="h-3 w-3" />
-              <span>Rollback</span>
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === 'user') {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-md rounded-br-sm bg-accent px-4 py-2.5 text-[13px] leading-relaxed text-accent-on">
-          {msg.content}
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.role === 'assistant') {
-    return (
-      <div className="flex justify-start">
-        <div className="max-w-[80%] whitespace-pre-wrap rounded-md rounded-bl-sm border border-line-soft bg-raised px-4 py-2.5 text-[13px] leading-relaxed text-fg">
-          {msg.content}
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.eventType === 'waiting_approval') {
-    return (
-      <div className="flex justify-center">
-        <div className="inline-flex max-w-[90%] items-start gap-2 rounded-sm border border-warn/25 bg-warn-soft px-4 py-2 text-center text-[13px] text-fg">
-          <IconAlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
-          <span>{msg.content}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.eventType === 'error') {
-    return (
-      <div className="flex justify-center">
-        <div className="inline-flex max-w-[90%] items-center gap-2 rounded-sm border border-danger/25 bg-danger/10 px-4 py-2 text-center text-[13px] text-danger">
-          <IconAlertCircle className="h-3.5 w-3.5 shrink-0" />
-          <span>{msg.content}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (msg.eventType === 'command_exec') {
-    return (
-      <div className="flex justify-center">
-        <span className="inline-block max-w-[90%] rounded-sm border border-line-soft bg-canvas px-3 py-1 font-mono text-xs text-fg-2">
-          {msg.content}
-        </span>
-      </div>
-    );
-  }
-
-  if (msg.eventType === 'thinking') {
-    const isMultiLine = msg.content.includes('\n') || msg.content.length > 80;
-    return (
-      <div className="flex justify-center my-1.5">
-        {isMultiLine ? (
-          <div className="w-full max-w-xl rounded-md border border-line-soft bg-surface/90 p-3 shadow-xs">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-meta">
-              <MatrixLoader variant="pulse" />
-              <span>Reasoning transcript</span>
-            </div>
-            <ReasoningStream maxHeight={72} className="text-xs font-mono leading-relaxed text-fg-2">
-              {msg.content}
-            </ReasoningStream>
+              Send
+            </Button>
           </div>
-        ) : (
-          <div className="inline-flex items-center gap-2 rounded-full border border-line-soft bg-surface px-3 py-1 text-xs text-meta shadow-xs">
-            <MatrixLoader variant="scan" />
-            <ThinkingStates text={msg.content} className="font-mono text-xs text-meta" />
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex justify-center">
-      <span className="inline-block max-w-[90%] rounded-full bg-raised px-3 py-1 text-center text-xs text-muted">
-        {msg.content}
-      </span>
+        </div>
+      )}
     </div>
   );
 }

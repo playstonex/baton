@@ -47,6 +47,20 @@ type SdkUserInput = {
   parent_tool_use_id: string | null;
 };
 
+function describeToolInput(input: Record<string, unknown>): string {
+  const pick = (key: string) => (typeof input[key] === 'string' ? (input[key] as string) : '');
+  const command = pick('command');
+  if (command) return `$ ${command}`;
+  const target = pick('file_path') || pick('path') || pick('url') || pick('pattern');
+  if (target) return target;
+  try {
+    const json = JSON.stringify(input);
+    return json && json !== '{}' ? json.slice(0, 500) : '';
+  } catch {
+    return '';
+  }
+}
+
 export class ClaudeSdkAdapter implements SdkAgentAdapter {
   readonly name = 'Claude Code (SDK)';
   readonly agentType = 'claude-code-sdk' as const;
@@ -86,7 +100,14 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
   private controller: AbortController | null = null;
   private sdkAvailable: boolean | null = null;
   private projectPath = '';
-  private resolveApproval: ((approved: boolean) => void) | null = null;
+  private pendingApprovals: Array<{
+    requestId: string;
+    tool: string;
+    resolve: (approved: boolean) => void;
+  }> = [];
+  private alwaysAllowedTools = new Set<string>();
+  private pendingQuestion: ((answer: string) => void) | null = null;
+  private emitEvent: ((event: ParsedEvent) => void) | null = null;
 
   /** PTY-only hook — SDK adapters track provider session ids natively. */
   extractSessionId(_clean: string): string | null {
@@ -150,8 +171,15 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
       }
     }
 
+    this.emitEvent = onEvent;
     const write = (input: string, images?: ChatImage[]) => {
       onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
+      if (this.pendingQuestion) {
+        const answer = this.pendingQuestion;
+        this.pendingQuestion = null;
+        answer(input);
+        return;
+      }
       messageQueue.push({ text: input, images });
       if (resolvePrompt) {
         resolvePrompt();
@@ -183,9 +211,16 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
 
     options.canUseTool = async (
       toolName: string,
-      _input: Record<string, unknown>,
-      opts: { requestId?: string; description?: string } = {},
+      input: Record<string, unknown>,
+      opts: { requestId?: string; toolUseID?: string; description?: string; title?: string } = {},
     ) => {
+      if (toolName === 'AskUserQuestion') {
+        return this.askUserQuestion(input, onEvent);
+      }
+      if (this.alwaysAllowedTools.has(toolName)) {
+        return { behavior: 'allow', updatedInput: input };
+      }
+
       // 1. YOLO / bypassPermissions: auto-allow without prompt
       if (
         this.selectedPermissionMode === 'yolo' ||
@@ -242,25 +277,33 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
       }
 
       // 4. Default: request user permission
-      const requestId = opts.requestId || `perm_${Date.now().toString(36)}`;
+      const requestId =
+        opts.toolUseID || opts.requestId || `perm_${Date.now().toString(36)}`;
       onEvent({
         type: 'permission_request',
         requestId,
         tool: toolName,
         action: toolName,
-        description: opts.description || `Permission requested for ${toolName}`,
+        description:
+          describeToolInput(input) || opts.description || opts.title || `Permission requested for ${toolName}`,
+        input,
+        canRemember: true,
         timestamp: Date.now(),
       });
       onEvent({ type: 'status_change', status: 'waiting_input', timestamp: Date.now() });
 
       return new Promise<Record<string, unknown>>((resolve) => {
-        this.resolveApproval = (approved: boolean) => {
-          if (approved) {
-            resolve({ behavior: 'allow' });
-          } else {
-            resolve({ behavior: 'deny', message: 'Rejected by user' });
-          }
-        };
+        this.pendingApprovals.push({
+          requestId,
+          tool: toolName,
+          resolve: (approved: boolean) => {
+            if (approved) {
+              resolve({ behavior: 'allow', updatedInput: input });
+            } else {
+              resolve({ behavior: 'deny', message: 'Rejected by user' });
+            }
+          },
+        });
       });
     };
 
@@ -372,18 +415,59 @@ export class ClaudeSdkAdapter implements SdkAgentAdapter {
     }
   }
 
-  async approve(_reason?: string): Promise<void> {
-    if (this.resolveApproval) {
-      this.resolveApproval(true);
-      this.resolveApproval = null;
-    }
+  async approve(_reason?: string, remember?: boolean): Promise<void> {
+    this.settleApproval(true, remember);
   }
 
   async reject(_reason?: string): Promise<void> {
-    if (this.resolveApproval) {
-      this.resolveApproval(false);
-      this.resolveApproval = null;
+    this.settleApproval(false);
+  }
+
+  private settleApproval(approved: boolean, remember = false): void {
+    const next = this.pendingApprovals.shift();
+    if (!next) return;
+    if (approved && remember) this.alwaysAllowedTools.add(next.tool);
+    next.resolve(approved);
+    const emit = this.emitEvent;
+    emit?.({
+      type: 'permission_response',
+      requestId: next.requestId,
+      approved,
+      timestamp: Date.now(),
+    });
+    if (this.pendingApprovals.length === 0) {
+      emit?.({ type: 'status_change', status: 'running', timestamp: Date.now() });
     }
+  }
+
+  private askUserQuestion(
+    input: Record<string, unknown>,
+    onEvent: (event: ParsedEvent) => void,
+  ): Promise<Record<string, unknown>> {
+    const rawQuestions = Array.isArray(input.questions)
+      ? (input.questions as Array<Record<string, unknown>>)
+      : [];
+    const questions = rawQuestions.map((q, index) => ({
+      id: String(q.id ?? index),
+      header: String(q.header ?? ''),
+      question: String(q.question ?? ''),
+      options: Array.isArray(q.options)
+        ? (q.options as Array<Record<string, unknown>>).map((o) => ({
+            label: String(o.label ?? ''),
+            description: String(o.description ?? ''),
+          }))
+        : undefined,
+    }));
+    onEvent({ type: 'user_input_prompt', questions, timestamp: Date.now() });
+    onEvent({ type: 'status_change', status: 'waiting_input', timestamp: Date.now() });
+    return new Promise((resolve) => {
+      this.pendingQuestion = (answer: string) => {
+        const answers: Record<string, string> = {};
+        for (const q of questions) answers[q.question] = answer;
+        onEvent({ type: 'status_change', status: 'running', timestamp: Date.now() });
+        resolve({ behavior: 'allow', updatedInput: { ...input, answers } });
+      };
+    });
   }
 
   async listModels(): Promise<string[]> {

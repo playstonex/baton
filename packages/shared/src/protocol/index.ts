@@ -99,6 +99,7 @@ export interface ApproveInputMessage {
   type: 'approve_input';
   sessionId: string;
   reason?: string;
+  remember?: boolean;
 }
 
 export interface RejectInputMessage {

@@ -124,6 +124,10 @@ export interface PermissionRequestEvent {
   tool: string;
   action: string;
   description: string;
+  /** Raw tool input (command, file path, ...) so clients can show what is being approved. */
+  input?: Record<string, unknown>;
+  /** Client may offer "always allow this tool for the session". */
+  canRemember?: boolean;
   timestamp: number;
 }
 
@@ -337,7 +341,7 @@ export interface SdkAgentAdapter extends AgentAdapter {
     config: AgentConfig,
     onEvent: (event: ParsedEvent) => void,
   ): Promise<{ write: (input: string) => void; stop: () => Promise<void> }>;
-  approve?(reason?: string): Promise<void>;
+  approve?(reason?: string, remember?: boolean): Promise<void>;
   reject?(reason?: string): Promise<void>;
   selectedModel?: string | null;
   setThinkingConfig?(config: ThinkingConfig): void;
