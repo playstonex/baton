@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import type { SavedConnection } from '../services/secure-storage';
-import type { AgentType } from '@baton/shared';
+import type { AgentStatus, AgentType } from '@baton/shared';
 
 export interface RecentConnection {
   mode: 'local' | 'remote';
@@ -17,6 +17,8 @@ export interface RecentSession {
   type: AgentType;
   projectPath: string;
   lastActivity: number;
+  /** Last status the daemon reported for this session. */
+  status?: AgentStatus;
   /** How this session should open: structured chat view or raw terminal.
    * Only meaningful for codex (the only agent with a chat mode). */
   chatMode?: 'chat' | 'terminal';

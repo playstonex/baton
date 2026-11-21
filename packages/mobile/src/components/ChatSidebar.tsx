@@ -14,33 +14,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useAgentStore } from '../stores/agents';
-import { useRecentStore, type RecentSession } from '../stores/recent';
+import { useRecentStore } from '../stores/recent';
 import { useConnectionStore } from '../stores/connection';
 import { useThemeStore } from '../stores/theme';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { Typography, Spacing, Colors, CornerRadius } from '../constants/theme';
 import type { AgentProcess } from '@baton/shared';
+import {
+  buildProjectLabels,
+  groupSessions,
+  sessionMatchesQuery,
+  type SessionGroupMode,
+} from '@baton/shared/utils';
 import { wsService } from '../services/websocket';
 import { apiFetch } from '../services/api';
-import { resolveSessionTitle } from '../lib/sessionTitle';
+import { useSidebarPrefs } from '../stores/sidebar-prefs';
+import { ScalePressable } from './Pressables';
+import { SessionRow, type SidebarSessionItem } from './session-list/SessionRow';
+import { SessionGroupHeader } from './session-list/SessionGroupHeader';
 
-const AGENT_META: Record<string, { label: string; icon: string; color: string }> = {
-  'claude-code': { label: 'Claude Code', icon: 'sparkles', color: '#D97757' },
-  codex: { label: 'Codex', icon: 'terminal', color: '#10A37F' },
-  opencode: { label: 'OpenCode', icon: 'code-slash', color: '#6366F1' },
-  kiro: { label: 'Kiro', icon: 'rocket', color: '#FF9900' },
-  antigravity: { label: 'Antigravity', icon: 'planet-outline', color: '#4285F4' },
-  pi: { label: 'Pi', icon: 'flask-outline', color: '#8B5CF6' },
-  acp: { label: 'ACP', icon: 'hardware-chip-outline', color: '#8B5CF6' },
-};
-
-function formatRelativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 60_000) return 'Just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
-}
+const GROUP_MODE_OPTIONS: { mode: SessionGroupMode; label: string }[] = [
+  { mode: 'project', label: 'Project' },
+  { mode: 'status', label: 'Status' },
+  { mode: 'time', label: 'Time' },
+];
 
 interface ChatSidebarProps {
   currentSessionId?: string;
@@ -48,11 +45,6 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   onClose?: () => void;
   isWide?: boolean;
-}
-
-interface HistoryGroup {
-  title: string;
-  items: RecentSession[];
 }
 
 export function ChatSidebar({
@@ -73,8 +65,8 @@ export function ChatSidebar({
   const updateAgentStatus = useAgentStore((s) => s.updateAgentStatus);
   const { sessions, removeSession, addSessions } = useRecentStore();
   const connected = useConnectionStore((s) => s.connected);
-  const activeHost = useConnectionStore((s) =>
-    s.hosts.find((h) => h.id === s.activeHostId) ?? null,
+  const activeHost = useConnectionStore(
+    (s) => s.hosts.find((h) => h.id === s.activeHostId) ?? null,
   );
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +86,7 @@ export function ChatSidebar({
               type: s.type,
               projectPath: s.projectPath,
               lastActivity: s.updatedAt ? Date.parse(s.updatedAt) : Date.now(),
+              status: s.status,
               title: s.title,
               eventCount: s.eventCount,
             })),
@@ -132,53 +125,79 @@ export function ChatSidebar({
     };
   }, [setAgents, updateAgentStatus, addSessions]);
 
-  // Live active agents
-  const liveAgents = useMemo(
-    () => agents.filter((a) => a.status !== 'stopped'),
-    [agents],
+  const groupMode = useSidebarPrefs((s) => s.groupMode);
+  const setGroupMode = useSidebarPrefs((s) => s.setGroupMode);
+  const loadSidebarPrefs = useSidebarPrefs((s) => s.load);
+  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(new Set());
+
+  useEffect(() => {
+    void loadSidebarPrefs();
+  }, [loadSidebarPrefs]);
+
+  // Live agents overlay the stored history: the live status and detail win,
+  // the stored row supplies sessions the agent list no longer carries.
+  const items = useMemo(() => {
+    const byId = new Map<string, SidebarSessionItem>();
+    for (const s of sessions) {
+      byId.set(s.id, {
+        id: s.id,
+        type: s.type,
+        projectPath: s.projectPath,
+        status: s.status ?? 'stopped',
+        title: s.title,
+        lastActivity: s.lastActivity,
+        live: false,
+      });
+    }
+    for (const agent of agents) {
+      if (agent.archivedAt) continue;
+      const previous = byId.get(agent.id);
+      const activityAt = Date.parse(agent.lastActivityAt ?? agent.startedAt);
+      byId.set(agent.id, {
+        id: agent.id,
+        type: agent.type,
+        projectPath: agent.projectPath,
+        status: agent.status,
+        title: agent.title ?? previous?.title,
+        lastActivity: Number.isNaN(activityAt)
+          ? (previous?.lastActivity ?? Date.now())
+          : activityAt,
+        detail: agent.stateDetail,
+        live: agent.status !== 'stopped',
+      });
+    }
+    return [...byId.values()];
+  }, [sessions, agents]);
+
+  const projectLabels = useMemo(
+    () => buildProjectLabels(items.map((item) => item.projectPath)),
+    [items],
   );
 
-  const activeSessionIds = useMemo(() => new Set(liveAgents.map((a) => a.id)), [liveAgents]);
+  const groups = useMemo(() => {
+    const visible = items.filter((item) =>
+      sessionMatchesQuery(item, searchQuery, projectLabels.get(item.projectPath) ?? ''),
+    );
+    return groupSessions(visible, groupMode, { projectLabels });
+  }, [items, searchQuery, groupMode, projectLabels]);
 
-  // History sessions grouped ChatGPT-style (Today, Yesterday, Previous 7 Days, Older)
-  const historyGroups = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const filtered = sessions.filter((s) => {
-      if (activeSessionIds.has(s.id)) return false;
-      if (!q) return true;
-      const titleMatch = (s.title ?? '').toLowerCase().includes(q);
-      const pathMatch = (s.projectPath ?? '').toLowerCase().includes(q);
-      const typeMatch = (s.type ?? '').toLowerCase().includes(q);
-      return titleMatch || pathMatch || typeMatch;
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
+  }, []);
 
-    const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const today: RecentSession[] = [];
-    const yesterday: RecentSession[] = [];
-    const last7Days: RecentSession[] = [];
-    const older: RecentSession[] = [];
-
-    for (const s of filtered) {
-      const age = now - s.lastActivity;
-      if (age < oneDay) {
-        today.push(s);
-      } else if (age < 2 * oneDay) {
-        yesterday.push(s);
-      } else if (age < 7 * oneDay) {
-        last7Days.push(s);
-      } else {
-        older.push(s);
-      }
-    }
-
-    const groups: HistoryGroup[] = [];
-    if (today.length > 0) groups.push({ title: 'Today', items: today });
-    if (yesterday.length > 0) groups.push({ title: 'Yesterday', items: yesterday });
-    if (last7Days.length > 0) groups.push({ title: 'Previous 7 Days', items: last7Days });
-    if (older.length > 0) groups.push({ title: 'Older', items: older });
-    return groups;
-  }, [sessions, activeSessionIds, searchQuery]);
+  const handleModeChange = useCallback(
+    (mode: SessionGroupMode) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setGroupMode(mode);
+      setCollapsedKeys(new Set());
+    },
+    [setGroupMode],
+  );
 
   const handleSelect = useCallback(
     (sessionId: string) => {
@@ -200,8 +219,7 @@ export function ChatSidebar({
   }, [onNewChat, isWide, onClose]);
 
   const handleDeleteSession = useCallback(
-    (id: string, e: any) => {
-      e.stopPropagation?.();
+    (id: string) => {
       Alert.alert('Remove Chat', 'Remove this chat session from history?', [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -248,33 +266,32 @@ export function ChatSidebar({
         </View>
 
         {!isWide && onClose && (
-          <Pressable
+          <ScalePressable
             onPress={onClose}
             hitSlop={8}
-            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            style={[styles.iconBtn]}
             accessibilityLabel="Close sidebar"
           >
             <Ionicons name="chevron-back" size={22} color={c.textSecondary} />
-          </Pressable>
+          </ScalePressable>
         )}
       </View>
 
       {/* Action: + New Chat Button (ChatGPT style) */}
-      <Pressable
+      <ScalePressable
+        pressedScale={0.98}
         onPress={handleNewChatPress}
-        style={({ pressed }) => [
+        style={[
           styles.newChatBtn,
           {
             backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
             borderColor: c.cardBorder,
-            opacity: pressed ? 0.8 : 1,
-            transform: [{ scale: pressed ? 0.98 : 1 }],
           },
         ]}
       >
         <Ionicons name="create-outline" size={18} color={c.textPrimary} />
         <Text style={[styles.newChatText, { color: c.textPrimary }]}>New Chat</Text>
-      </Pressable>
+      </ScalePressable>
 
       {/* Search Bar */}
       <View
@@ -304,6 +321,37 @@ export function ChatSidebar({
         )}
       </View>
 
+      {/* Grouping */}
+      <View style={styles.modeRow}>
+        {GROUP_MODE_OPTIONS.map((option) => {
+          const active = option.mode === groupMode;
+          return (
+            <Pressable
+              key={option.mode}
+              onPress={() => handleModeChange(option.mode)}
+              style={[
+                styles.modeChip,
+                {
+                  backgroundColor: active
+                    ? c.isDark
+                      ? 'rgba(255, 255, 255, 0.14)'
+                      : 'rgba(0, 0, 0, 0.08)'
+                    : 'transparent',
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+            >
+              <Text
+                style={[styles.modeChipText, { color: active ? c.textPrimary : c.textTertiary }]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* Sessions List */}
       <ScrollView
         style={styles.listScroll}
@@ -311,123 +359,33 @@ export function ChatSidebar({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Active live agents (if any) */}
-        {liveAgents.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: c.textTertiary }]}>ACTIVE NOW</Text>
-            {liveAgents.map((agent) => {
-              const meta = AGENT_META[agent.type] ?? {
-                label: agent.type,
-                icon: 'cube-outline',
-                color: Colors.primary[500],
-              };
-              const isSelected = agent.id === currentSessionId;
-              const title = resolveSessionTitle(agent);
+        {groups.map((group) => {
+          const collapsed = collapsedKeys.has(group.key);
+          return (
+            <View key={group.key} style={styles.section}>
+              <SessionGroupHeader
+                title={group.title}
+                count={group.items.length}
+                bucket={group.bucket}
+                collapsed={collapsed}
+                onToggle={() => toggleGroup(group.key)}
+              />
+              {!collapsed &&
+                group.items.map((item) => (
+                  <SessionRow
+                    key={item.id}
+                    item={item}
+                    projectLabel={projectLabels.get(item.projectPath) ?? ''}
+                    selected={item.id === currentSessionId}
+                    onPress={handleSelect}
+                    onDelete={item.live ? undefined : handleDeleteSession}
+                  />
+                ))}
+            </View>
+          );
+        })}
 
-              return (
-                <Pressable
-                  key={agent.id}
-                  onPress={() => handleSelect(agent.id)}
-                  style={({ pressed }) => [
-                    styles.sessionRow,
-                    isSelected && [
-                      styles.sessionRowActive,
-                      {
-                        backgroundColor: c.isDark
-                          ? 'rgba(255, 255, 255, 0.12)'
-                          : 'rgba(0, 0, 0, 0.07)',
-                      },
-                    ],
-                    { opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <View style={[styles.agentBadge, { backgroundColor: meta.color + '22' }]}>
-                    <Ionicons name={meta.icon as any} size={14} color={meta.color} />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <Text
-                      style={[
-                        styles.sessionTitle,
-                        { color: isSelected ? c.textPrimary : c.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {title}
-                    </Text>
-                    <View style={styles.liveMetaRow}>
-                      <View style={styles.liveDot} />
-                      <Text style={[styles.sessionSubtitle, { color: Colors.primary[400] }]}>
-                        {agent.status}
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {/* History Groups */}
-        {historyGroups.map((group) => (
-          <View key={group.title} style={styles.section}>
-            <Text style={[styles.sectionHeader, { color: c.textTertiary }]}>{group.title}</Text>
-            {group.items.map((session) => {
-              const meta = AGENT_META[session.type] ?? {
-                label: session.type,
-                icon: 'chatbubble-outline',
-                color: Colors.surface[400],
-              };
-              const isSelected = session.id === currentSessionId;
-              const title = resolveSessionTitle(session);
-
-              return (
-                <Pressable
-                  key={session.id}
-                  onPress={() => handleSelect(session.id)}
-                  style={({ pressed }) => [
-                    styles.sessionRow,
-                    isSelected && [
-                      styles.sessionRowActive,
-                      {
-                        backgroundColor: c.isDark
-                          ? 'rgba(255, 255, 255, 0.12)'
-                          : 'rgba(0, 0, 0, 0.07)',
-                      },
-                    ],
-                    { opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <View style={[styles.agentBadge, { backgroundColor: meta.color + '18' }]}>
-                    <Ionicons name={meta.icon as any} size={13} color={meta.color} />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <Text
-                      style={[
-                        styles.sessionTitle,
-                        { color: isSelected ? c.textPrimary : c.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {title}
-                    </Text>
-                    <Text style={[styles.sessionSubtitle, { color: c.textTertiary }]}>
-                      {formatRelativeTime(session.lastActivity)}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={(e) => handleDeleteSession(session.id, e)}
-                    hitSlop={8}
-                    style={styles.deleteBtn}
-                  >
-                    <Ionicons name="trash-outline" size={13} color={c.textTertiary} />
-                  </Pressable>
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-
-        {liveAgents.length === 0 && historyGroups.length === 0 && (
+        {groups.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={28} color={c.textTertiary} />
             <Text style={[styles.emptyText, { color: c.textTertiary }]}>No chats found</Text>
@@ -438,17 +396,16 @@ export function ChatSidebar({
       {/* Footer Navigation: Host status, Settings, Theme */}
       <View style={[styles.footer, { borderTopColor: c.separator }]}>
         {/* Active Server Card */}
-        <Pressable
+        <ScalePressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push('/connect');
             if (!isWide && onClose) onClose();
           }}
-          style={({ pressed }) => [
+          style={[
             styles.hostCard,
             {
               backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-              opacity: pressed ? 0.7 : 1,
             },
           ]}
         >
@@ -460,52 +417,50 @@ export function ChatSidebar({
           />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.hostName, { color: c.textPrimary }]} numberOfLines={1}>
-              {activeHost ? activeHost.localHttpUrl || activeHost.relayUrl || 'Active Server' : 'Connect Server'}
+              {activeHost
+                ? activeHost.localHttpUrl || activeHost.relayUrl || 'Active Server'
+                : 'Connect Server'}
             </Text>
             <Text style={[styles.hostStatus, { color: c.textTertiary }]}>
               {connected ? 'Connected' : 'Disconnected'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={14} color={c.textTertiary} />
-        </Pressable>
+        </ScalePressable>
 
         {/* Action Row */}
         <View style={styles.footerActions}>
-          <Pressable
+          <ScalePressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/settings' as any);
+              router.push('/settings');
               if (!isWide && onClose) onClose();
             }}
-            style={({ pressed }) => [styles.actionButton, { opacity: pressed ? 0.6 : 1 }]}
+            style={[styles.actionButton]}
           >
             <Ionicons name="settings-outline" size={18} color={c.textSecondary} />
             <Text style={[styles.actionButtonText, { color: c.textSecondary }]}>Settings</Text>
-          </Pressable>
+          </ScalePressable>
 
-          <Pressable
+          <ScalePressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(tabs)/pipelines' as any);
+              router.push('/pipelines');
               if (!isWide && onClose) onClose();
             }}
-            style={({ pressed }) => [styles.actionButton, { opacity: pressed ? 0.6 : 1 }]}
+            style={[styles.actionButton]}
           >
             <Ionicons name="git-network-outline" size={18} color={c.textSecondary} />
             <Text style={[styles.actionButtonText, { color: c.textSecondary }]}>Pipelines</Text>
-          </Pressable>
+          </ScalePressable>
 
-          <Pressable
-            onPress={toggleTheme}
-            style={({ pressed }) => [styles.themeToggleBtn, { opacity: pressed ? 0.6 : 1 }]}
-            hitSlop={6}
-          >
+          <ScalePressable onPress={toggleTheme} style={[styles.themeToggleBtn]} hitSlop={6}>
             <Ionicons
               name={c.isDark ? 'sunny-outline' : 'moon-outline'}
               size={18}
               color={c.textSecondary}
             />
-          </Pressable>
+          </ScalePressable>
         </View>
       </View>
     </View>
@@ -584,6 +539,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 0,
   },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginHorizontal: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  modeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  modeChipText: {
+    ...Typography.caption1,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   listScroll: {
     flex: 1,
   },
@@ -592,63 +563,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
   },
   section: {
-    marginBottom: Spacing.md,
-  },
-  sectionHeader: {
-    ...Typography.caption2,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: Spacing.xs,
-    paddingLeft: Spacing.xs,
-  },
-  sessionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: CornerRadius.medium,
-    marginBottom: 2,
-    gap: 10,
-  },
-  sessionRowActive: {
-    borderRadius: CornerRadius.medium,
-  },
-  agentBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sessionInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  sessionTitle: {
-    ...Typography.subhead,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  sessionSubtitle: {
-    ...Typography.caption2,
-    fontSize: 11,
-    marginTop: 1,
-  },
-  liveMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 1,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.primary[500],
-  },
-  deleteBtn: {
-    padding: 4,
-    opacity: 0.6,
+    marginBottom: Spacing.sm,
   },
   emptyState: {
     alignItems: 'center',
