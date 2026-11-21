@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import {
   acquirePid,
@@ -69,10 +70,19 @@ describe('pidfile', () => {
     expect(pid).toBe(process.pid);
   });
 
-  it('acquire refuses when a live process holds the pidfile', async () => {
-    // Our own process is definitely alive.
+  it('acquire refuses when another live process holds the pidfile', async () => {
+    const other = spawn('sleep', ['30'], { stdio: 'ignore' });
+    try {
+      writeFileSync(pidfile(), String(other.pid));
+      await expect(acquirePid(pidfile())).rejects.toBeInstanceOf(DaemonAlreadyRunningError);
+    } finally {
+      other.kill();
+    }
+  });
+
+  it('acquire reclaims a pidfile holding our own pid (bun --watch reload)', async () => {
     writeFileSync(pidfile(), String(process.pid));
-    await expect(acquirePid(pidfile())).rejects.toBeInstanceOf(DaemonAlreadyRunningError);
+    expect(await acquirePid(pidfile())).toBe(process.pid);
   });
 
   it('isProcessAlive returns true for the current process', () => {

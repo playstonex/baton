@@ -38,7 +38,8 @@ import { proxyResponses, resolveApiKey } from './api-converter/proxy.js';
 import { previewCodexProviders } from './api-converter/codex-sync.js';
 import { loadBatonEnv } from './env.js';
 import type { ResponsesApiRequest } from './api-converter/types.js';
-import { acquirePid, releasePid, DaemonAlreadyRunningError, BATON_VERSION } from '@baton/shared';
+import { BATON_VERSION } from '@baton/shared';
+import { acquirePid, releasePid, DaemonAlreadyRunningError } from '@baton/shared/lifecycle';
 import type { PipelineStep } from './orchestrator/index.js';
 import type {
   ProviderProfile,
@@ -349,6 +350,12 @@ export function createDaemon(port = DEFAULT_PORT) {
         : createSdkAdapter(body.agentType);
     const sdkUsable = !!sdkAdapter && sdkAdapter.isSdkAvailable();
     const wantSdk = (body.mode ?? 'pty') === 'sdk' ? sdkUsable : body.mode === 'auto' && sdkUsable;
+    // Apply the caller's model before the session exists: SDK adapters create
+    // the provider session with it, so the first turn cannot silently run on
+    // the provider's configured default model.
+    if (body.model && sdkAdapter) {
+      sdkAdapter.selectedModel = body.model;
+    }
     let sessionId: string;
     if (wantSdk && sdkAdapter) {
       try {

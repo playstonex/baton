@@ -50,7 +50,7 @@ export class CodexAdapter extends BaseAgentAdapter {
     // - "Thinking" / "Reasoning" for processing
     // - Permission prompts: "Allow" / "Approve"
 
-    if (/thinking|reasoning|analyzing/i.test(clean)) {
+    if (/^\s*(?:[^\w\s]\s*)?(?:thinking|reasoning|analyzing)\b/im.test(clean)) {
       events.push({ type: 'thinking', content: clean, timestamp: now });
       events.push({ type: 'status_change', status: 'thinking', timestamp: now });
       return events;

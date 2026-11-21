@@ -903,12 +903,13 @@ export class Transport {
       coalescer.push(event);
 
       if (event.type === 'status_change') {
-        // State was already synced before the event callbacks fired, so the
-        // detail reflects this very transition.
+        // Report the daemon's authoritative status, not the raw parser value:
+        // syncStatus may have rejected the reported change (terminal state,
+        // invalid transition), and status + detail must come from one source.
         const statusMsg: DaemonMessage = {
           type: 'status_update',
           sessionId: sid,
-          status: event.status,
+          status: this.agentManager.get(sid)?.status ?? event.status,
           detail: this.agentManager.getStatusDetail(sid),
         };
         this.emitSequenced(sid, statusMsg);
@@ -1036,6 +1037,7 @@ export class Transport {
       type: 'status_update',
       sessionId,
       status: 'stopped',
+      detail: this.agentManager.getStatusDetail(sessionId),
     });
     this.broadcastAgentList();
   }

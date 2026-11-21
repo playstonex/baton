@@ -51,14 +51,9 @@ export const useChatStore = create<ChatState>()((set) => ({
       const id = `msg-${++msgCounter}`;
       const ts = event.timestamp;
 
-      if (event.type === 'status_change') {
-        const nextPending = event.status === 'waiting_input';
-        return {
-          agentStatus: event.status,
-          pendingApproval: nextPending ? state.pendingApproval : false,
-          approvalDetail: nextPending ? state.approvalDetail : null,
-        };
-      }
+      // Status comes only from the daemon's `status_update` (see setStatus);
+      // raw status_change events can disagree with the authoritative value.
+      if (event.type === 'status_change') return state;
 
       if (event.type === 'chat_message') {
         if (event.role === 'user') {

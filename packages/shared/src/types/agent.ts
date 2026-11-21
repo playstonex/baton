@@ -12,17 +12,40 @@ export type AgentState =
   | { status: 'error'; at: number; error: string; code?: number }
   | { status: 'stopped'; at: number; exitCode: number };
 
+/**
+ * The authoritative state machine. Every status write — `transition()` for
+ * lifecycle events and `syncStatus()` for parser/adapter-reported ones — is
+ * checked against this map, so the table really is the contract rather than
+ * documentation of one path.
+ *
+ * Busy states are mutually reachable because real agents reorder freely: a
+ * turn can open straight into a tool call (`idle → executing`, no thinking
+ * marker), and answering a permission prompt resumes work without passing
+ * through `running` (`waiting_input → thinking | executing`).
+ */
 export const VALID_TRANSITIONS: Record<string, string[]> = {
-  starting: ['initializing', 'running', 'error', 'stopped'],
-  initializing: ['idle', 'running', 'error', 'stopped'],
-  idle: ['running', 'thinking', 'waiting_input', 'error', 'stopped'],
+  starting: ['initializing', 'idle', 'running', 'error', 'stopped'],
+  initializing: ['idle', 'running', 'thinking', 'executing', 'waiting_input', 'error', 'stopped'],
+  idle: ['running', 'thinking', 'executing', 'waiting_input', 'error', 'stopped'],
   running: ['idle', 'thinking', 'executing', 'waiting_input', 'error', 'stopped'],
-  thinking: ['running', 'executing', 'idle', 'error', 'stopped'],
-  executing: ['running', 'thinking', 'idle', 'error', 'stopped'],
-  waiting_input: ['running', 'idle', 'error', 'stopped'],
+  thinking: ['running', 'executing', 'idle', 'waiting_input', 'error', 'stopped'],
+  executing: ['running', 'thinking', 'idle', 'waiting_input', 'error', 'stopped'],
+  waiting_input: ['running', 'thinking', 'executing', 'idle', 'error', 'stopped'],
   error: ['stopped'],
   stopped: [],
 };
+
+/** Statuses that mean "a turn is in flight" — the dashboards' busy bucket. */
+export const BUSY_STATUSES = ['running', 'thinking', 'executing'] as const;
+
+export function isBusyStatus(status: string): boolean {
+  return (BUSY_STATUSES as readonly string[]).includes(status);
+}
+
+/** Single predicate for the state machine, so no call site re-implements it. */
+export function canTransition(from: string, to: string): boolean {
+  return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+}
 
 /**
  * What a session is doing right now, beyond the bare status word — powers the

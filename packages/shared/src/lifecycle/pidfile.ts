@@ -71,7 +71,9 @@ const DYING_GRACE_MS = 1000;
 
 export async function acquirePid(path: string = defaultPidfile()): Promise<number> {
   const existing = await readPid(path);
-  if (existing !== null && isProcessAlive(existing)) {
+  // `bun run --watch` reloads in place (execve keeps the pid), so a pidfile
+  // naming our own pid was written by this process's previous incarnation.
+  if (existing !== null && existing !== process.pid && isProcessAlive(existing)) {
     if (!(await waitForExit(existing, DYING_GRACE_MS))) {
       throw new DaemonAlreadyRunningError(existing, path);
     }

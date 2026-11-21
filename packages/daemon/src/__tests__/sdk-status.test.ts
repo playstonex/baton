@@ -134,4 +134,27 @@ describe('AgentManager SDK status lifecycle', () => {
     await manager.stop(id);
     await expect(manager.stop(id)).resolves.toBeUndefined();
   });
+
+  it('does not broadcast or record status_change events the state machine rejected', async () => {
+    const adapter = new FakeSdkAdapter();
+    const manager = new Manager();
+    const id = await manager.startSdk({ type: 'claude-code', projectPath: '/tmp/proj' }, adapter);
+    const seen: string[] = [];
+    manager.onEvent(id, (e) => {
+      if (e.type === 'status_change') seen.push(e.status);
+    });
+
+    adapter.send('idle');
+    adapter.send('idle'); // duplicate: no change, must not be forwarded
+    adapter.send('thinking');
+    adapter.send('stopped');
+    adapter.send('running'); // after terminal state: rejected
+
+    expect(seen).toEqual(['idle', 'thinking', 'stopped']);
+    const recorded = manager
+      .getEventHistory(id)
+      .filter((e) => e.type === 'status_change')
+      .map((e) => (e as { status: string }).status);
+    expect(recorded[recorded.length - 1]).toBe('stopped');
+  });
 });

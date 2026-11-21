@@ -63,7 +63,7 @@ export class OpenCodeAdapter extends BaseAgentAdapter {
     if (!clean) return events;
 
     // OpenCode uses similar patterns to Claude Code
-    if (/thinking|processing/i.test(clean)) {
+    if (/^\s*(?:[^\w\s]\s*)?(?:thinking|processing)\b/im.test(clean)) {
       events.push({ type: 'thinking', content: clean, timestamp: now });
       return events;
     }

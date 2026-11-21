@@ -430,6 +430,12 @@ export interface StartAgentRequest {
    * (e.g. 'gemini'). Required for ACP sessions; ignored by other types.
    */
   acpProvider?: string;
+  /**
+   * Provider-qualified model id (e.g. 'opencode/deepseek-v4.1-flash-free').
+   * SDK sessions apply it when the session is created so the first turn never
+   * falls back to the provider's configured default. Ignored by PTY mode.
+   */
+  model?: string;
 }
 
 /** One entry of $BATON_HOME/acp.json — an arbitrary ACP-speaking command. */

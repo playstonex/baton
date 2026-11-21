@@ -86,6 +86,14 @@ type OcPart = {
   state?: OcToolState;
 };
 
+type OcStructuredError = {
+  type?: string;
+  message?: string;
+  status?: number;
+  response?: { body?: string };
+  retryAfterMs?: number;
+};
+
 type OcMessage = {
   id: string;
   /** 1.x */
@@ -96,6 +104,8 @@ type OcMessage = {
   content?: OcPart[];
   text?: string;
   outcome?: string;
+  /** 2.x idle messages carry the provider failure that ended the turn. */
+  error?: OcStructuredError;
   finish?: string | null;
   time?: { created?: number; streamed?: number; completed?: number };
 };
@@ -123,12 +133,19 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   }
 
   set selectedModel(model: string | null) {
+    // `manager.setModel` assigns selectedModel and then calls setModel(), which
+    // assigns again — dedupe so a single pick issues a single switch request.
+    if (model === this._selectedModel) return;
     this._selectedModel = model;
-    if (model && this.sessionId && this.baseUrl) {
-      const modelRef = this.isV2 ? parseOpencodeModelRef(model) : model;
-      this.httpPatch(`/session/${this.sessionId}`, { model: modelRef }).catch((err) => {
-        console.error('[baton] opencode-sdk: setModel error:', err);
-      });
+    if (model) {
+      this.pendingModel = model;
+      // Session creation already uses _selectedModel; a live session needs the
+      // model pushed through the dedicated endpoint before the next prompt.
+      if (this.sessionId && this.baseUrl) {
+        void this.ensureModelApplied().catch((err) => {
+          console.error('[baton] opencode-sdk: setModel error:', err);
+        });
+      }
     }
   }
 
@@ -138,6 +155,43 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
 
   setThinkingConfig(_config: ThinkingConfig): void {
     // OpenCode SDK does not currently support thinking/reasoning configuration
+  }
+
+  /**
+   * Push the queued model to the live session. opencode 2.x's PATCH /session
+   * accepts `model` but silently ignores it — only POST /session/:id/model
+   * actually switches providers. Resolves once the newest queued model is
+   * applied; rejects on HTTP failure so the caller can surface it.
+   */
+  private async ensureModelApplied(): Promise<void> {
+    if (!this.sessionId || !this.baseUrl) return;
+    // A switch already running will pick up any newer pendingModel itself.
+    if (this.modelApply) {
+      await this.modelApply.catch(() => {});
+    }
+    while (this.pendingModel && this.sessionId && this.baseUrl) {
+      const model = this.pendingModel;
+      const task = (async () => {
+        if (this.isV2) {
+          await this.httpPost(`/session/${this.sessionId}/model`, {
+            model: parseOpencodeModelRef(model),
+          });
+        } else {
+          await this.httpPatch(`/session/${this.sessionId}`, { model });
+        }
+      })();
+      this.modelApply = task;
+      try {
+        await task;
+      } finally {
+        if (this.modelApply === task) this.modelApply = null;
+      }
+      // A newer pick may have queued while this request was in flight; keep
+      // looping until the session matches the latest selection.
+      if (this.pendingModel === model) {
+        this.pendingModel = null;
+      }
+    }
   }
 
   private projectPath = '';
@@ -154,6 +208,10 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   private assistantProgress = new Map<string, AssistantProgress>();
   private seenIdle = new Set<string>();
   private pendingPermissionIds = new Set<string>();
+  /** Model chosen but not yet acknowledged by the live opencode session. */
+  private pendingModel: string | null = null;
+  /** In-flight model switch; prompts await it so they never race a switch. */
+  private modelApply: Promise<void> | null = null;
 
   detect(): boolean {
     try {
@@ -197,6 +255,10 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
     const created = await this.httpPost('/session', sessionBody);
     const session = this.unwrap<{ id: string }>(created);
     this.sessionId = session.id ?? '';
+    // The session was created with `_selectedModel` already, so no switch is
+    // outstanding for it.
+    this.pendingModel = null;
+    this.modelApply = null;
 
     this.pollEvents(onEvent);
 
@@ -207,19 +269,40 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       onEvent({ type: 'chat_message', role: 'user', content: input, timestamp: Date.now() });
       onEvent({ type: 'status_change', status: 'thinking', timestamp: Date.now() });
 
-      // 2.x takes a flat { text } body; 1.x took content parts on
-      // prompt_async. Both accept the request asynchronously.
-      const request = this.isV2
-        ? this.httpPost(`/session/${this.sessionId}/prompt`, { text: input })
-        : this.httpPost(`/session/${this.sessionId}/prompt_async`, {
-            parts: [{ type: 'text', text: input }],
+      void (async () => {
+        try {
+          // A model picked in the UI must land before the turn starts —
+          // otherwise opencode runs the prompt on whatever model the session
+          // was created with (frequently the configured default).
+          await this.ensureModelApplied();
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err);
+          console.error('[baton] opencode-sdk: model switch error:', err);
+          onEvent({
+            type: 'error',
+            message: `Could not switch to the selected model: ${detail}`,
+            timestamp: Date.now(),
           });
+          onEvent({ type: 'status_change', status: 'error', timestamp: Date.now() });
+          return;
+        }
 
-      request.catch((err) => {
-        console.error('[baton] opencode-sdk: prompt error:', err);
-        onEvent({ type: 'error', message: String(err), timestamp: Date.now() });
-        onEvent({ type: 'status_change', status: 'error', timestamp: Date.now() });
-      });
+        try {
+          // 2.x takes a flat { text } body; 1.x took content parts on
+          // prompt_async. Both accept the request asynchronously.
+          if (this.isV2) {
+            await this.httpPost(`/session/${this.sessionId}/prompt`, { text: input });
+          } else {
+            await this.httpPost(`/session/${this.sessionId}/prompt_async`, {
+              parts: [{ type: 'text', text: input }],
+            });
+          }
+        } catch (err) {
+          console.error('[baton] opencode-sdk: prompt error:', err);
+          onEvent({ type: 'error', message: String(err), timestamp: Date.now() });
+          onEvent({ type: 'status_change', status: 'error', timestamp: Date.now() });
+        }
+      })();
     };
 
     const stop = async () => {
@@ -551,6 +634,19 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
   }
 
   /**
+   * A 2.x idle message carries the provider failure that ended the turn
+   * (`{ type, message, status }`). Surface it verbatim — a generic
+   * "OpenCode turn failed" hides actionable auth/model errors.
+   */
+  private describeIdleError(error?: OcStructuredError): string {
+    const message = error?.message?.trim();
+    if (!message) return 'OpenCode turn failed';
+    if (!error?.status) return message;
+    const kind = error.type ? ` ${error.type}` : '';
+    return `${message} (${error.status}${kind})`;
+  }
+
+  /**
    * opencode 2.x messages: `{ type: 'assistant', content: [...] }` whose text
    * and tool state grow while the turn streams. Emit text as deltas and each
    * tool once at start and once at completion so a 500ms poll never duplicates
@@ -563,7 +659,11 @@ export class OpenCodeSdkAdapter implements SdkAgentAdapter {
       if (this.seenIdle.has(msg.id)) return;
       this.seenIdle.add(msg.id);
       if (msg.outcome === 'failed') {
-        onEvent({ type: 'error', message: 'OpenCode turn failed', timestamp: Date.now() });
+        onEvent({
+          type: 'error',
+          message: this.describeIdleError(msg.error),
+          timestamp: Date.now(),
+        });
         onEvent({ type: 'status_change', status: 'error', timestamp: Date.now() });
       } else {
         onEvent({ type: 'status_change', status: 'idle', timestamp: Date.now() });

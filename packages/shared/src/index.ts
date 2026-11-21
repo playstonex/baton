@@ -7,6 +7,6 @@ export * from './utils/index.js';
 export * from './errors/index.js';
 export * from './retry/index.js';
 export * from './tools/index.js';
-export * from './lifecycle/index.js';
+// lifecycle (pidfile) uses node:fs — import from '@baton/shared/lifecycle' (Node/Bun only).
 export * from './forge/index.js';
 export * from './review/index.js';

@@ -11,7 +11,12 @@ import type {
   ServiceTier,
   PermissionMode,
 } from '@baton/shared';
-import { VALID_TRANSITIONS, generateSessionId, statusDetailFromState } from '@baton/shared';
+import {
+  VALID_TRANSITIONS,
+  canTransition,
+  generateSessionId,
+  statusDetailFromState,
+} from '@baton/shared';
 import type {
   AgentState,
   AgentSnapshot,
@@ -30,6 +35,7 @@ import { REPLAY_MODELS } from './replay-sdk.js';
 import { spawnPty } from '../pty/bridge.js';
 import { SessionStore, deriveTitle } from '../session/store.js';
 import { stripAnsi } from '../parser/ansi.js';
+import { foldTerminalInput, isFreshOutput } from './activity.js';
 import type { WorkspaceCheckpointService } from '../workspace/checkpoint.js';
 import { readdir, stat, readFile, access, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -92,6 +98,10 @@ interface ManagedAgent {
   lastPrompt?: string;
   /** Epoch ms of the last observed output/event — drives the idle watchdog. */
   lastOutputAt?: number;
+  /** Signatures of recent meaningful PTY chunks (redraw filter window). */
+  recentSignatures?: string[];
+  /** Text typed into the PTY since the last Enter — an empty Enter starts no turn. */
+  inputLine?: string;
   /** Monotonic turn index within this session. */
   turnIndex?: number;
   /** ID of the most recent git plumbing checkpoint captured for this session. */
@@ -249,12 +259,18 @@ export class AgentManager {
    * instead of a perpetual 'running'. Terminal states are never left: a late
    * adapter event must not resurrect a stopped/error session.
    */
-  private syncStatus(id: string, status: AgentProcess['status']): void {
+  private syncStatus(id: string, status: AgentProcess['status']): boolean {
     const managed = this.agents.get(id);
-    if (!managed) return;
-    if (managed.state.status === 'stopped' || managed.state.status === 'error') return;
-    if (managed.state.status === status) return;
+    if (!managed) return false;
+    if (managed.state.status === 'stopped' || managed.state.status === 'error') return false;
+    if (managed.state.status === status) return false;
     const prevStatus = managed.state.status;
+    if (!canTransition(prevStatus, status)) {
+      console.warn(
+        `[STATE] ${id.slice(0, 8)} dropped invalid transition ${prevStatus} → ${status}`,
+      );
+      return false;
+    }
     const at = Date.now();
     switch (status) {
       case 'stopped':
@@ -283,7 +299,7 @@ export class AgentManager {
         managed.state = { status: 'waiting_input', at, prompt: managed.lastPrompt ?? '' };
         break;
       default:
-        return; // 'starting'/'initializing' are spawn-internal — never synced
+        return false; // 'starting'/'initializing' are spawn-internal — never synced
     }
     managed.process.status = status;
     this.touch(id, true);
@@ -296,6 +312,25 @@ export class AgentManager {
     ) {
       void this.maybeCaptureTurnCheckpoint(id, managed);
     }
+    return true;
+  }
+
+  /**
+   * Daemon-initiated status change (turn start on input, turn end on cancel).
+   * Unlike syncStatus, nobody forwards a raw event for these, so record and
+   * broadcast a status_change here — clients derive their status from it.
+   */
+  private applyStatus(id: string, status: AgentProcess['status']): void {
+    const managed = this.agents.get(id);
+    if (!managed || !this.syncStatus(id, status)) return;
+    const event: ParsedEvent = { type: 'status_change', status, timestamp: Date.now() };
+    managed.eventHistory.push(event);
+    this.sessionStore.appendEvent(id, event);
+    this.sessionStore.patchSession(id, {
+      status,
+      updatedAt: new Date(event.timestamp).toISOString(),
+    });
+    for (const cb of managed.eventCallbacks) cb(event, id);
   }
 
   /**
@@ -304,8 +339,12 @@ export class AgentManager {
    * "Waiting input"), and the last-activity heartbeat for the idle watchdog.
    */
   private trackEventContext(managed: ManagedAgent, event: ParsedEvent): void {
-    managed.lastOutputAt = event.timestamp;
-    managed.process.lastActivityAt = new Date(event.timestamp).toISOString();
+    // PTY raw_output is just the parser's fallback for every chunk (spinner
+    // redraws included); onData already decided whether it was meaningful.
+    if (!(managed.pty && event.type === 'raw_output')) {
+      managed.lastOutputAt = event.timestamp;
+      managed.process.lastActivityAt = new Date(event.timestamp).toISOString();
+    }
     if (event.type === 'tool_call_start') {
       managed.lastTool = event.tool;
       managed.lastToolTitle = event.title;
@@ -412,7 +451,7 @@ export class AgentManager {
     for (const managed of this.agents.values()) {
       if (!managed.pty || managed.historyOnly) continue;
       const { status } = managed.state;
-      if (status !== 'thinking' && status !== 'executing') continue;
+      if (status !== 'running' && status !== 'thinking' && status !== 'executing') continue;
       const last = managed.lastOutputAt ?? managed.state.at;
       if (now - last <= IDLE_WATCHDOG_MS) continue;
       try {
@@ -421,6 +460,32 @@ export class AgentManager {
         // state moved on between the check and the flip — leave it
       }
     }
+  }
+
+  /**
+   * Fold raw keystrokes into the per-session line buffer and decide whether
+   * they start (or resume) a turn: a non-empty submitted line from idle, or
+   * any answer (Enter / printable key) to a pending permission prompt.
+   */
+  private inputStartsTurn(managed: ManagedAgent, data: string): boolean {
+    const fold = foldTerminalInput(managed.inputLine ?? '', data);
+    managed.inputLine = fold.line;
+    const { status } = managed.state;
+    if (status === 'idle') return fold.submitted;
+    if (status === 'waiting_input') return fold.answered;
+    return false;
+  }
+
+  /** Input is the one reliable turn-start signal: mark the session busy now. */
+  private beginTurn(id: string, managed: ManagedAgent): void {
+    managed.lastOutputAt = Date.now(); // restart the watchdog clock for this turn
+    this.applyStatus(id, 'thinking');
+  }
+
+  /** True when a PTY chunk carries real content, not a spinner/timer/input-box redraw. */
+  private isMeaningfulOutput(managed: ManagedAgent, data: string): boolean {
+    managed.recentSignatures ??= [];
+    return isFreshOutput(managed.recentSignatures, data);
   }
 
   /** Derive + persist a provisional title from the first user prompt. */
@@ -667,9 +732,11 @@ export class AgentManager {
 
     // PTY output handler
     pty.onData((data: string) => {
-      // Any bytes at all — spinner redraws included — prove the session is
-      // alive; the idle watchdog keys off this.
-      managed.lastOutputAt = Date.now();
+      // Only substantive output counts as activity. TUIs redraw spinners and
+      // the input box continuously, so raw bytes would keep the idle watchdog
+      // and "quiet" indicators permanently satisfied.
+      const meaningful = this.isMeaningfulOutput(managed, data);
+      if (meaningful) managed.lastOutputAt = Date.now();
 
       // Best-effort provider session id capture — enables exact resume
       // (`--resume-id`/`--conversation`/`--session`) instead of the coarser
@@ -694,7 +761,9 @@ export class AgentManager {
         );
         managed.firstOutputReceived = true;
         if (managed.state.status === 'initializing') {
-          this.transition(id, 'running');
+          // The TUI has printed its banner and is waiting for input: that is
+          // idle. 'running' is reserved for a turn actually in flight.
+          this.transition(id, 'idle');
         }
       }
 
@@ -706,7 +775,7 @@ export class AgentManager {
           managed.displayHistory = managed.displayHistory.slice(-OUTPUT_TRIM_TO);
         }
         this.sessionStore.appendOutput(id, filtered);
-        this.touch(id);
+        if (meaningful) this.touch(id);
         for (const cb of managed.rawCallbacks) {
           cb(filtered, id);
         }
@@ -715,6 +784,15 @@ export class AgentManager {
       // Parse and broadcast structured events
       const events = adapter.parseOutput(data);
       for (const event of events) {
+        // Mirror parser status changes into the canonical state, and gate on
+        // the result: a status_change the state machine rejects (duplicate,
+        // invalid transition, session already ended) must not reach history,
+        // the timeline or any client — otherwise clients that read raw events
+        // would disagree with the daemon's authoritative status.
+        if (event.type === 'status_change' && !this.syncStatus(id, event.status)) {
+          continue;
+        }
+
         managed.eventHistory.push(event);
         if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
           managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
@@ -728,13 +806,6 @@ export class AgentManager {
             ...managed.state,
             toolCount: managed.state.toolCount + 1,
           };
-        }
-
-        // Mirror parser status changes into the canonical state — otherwise
-        // /api/agents and agent_list keep reporting 'running' while the
-        // dashboard badge (fed by status_update) shows thinking/executing.
-        if (event.type === 'status_change') {
-          this.syncStatus(id, event.status);
         }
 
         if (event.type === 'tool_use') {
@@ -851,25 +922,24 @@ export class AgentManager {
     let stop: () => Promise<void>;
     try {
       ({ write, stop } = await sdkAdapter.startSession(config, (event: ParsedEvent) => {
+        if (managed.state.status === 'initializing') {
+          this.transition(id, 'running');
+        }
+        // Mirror adapter-reported status into the daemon's canonical state so
+        // /api/agents, agent_list and attach-time status_update tell the
+        // truth. Adapters may report sequences the map rejects (an `error`
+        // followed by `idle`, events racing a stop()); those are dropped here
+        // rather than forwarded, so every status_change a client sees is one
+        // the daemon actually applied.
+        if (event.type === 'status_change' && !this.syncStatus(id, event.status)) {
+          return;
+        }
+
         managed.eventHistory.push(event);
         if (managed.eventHistory.length > MAX_EVENT_HISTORY) {
           managed.eventHistory = managed.eventHistory.slice(-EVENT_TRIM_TO);
         }
         this.sessionStore.appendEvent(id, event);
-
-        if (managed.state.status === 'initializing') {
-          this.transition(id, 'running');
-        }
-        if (event.type === 'status_change') {
-          // Mirror adapter-reported status into the daemon's canonical state so
-          // /api/agents, agent_list and attach-time status_update tell the
-          // truth. Without this every SDK session stayed 'running' forever.
-          // Deliberately not transition(): the raw event is already recorded
-          // and broadcast below — going through the state machine here would
-          // duplicate it, and adapters may legitimately report sequences the
-          // map rejects (events racing a stop()).
-          this.syncStatus(id, event.status);
-        }
 
         this.trackEventContext(managed, event);
         if (event.type === 'tool_use' && managed.state.status === 'running') {
@@ -1163,6 +1233,9 @@ export class AgentManager {
       const transformed = managed.adapter?.transformInput(data) ?? data;
       if (transformed !== null) {
         managed.pty.write(transformed);
+        // A bare Enter (or editing keys) in an idle TUI produces no output and
+        // no end marker, so only submitted text / prompt answers begin a turn.
+        if (this.inputStartsTurn(managed, data)) this.beginTurn(id, managed);
       }
     } else if (managed.sdk) {
       managed.sdk.write(data);
@@ -1182,6 +1255,7 @@ export class AgentManager {
 
     if (managed.sdk) {
       managed.sdk.write(content, images);
+      this.beginTurn(id, managed);
     } else if (managed.pty) {
       if (images && images.length > 0) {
         throw new Error(
@@ -1205,6 +1279,7 @@ export class AgentManager {
 
       const transformed = managed.adapter?.transformInput(content) ?? content + '\n';
       managed.pty.write(transformed);
+      this.beginTurn(id, managed);
     } else {
       throw new Error(`Agent ${id} has no active session`);
     }
@@ -1219,7 +1294,9 @@ export class AgentManager {
 
     if (managed.sdk) {
       managed.sdk.write(content);
+      this.beginTurn(id, managed);
     } else if (managed.pty) {
+      this.beginTurn(id, managed);
       // ESC to interrupt current prompt, then send the new content
       managed.pty.write('\x1b');
       setTimeout(() => {
@@ -1252,6 +1329,9 @@ export class AgentManager {
     } else if (managed.pty) {
       managed.pty.write('\x03');
     }
+    // The turn is over either way; don't leave the session parked in a busy
+    // state waiting for a parser marker that a cancelled turn never prints.
+    this.applyStatus(id, 'idle'); // no-op if the session already ended
   }
 
   /** Allow external code to register an SDK session on an existing agent record. */

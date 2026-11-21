@@ -127,6 +127,9 @@ export class KiroAdapter extends BaseAgentAdapter {
     return clean.match(/session[ _-]?id[^0-9a-f]{0,8}([0-9a-zA-Z-]{12,})/i)?.[1] ?? null;
   }
 
+  /** Trailing output of the previous chunk, for markers split across reads. */
+  private tail = '';
+
   parseOutput(raw: string): ParsedEvent[] {
     const events: ParsedEvent[] = [];
     const now = Date.now();
@@ -138,14 +141,22 @@ export class KiroAdapter extends BaseAgentAdapter {
       return events;
     }
 
-    if (/thinking|processing|analyzing/i.test(clean)) {
+    // Completion marker can be split across PTY reads (`▸ Cre` + `dits:`), so
+    // test it against a short tail of previous output as well.
+    const window = this.tail + clean;
+    this.tail = clean.slice(-40);
+
+    // Anchored to line start so prose or echoed input containing "thinking"
+    // doesn't flip the session busy.
+    if (/^\s*(?:[^\w\s]\s*)?(?:thinking|processing|analyzing)\b/im.test(clean)) {
       events.push({ type: 'thinking', content: clean, timestamp: now });
       events.push({ type: 'status_change', status: 'thinking', timestamp: now });
       return events;
     }
 
     // TUI response complete marker (▸ Credits: 0.24 • Time: 3s)
-    if (/▸\s*Credits:/i.test(clean)) {
+    if (/▸\s*Credits:/i.test(window)) {
+      this.tail = '';
       events.push({ type: 'status_change', status: 'idle', timestamp: now });
       return events;
     }

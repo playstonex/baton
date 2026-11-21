@@ -175,24 +175,6 @@ export function TerminalScreen() {
       }
     });
 
-    const unsubEvents = wsService.on('parsed_event', (msg) => {
-      if (msg.type === 'parsed_event' && msg.sessionId === sessionId) {
-        if (msg.event.type === 'status_change') {
-          setStatus(msg.event.status);
-        }
-      }
-    });
-
-    const unsubEventHistory = wsService.on('event_history', (msg) => {
-      if (msg.type === 'event_history' && msg.sessionId === sessionId) {
-        for (const event of msg.events) {
-          if (event.type === 'status_change') {
-            setStatus(event.status);
-          }
-        }
-      }
-    });
-
     const unsubOwnership = wsService.on('session_ownership', (msg) => {
       if (msg.type === 'session_ownership' && msg.sessionId === sessionId) {
         setSessionOwner(msg.owner);
@@ -224,8 +206,6 @@ export function TerminalScreen() {
       unsubOutput();
       unsubHistory();
       unsubStatus();
-      unsubEvents();
-      unsubEventHistory();
       unsubOwnership();
       unsubState();
       mql.removeEventListener('change', handleThemeChange);

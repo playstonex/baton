@@ -7,8 +7,8 @@ import {
   releasePid,
   defaultPidfile,
   DaemonAlreadyRunningError,
-  TailscaleStatusReport,
-} from '@baton/shared';
+} from '@baton/shared/lifecycle';
+import { TailscaleStatusReport } from '@baton/shared';
 import { apiFetch, DAEMON_URL } from '../client/api.js';
 
 export async function daemonCommand(sub: string, args: string[]): Promise<void> {

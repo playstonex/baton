@@ -9,6 +9,7 @@
     "./protocol": "./src/protocol/index.ts",
     "./utils": "./src/utils/index.ts",
     "./crypto": "./src/crypto/index.ts",
+    "./lifecycle": "./src/lifecycle/index.ts",
     "./forge": "./src/forge/index.ts",
     "./host": "./src/host/index.ts"
   },

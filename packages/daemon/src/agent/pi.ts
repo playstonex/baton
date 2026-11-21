@@ -69,7 +69,7 @@ export class PiAdapter extends BaseAgentAdapter {
     const clean = stripAnsi(raw);
     if (!clean) return events;
 
-    if (/thinking|reasoning/i.test(clean)) {
+    if (/^\s*(?:[^\w\s]\s*)?(?:thinking|reasoning)\b/im.test(clean)) {
       events.push({ type: 'thinking', content: clean, timestamp: now });
       return events;
     }

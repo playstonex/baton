@@ -58,3 +58,23 @@ describe('Agent State Machine', () => {
     }
   });
 });
+
+describe('canTransition', () => {
+  it('agrees with VALID_TRANSITIONS for every pair', async () => {
+    const { canTransition } = await import('../types/agent.js');
+    const all = Object.keys(VALID_TRANSITIONS);
+    for (const from of all) {
+      for (const to of all) {
+        expect(canTransition(from, to)).toBe(VALID_TRANSITIONS[from].includes(to));
+      }
+    }
+  });
+
+  it('rejects unknown states and never leaves terminal states', async () => {
+    const { canTransition } = await import('../types/agent.js');
+    expect(canTransition('bogus', 'idle')).toBe(false);
+    expect(canTransition('stopped', 'idle')).toBe(false);
+    expect(canTransition('error', 'idle')).toBe(false);
+    expect(canTransition('idle', 'executing')).toBe(true);
+  });
+});
