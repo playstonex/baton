@@ -1421,6 +1421,28 @@ export class AgentManager {
     return events.length > limit ? events.slice(-limit) : events;
   }
 
+  /**
+   * Paging cursor for an attach tail of `tailLength` events: the store seq of
+   * its oldest event, and whether anything older exists. Every in-memory
+   * event is written through to the store, so the tail's n-th newest event
+   * is the store's n-th newest.
+   */
+  getEventReplayCursor(id: string, tailLength: number): { beforeSeq?: number; hasMore: boolean } {
+    const seq = this.sessionStore.getEventSeqFromEnd(id, tailLength);
+    if (seq === null) return { hasMore: false };
+    return { beforeSeq: seq, hasMore: this.sessionStore.getEventCount(id) > tailLength };
+  }
+
+  /** Events older than `beforeSeq`, oldest first — "load earlier" paging. */
+  getEventPage(
+    id: string,
+    beforeSeq: number,
+    limit: number,
+  ): { events: ParsedEvent[]; firstSeq: number | null; hasMore: boolean } {
+    if (!this.agents.get(id) && !this.ensureShell(id)) throw new Error(`Agent ${id} not found`);
+    return this.sessionStore.getEventsBefore(id, beforeSeq, limit);
+  }
+
   getEventHistory(id: string): ParsedEvent[] {
     const managed = this.agents.get(id) ?? this.ensureShell(id);
     if (!managed) throw new Error(`Agent ${id} not found`);

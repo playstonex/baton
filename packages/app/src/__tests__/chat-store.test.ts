@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useChatStore } from '../stores/chat.js';
+import { createChatStore } from '../stores/chat.js';
+
+const useChatStore = createChatStore();
 
 const t = Date.now();
 const st = () => useChatStore.getState();

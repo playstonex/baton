@@ -590,6 +590,21 @@ export function createDaemon(port = DEFAULT_PORT) {
     }
   });
 
+  // "Load earlier" paging: events strictly older than `beforeSeq` (the
+  // cursor from event_history or a previous page), oldest first.
+  app.get('/api/agents/:id/events/page', (c) => {
+    const beforeSeq = Number(c.req.query('beforeSeq'));
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '500') || 500, 1), 2000);
+    if (!Number.isInteger(beforeSeq) || beforeSeq < 1) {
+      return c.json({ error: 'beforeSeq must be a positive integer' }, 400);
+    }
+    try {
+      return c.json(agentManager.getEventPage(c.req.param('id'), beforeSeq, limit));
+    } catch {
+      return c.json({ error: 'Not found' }, 404);
+    }
+  });
+
   app.get('/api/agents/:id/output', (c) => {
     try {
       const output = agentManager.getOutputHistory(c.req.param('id'));

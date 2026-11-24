@@ -70,6 +70,30 @@ describe('SessionStore', () => {
     expect(store.getEventCount('sess-1')).toBe(30);
   });
 
+  it('pages events backwards from an attach-tail cursor', () => {
+    const id = 'sess-page';
+    for (let i = 0; i < 12; i++) {
+      store.appendEvent(id, ev(i));
+      store.appendOutput(id, `o-${i}`); // interleaved: seq is shared with output
+    }
+    const content = (es: ParsedEvent[]) => es.map((e) => (e as { content: string }).content);
+
+    // Attach tail of 4 → cursor at the 4th-newest event (chunk-8).
+    const cursor = store.getEventSeqFromEnd(id, 4)!;
+    expect(content(store.getEventTail(id, 4))[0]).toBe('chunk-8');
+
+    const p1 = store.getEventsBefore(id, cursor, 5);
+    expect(content(p1.events)).toEqual(['chunk-3', 'chunk-4', 'chunk-5', 'chunk-6', 'chunk-7']);
+    expect(p1.hasMore).toBe(true);
+
+    const p2 = store.getEventsBefore(id, p1.firstSeq!, 5);
+    expect(content(p2.events)).toEqual(['chunk-0', 'chunk-1', 'chunk-2']);
+    expect(p2.hasMore).toBe(false);
+
+    expect(store.getEventSeqFromEnd(id, 13)).toBeNull();
+    expect(store.getEventsBefore(id, 1, 5)).toEqual({ events: [], firstSeq: null, hasMore: false });
+  });
+
   it('caps oversized payloads instead of storing unbounded rows', () => {
     const huge = 'x'.repeat(200_000);
     store.appendEvent('sess-1', { type: 'raw_output', content: huge, timestamp: 1 });

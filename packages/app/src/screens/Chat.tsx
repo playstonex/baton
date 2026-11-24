@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import type { PermissionMode, ModelInfo } from '@baton/shared';
 import { formatModelName } from '@baton/shared';
-import { useChatStore } from '../stores/chat.js';
+import { useStore } from 'zustand';
+import { useChatSessionStore } from '../stores/chat.js';
 import { wsService } from '../services/websocket.js';
 import { Button } from '../lib/ui.js';
 import { UsagePill } from '../components/UsagePill.js';
@@ -51,6 +52,7 @@ const isRunning = (s: string) =>
 
 export function ChatScreen() {
   const { sessionId } = useParams();
+  const chatStore = useChatSessionStore(sessionId);
   const navigate = useNavigate();
   const {
     messages,
@@ -64,7 +66,7 @@ export function ChatScreen() {
     setStatus,
     resolveApproval,
     clear,
-  } = useChatStore();
+  } = useStore(chatStore);
   const [input, setInput] = useState('');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [showPermMenu, setShowPermMenu] = useState(false);

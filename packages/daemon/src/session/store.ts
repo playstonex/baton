@@ -336,6 +336,50 @@ export class SessionStore {
     return (this.stmtEventCount.get(sessionId) as { n: number }).n;
   }
 
+  /**
+   * Seq of the `n`-th newest event (1 = newest), or null when the session has
+   * fewer than `n` events. Marks where an `n`-event attach tail starts, so a
+   * client can page further back from there.
+   */
+  getEventSeqFromEnd(sessionId: string, n: number): number | null {
+    if (n < 1) return null;
+    const row = this.db
+      .query(`SELECT seq FROM events WHERE session_id = ? ORDER BY seq DESC LIMIT 1 OFFSET ?`)
+      .get(sessionId, n - 1) as { seq: number } | null;
+    return row?.seq ?? null;
+  }
+
+  /**
+   * Up to `limit` events strictly older than `beforeSeq`, oldest first.
+   * `firstSeq` is the cursor for the next page; `hasMore` says one exists.
+   */
+  getEventsBefore(
+    sessionId: string,
+    beforeSeq: number,
+    limit: number,
+  ): { events: ParsedEvent[]; firstSeq: number | null; hasMore: boolean } {
+    const rows = this.db
+      .query(
+        `SELECT seq, event FROM (SELECT seq, event FROM events WHERE session_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?) ORDER BY seq ASC`,
+      )
+      .all(sessionId, beforeSeq, limit) as { seq: number; event: string }[];
+    const events: ParsedEvent[] = [];
+    for (const row of rows) {
+      try {
+        events.push(JSON.parse(row.event) as ParsedEvent);
+      } catch {
+        // skip corrupt row
+      }
+    }
+    const firstSeq = rows.length > 0 ? rows[0].seq : null;
+    const hasMore =
+      firstSeq !== null &&
+      this.db
+        .query(`SELECT 1 FROM events WHERE session_id = ? AND seq < ? LIMIT 1`)
+        .get(sessionId, firstSeq) !== null;
+    return { events, firstSeq, hasMore };
+  }
+
   // ── Listing ──────────────────────────────────────────────────────
 
   list(query: SessionQuery = {}): SessionQueryResult {

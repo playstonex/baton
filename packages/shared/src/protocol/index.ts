@@ -265,6 +265,14 @@ export interface EventHistoryMessage {
   type: 'event_history';
   sessionId: string;
   events: ParsedEvent[];
+  /**
+   * Paging cursor: store seq of the oldest replayed event. Pass it as
+   * `beforeSeq` to GET /api/agents/:id/events/page for earlier events.
+   * Optional — older daemons omit it.
+   */
+  beforeSeq?: number;
+  /** True when events older than this replay exist. Optional. */
+  hasMore?: boolean;
 }
 
 export interface StatusUpdateMessage {
@@ -337,6 +345,8 @@ export interface AckMessage {
   status: 'ok' | 'error';
   messageId: string;
   error?: string;
+  /** Session the acknowledged message was sent to. Optional — older daemons omit it. */
+  sessionId?: string;
 }
 
 import type { ModelInfo } from '../utils/models.js';

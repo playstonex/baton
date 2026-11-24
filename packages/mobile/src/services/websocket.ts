@@ -277,6 +277,31 @@ export class WebSocketService {
     this.lastSeq.delete(sessionId);
   }
 
+  /**
+   * Screens currently showing each session. The daemon keeps one plain
+   * subscription per client and session, so the chat screen and a terminal
+   * screen pushed over it share it: whichever unmounted first used to detach
+   * the other one too.
+   */
+  private sessionViewers = new Map<string, number>();
+
+  /** A screen started showing `sessionId`. Pair with releaseSession. */
+  retainSession(sessionId: string): void {
+    this.sessionViewers.set(sessionId, (this.sessionViewers.get(sessionId) ?? 0) + 1);
+  }
+
+  /** Detach from `sessionId` once the last screen showing it is gone. */
+  releaseSession(sessionId: string): void {
+    const n = (this.sessionViewers.get(sessionId) ?? 1) - 1;
+    if (n > 0) {
+      this.sessionViewers.set(sessionId, n);
+      return;
+    }
+    this.sessionViewers.delete(sessionId);
+    this.send({ type: 'control', action: 'detach_session', sessionId });
+    this.lastSeq.delete(sessionId);
+  }
+
   disconnect(): void {
     this.intentionalClose = true;
     this.clearBackgroundDisconnect();

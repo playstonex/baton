@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { useEffect, useMemo } from 'react';
+import { createStore, type StateCreator, type StoreApi } from 'zustand';
 import type { ParsedEvent } from '@baton/shared';
 
 export interface ChatMessage {
@@ -95,7 +96,7 @@ function approvalState(queue: ApprovalDetail[]) {
   };
 }
 
-export const useChatStore = create<ChatState>()((set) => ({
+const initChatState: StateCreator<ChatState> = (set) => ({
   messages: [],
   agentStatus: 'unknown',
   pendingApproval: false,
@@ -450,7 +451,54 @@ export const useChatStore = create<ChatState>()((set) => ({
       pendingQuestion: null,
       ...approvalState([]),
     }),
-}));
+});
+
+export type ChatStore = StoreApi<ChatState>;
+
+/** A standalone chat store. Screens use `useChatSessionStore`; tests use this. */
+export function createChatStore(): ChatStore {
+  return createStore<ChatState>()(initChatState);
+}
+
+/**
+ * One store per session, so a replay or live event for one session can never
+ * land in another session's transcript — whatever is mounted, and whatever
+ * order async replies arrive in. Same design as the mobile app's chat store.
+ */
+const sessionStores = new Map<string, ChatStore>();
+const retainCounts = new Map<string, number>();
+/** Unretained stores kept for instant re-entry before the oldest is evicted. */
+const MAX_IDLE_STORES = 4;
+
+export function getChatStore(sessionId: string): ChatStore {
+  let store = sessionStores.get(sessionId);
+  if (!store) store = createChatStore();
+  // (Re-)insert so Map order tracks recency for eviction.
+  sessionStores.delete(sessionId);
+  sessionStores.set(sessionId, store);
+  return store;
+}
+
+export function retainChatStore(sessionId: string): () => void {
+  retainCounts.set(sessionId, (retainCounts.get(sessionId) ?? 0) + 1);
+  return () => {
+    const n = (retainCounts.get(sessionId) ?? 1) - 1;
+    if (n > 0) retainCounts.set(sessionId, n);
+    else retainCounts.delete(sessionId);
+    const idle = [...sessionStores.keys()].filter((id) => !retainCounts.get(id));
+    for (const id of idle.slice(0, Math.max(0, idle.length - MAX_IDLE_STORES))) {
+      sessionStores.delete(id);
+    }
+  };
+}
+
+/** The store for `sessionId`, kept alive while the calling component is mounted. */
+export function useChatSessionStore(sessionId: string | undefined): ChatStore {
+  const key = sessionId ?? '';
+  const store = useMemo(() => getChatStore(key), [key]);
+  useEffect(() => retainChatStore(key), [key]);
+  return store;
+}
 
 function isBusy(status: string): boolean {
   return (

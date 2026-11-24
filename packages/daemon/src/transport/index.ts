@@ -174,7 +174,12 @@ export class Transport {
         try {
           this.agentManager.chatWrite(msg.sessionId, msg.content, msg.images);
           if (msg.messageId) {
-            this.send(clientId, { type: 'ack', status: 'ok', messageId: msg.messageId });
+            this.send(clientId, {
+              type: 'ack',
+              status: 'ok',
+              messageId: msg.messageId,
+              sessionId: msg.sessionId,
+            });
           }
         } catch (err) {
           if (msg.messageId) {
@@ -182,6 +187,7 @@ export class Transport {
               type: 'ack',
               status: 'error',
               messageId: msg.messageId,
+              sessionId: msg.sessionId,
               error: err instanceof Error ? err.message : 'chatWrite failed',
             });
           } else {
@@ -691,7 +697,13 @@ export class Transport {
 
     const events = this.agentManager.getEventHistoryTail(sessionId);
     if (events.length > 0) {
-      replies.push({ type: 'event_history', sessionId, events });
+      let cursor: { beforeSeq?: number; hasMore: boolean } = { hasMore: false };
+      try {
+        cursor = this.agentManager.getEventReplayCursor(sessionId, events.length);
+      } catch {
+        // paging is best-effort; the replay itself still goes out
+      }
+      replies.push({ type: 'event_history', sessionId, events, ...cursor });
     }
 
     const proc = this.agentManager.get(sessionId);

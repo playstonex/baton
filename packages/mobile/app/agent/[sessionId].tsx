@@ -47,6 +47,9 @@ export default function AgentDetailScreen() {
   useEffect(() => {
     if (!sessionId) return;
     clearEvents();
+    // Store was just emptied: force a full attach instead of a delta resume.
+    wsService.clearResume(sessionId);
+    wsService.retainSession(sessionId);
     wsService.attachOrResume(sessionId);
 
     const unsubEvent = wsService.on('parsed_event', (msg) => {
@@ -57,6 +60,7 @@ export default function AgentDetailScreen() {
 
     const unsubEventHistory = wsService.on('event_history', (msg) => {
       if (msg.type === 'event_history' && msg.sessionId === sessionId) {
+        clearEvents();
         for (const event of msg.events) {
           addEvent(event);
         }
@@ -66,6 +70,7 @@ export default function AgentDetailScreen() {
     return () => {
       unsubEvent();
       unsubEventHistory();
+      wsService.releaseSession(sessionId);
     };
   }, [sessionId, addEvent, clearEvents]);
 

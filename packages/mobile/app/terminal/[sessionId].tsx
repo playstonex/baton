@@ -25,7 +25,8 @@ import { XtermWebView, type XtermWebViewRef } from '../../src/components/XtermWe
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTerminalSettingsStore } from '../../src/stores/terminal-settings';
-import { useChatStore } from '../../src/stores/chat';
+import { useStore } from 'zustand';
+import { useChatSessionStore } from '../../src/stores/chat';
 import { AgentQuestionCard } from '../../src/components/AgentQuestionCard';
 import { GlassCard, GlassButton, GlassPill } from '../../src/components/GlassKit';
 
@@ -174,6 +175,7 @@ function StatusDot({ color, active }: { color: string; active: boolean }) {
 
 export default function TerminalScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const chatStore = useChatSessionStore(sessionId);
   const router = useRouter();
   const xtermRef = useRef<XtermWebViewRef>(null);
   const textInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
@@ -189,10 +191,10 @@ export default function TerminalScreen() {
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const termSettings = useTerminalSettingsStore();
-  const activePrompt = useChatStore((s) => s.activePrompt);
-  const activePermission = useChatStore((s) => s.activePermission);
-  const sessionOwner = useChatStore((s) => s.sessionOwner);
-  const setSessionOwner = useChatStore((s) => s.setSessionOwner);
+  const activePrompt = useStore(chatStore, (s) => s.activePrompt);
+  const activePermission = useStore(chatStore, (s) => s.activePermission);
+  const sessionOwner = useStore(chatStore, (s) => s.sessionOwner);
+  const setSessionOwner = useStore(chatStore, (s) => s.setSessionOwner);
 
   const handleResize = useCallback(
     (cols: number, rows: number) => {
@@ -272,6 +274,12 @@ export default function TerminalScreen() {
   }, [sessionId, setSessionOwner]);
 
   useEffect(() => {
+    if (!sessionId) return;
+    wsService.retainSession(sessionId);
+    return () => wsService.releaseSession(sessionId);
+  }, [sessionId]);
+
+  useEffect(() => {
     if (!sessionId || !wsConnected) return;
 
     wsService.attachOrResume(sessionId);
@@ -279,11 +287,6 @@ export default function TerminalScreen() {
 
     return () => {
       attachSent.current = false;
-      wsService.send({
-        type: 'control',
-        action: 'detach_session',
-        sessionId,
-      });
     };
   }, [sessionId, wsConnected]);
 
@@ -496,7 +499,7 @@ export default function TerminalScreen() {
                     });
                     wsService.send({ type: 'terminal_input', sessionId, data: 'y\r' });
                   }
-                  useChatStore.getState().setActivePermission(null);
+                  chatStore.getState().setActivePermission(null);
                 }}
                 onReject={() => {
                   if (sessionId) {
@@ -508,7 +511,7 @@ export default function TerminalScreen() {
                     });
                     wsService.send({ type: 'terminal_input', sessionId, data: 'n\r' });
                   }
-                  useChatStore.getState().setActivePermission(null);
+                  chatStore.getState().setActivePermission(null);
                 }}
                 compact
               />
@@ -523,7 +526,7 @@ export default function TerminalScreen() {
                   if (sessionId) {
                     wsService.send({ type: 'terminal_input', sessionId, data: ans + '\r' });
                   }
-                  useChatStore.getState().setActivePrompt(null);
+                  chatStore.getState().setActivePrompt(null);
                 }}
                 compact
               />

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ParsedEvent } from '@baton/shared';
-import { useChatStore } from '../stores/chat';
+import { createChatStore } from '../stores/chat';
+
+const useChatStore = createChatStore();
 
 /**
  * Streaming providers deliver assistant text in whatever fragments they
