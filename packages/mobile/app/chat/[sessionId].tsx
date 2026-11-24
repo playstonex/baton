@@ -35,7 +35,8 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { wsService } from '../../src/services/websocket';
-import { useChatStore, type ChatMessage } from '../../src/stores/chat';
+import { useStore } from 'zustand';
+import { useChatSessionStore, type ChatMessage } from '../../src/stores/chat';
 import { useConnectionStore } from '../../src/stores/connection';
 import { useComposerPrefs } from '../../src/stores/composer-prefs';
 import { useAgentStore } from '../../src/stores/agents';
@@ -101,11 +102,15 @@ type GroupedItem =
   | { type: 'burst'; id: string; messages: ChatMessage[]; turnId: string };
 
 const PAGE_SIZE = 40;
+/** Events fetched per "load earlier" round trip to the daemon store. */
+const HISTORY_PAGE = 500;
 /** Reading-column cap shared by the transcript and the composer, so both stay
  * on the same measure on iPad / Duo-unfolded widths. */
 const CONTENT_MAX_WIDTH = 720;
 const TOOL_BURST_THRESHOLD = 2;
 const SCROLL_BOTTOM_THRESHOLD = 120;
+/** How far the transcript extends beneath the floating composer. */
+const COMPOSER_OVERLAP = 136;
 
 const THINKING_LEVEL_SHORT: Record<string, string> = {
   minimal: 'Min',
@@ -222,6 +227,7 @@ function GlassCapsule({
   c,
   radius = 999,
   intensity,
+  translucent = false,
   style,
   contentStyle,
   children,
@@ -229,20 +235,29 @@ function GlassCapsule({
   c: ThemeColors;
   radius?: number;
   intensity?: number;
+  /** See-through "floating island" material: the transcript shows through. */
+  translucent?: boolean;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
+  const fill = translucent
+    ? c.isDark
+      ? 'rgba(28,29,33,0.42)'
+      : 'rgba(255,255,255,0.45)'
+    : c.isDark
+      ? 'rgba(25,26,29,0.96)'
+      : 'rgba(252,253,254,0.94)';
   return (
     <View
       style={[
         {
           borderRadius: radius,
           shadowColor: '#08090a',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: c.isDark ? 0.12 : 0.06,
-          shadowRadius: 6,
-          elevation: 4,
+          shadowOffset: { width: 0, height: translucent ? 6 : 2 },
+          shadowOpacity: translucent ? (c.isDark ? 0.4 : 0.16) : c.isDark ? 0.12 : 0.06,
+          shadowRadius: translucent ? 18 : 6,
+          elevation: translucent ? 8 : 4,
         },
         style,
       ]}
@@ -253,13 +268,7 @@ function GlassCapsule({
         style={{ borderRadius: radius, overflow: 'hidden' }}
       >
         <View
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              backgroundColor: c.isDark ? 'rgba(25,26,29,0.96)' : 'rgba(252,253,254,0.94)',
-              borderRadius: radius,
-            },
-          ]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: fill, borderRadius: radius }]}
           pointerEvents="none"
         />
         {/* Specular rim — brightest at top, uniform hairline in RN. */}
@@ -268,8 +277,8 @@ function GlassCapsule({
             StyleSheet.absoluteFill,
             {
               borderRadius: radius,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: c.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.62)',
+              borderWidth: translucent ? 1 : StyleSheet.hairlineWidth,
+              borderColor: c.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.7)',
             },
           ]}
           pointerEvents="none"
@@ -327,29 +336,33 @@ function showActionSheet(
 
 export default function ChatScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  // Per-session store: screens left mounted under the stack top keep writing
+  // to their own session, never to the one on screen.
+  const chatStore = useChatSessionStore(sessionId);
   const router = useRouter();
-  const messages = useChatStore((s) => s.messages);
-  const agentStatus = useChatStore((s) => s.agentStatus);
-  const statusDetail = useChatStore((s) => s.statusDetail);
+  const messages = useStore(chatStore, (s) => s.messages);
+  const agentStatus = useStore(chatStore, (s) => s.agentStatus);
+  const statusDetail = useStore(chatStore, (s) => s.statusDetail);
   const running = isRunning(agentStatus);
   const wsConnected = useConnectionStore((s) => s.connected);
-  const waitingApproval = useChatStore((s) => s.waitingApproval);
-  const activePrompt = useChatStore((s) => s.activePrompt);
-  const activePermission = useChatStore((s) => s.activePermission);
-  const promptQueue = useChatStore((s) => s.promptQueue);
-  const enqueuePrompt = useChatStore((s) => s.enqueuePrompt);
-  const dequeuePrompt = useChatStore((s) => s.dequeuePrompt);
-  const removeQueuedPrompt = useChatStore((s) => s.removeQueuedPrompt);
-  const clearQueue = useChatStore((s) => s.clearQueue);
-  const addEvent = useChatStore((s) => s.addEvent);
-  const addUserMessage = useChatStore((s) => s.addUserMessage);
-  const resolveDelivery = useChatStore((s) => s.resolveDelivery);
-  const retryMessage = useChatStore((s) => s.retryMessage);
-  const setStatus = useChatStore((s) => s.setStatus);
-  const setWaitingApproval = useChatStore((s) => s.setWaitingApproval);
-  const clear = useChatStore((s) => s.clear);
-  const sessionOwner = useChatStore((s) => s.sessionOwner);
-  const setSessionOwner = useChatStore((s) => s.setSessionOwner);
+  const waitingApproval = useStore(chatStore, (s) => s.waitingApproval);
+  const activePrompt = useStore(chatStore, (s) => s.activePrompt);
+  const activePermission = useStore(chatStore, (s) => s.activePermission);
+  const promptQueue = useStore(chatStore, (s) => s.promptQueue);
+  const hasOlderHistory = useStore(chatStore, (s) => s.hasOlderHistory);
+  const loadingOlderRef = useRef(false);
+  const enqueuePrompt = useStore(chatStore, (s) => s.enqueuePrompt);
+  const dequeuePrompt = useStore(chatStore, (s) => s.dequeuePrompt);
+  const removeQueuedPrompt = useStore(chatStore, (s) => s.removeQueuedPrompt);
+  const clearQueue = useStore(chatStore, (s) => s.clearQueue);
+  const addEvent = useStore(chatStore, (s) => s.addEvent);
+  const addUserMessage = useStore(chatStore, (s) => s.addUserMessage);
+  const resolveDelivery = useStore(chatStore, (s) => s.resolveDelivery);
+  const retryMessage = useStore(chatStore, (s) => s.retryMessage);
+  const setStatus = useStore(chatStore, (s) => s.setStatus);
+  const setWaitingApproval = useStore(chatStore, (s) => s.setWaitingApproval);
+  const sessionOwner = useStore(chatStore, (s) => s.sessionOwner);
+  const setSessionOwner = useStore(chatStore, (s) => s.setSessionOwner);
   const [showDiffReview, setShowDiffReview] = useState(false);
   const [input, setInput] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
@@ -499,7 +512,15 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!sessionId) return;
-    clear();
+    // Keep the transcript this session's store already holds: the full attach
+    // below replaces it atomically (applyReplay), so re-entering a chat shows
+    // the last conversation immediately instead of an empty screen that may
+    // never refill if the replay is slow or the socket is down.
+    // The seq-based resume would deliver only what arrived since the last
+    // visit, so force a full attach on entry; later reconnects inside this
+    // mount still resume from lastSeq.
+    wsService.clearResume(sessionId);
+    wsService.retainSession(sessionId);
     setVisibleCount(PAGE_SIZE);
     setExpandedBursts(new Set());
 
@@ -525,8 +546,21 @@ export default function ChatScreen() {
       });
 
     const unsubAck = wsService.on('ack', (raw) => {
-      const m = raw as { type: 'ack'; messageId: string; status: 'ok' | 'error'; error?: string };
+      const m = raw as {
+        type: 'ack';
+        messageId: string;
+        status: 'ok' | 'error';
+        error?: string;
+        sessionId?: string;
+      };
+      const ownsMessage = (id: string) =>
+        chatStore.getState().messages.some((x) => x.meta?.messageId === id);
       if (m.type !== 'ack' || !m.messageId) return;
+      // Every mounted chat screen hears every ack; only the sender reacts.
+      // Older daemons omit ack.sessionId — fall back to owning the messageId.
+      if (m.sessionId !== undefined ? m.sessionId !== sessionId : !ownsMessage(m.messageId)) {
+        return;
+      }
       const ok = m.status === 'ok';
       resolveDelivery(m.messageId, ok);
       if (!ok) {
@@ -563,27 +597,23 @@ export default function ChatScreen() {
       }
     });
 
-    // Replay the session's event history on attach — without this a fresh
-    // attach (new device, app restart) renders an empty conversation.
+    // Full replay (attach, or gap recovery after a reconnect). The daemon
+    // sends it as one frame, so rebuilding from scratch is always correct and
+    // a re-attach never stacks the conversation on top of itself. This is
+    // the only hydration path: the old extra GET /api/agents/:id/events fed
+    // the same events a second time and, being unguarded async, could land
+    // after the user had already moved to another session.
     const unsubEventHistory = wsService.on('event_history', (msg) => {
       if (msg.type === 'event_history' && msg.sessionId === sessionId) {
-        for (const event of msg.events) {
-          addEvent(event);
-        }
+        chatStore
+          .getState()
+          .applyReplay(msg.events, { beforeSeq: msg.beforeSeq, hasMore: msg.hasMore });
+        // A rebuilt transcript lands with the list at its old offset (or at an
+        // estimated end, since row heights are unmeasured): pin to the newest
+        // message so the last reply is never left below the fold.
+        requestAnimationFrame(() => flatRef.current?.scrollToEnd({ animated: false }));
       }
     });
-
-    // Hydrate event history from daemon store on mount so navigating to
-    // an active or past session immediately renders full conversation history.
-    apiFetch<unknown[]>(`/api/agents/${sessionId}/events`)
-      .then((events) => {
-        if (Array.isArray(events)) {
-          for (const event of events) {
-            addEvent(event as Parameters<typeof addEvent>[0]);
-          }
-        }
-      })
-      .catch(() => {});
 
     const unsubStatus = wsService.on('status_update', (msg) => {
       if (msg.type === 'status_update' && msg.sessionId === sessionId) {
@@ -674,8 +704,20 @@ export default function ChatScreen() {
       unsubGitStatus();
       unsubGitResult();
       unsubOwnership();
+      // Stop the daemon streaming this session once no screen shows it
+      // (a terminal screen for the same session may still be open).
+      wsService.releaseSession(sessionId);
+      wsService.clearResume(sessionId);
     };
-  }, [sessionId, addEvent, setStatus, setSessionOwner, clear, attachSession, resolveDelivery]);
+  }, [
+    sessionId,
+    chatStore,
+    addEvent,
+    setStatus,
+    setSessionOwner,
+    attachSession,
+    resolveDelivery,
+  ]);
 
   useEffect(() => {
     if (errorToast) {
@@ -717,7 +759,7 @@ export default function ChatScreen() {
     transform: [{ translateY: interpolate(scrollBtnProgress.value, [0, 1], [8, 0]) }],
   }));
 
-  const hasMore = messages.length > visibleCount;
+  const hasMore = messages.length > visibleCount || hasOlderHistory;
 
   const groupedData = useMemo(() => {
     const result: GroupedItem[] = [];
@@ -957,8 +999,34 @@ export default function ChatScreen() {
 
   const listExtraData = useMemo(() => ({ running, expandedBursts }), [running, expandedBursts]);
 
-  function loadEarlier() {
-    setVisibleCount((v) => Math.min(v + PAGE_SIZE, messages.length));
+  async function loadEarlier() {
+    if (messages.length > visibleCount) {
+      setVisibleCount((v) => Math.min(v + PAGE_SIZE, messages.length));
+      return;
+    }
+    // Everything loaded is visible: page older events from the daemon store.
+    const { historyCursor, hasOlderHistory: more } = chatStore.getState();
+    if (!sessionId || !more || historyCursor === null || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    try {
+      const page = await apiFetch<{
+        events: Parameters<typeof addEvent>[0][];
+        firstSeq: number | null;
+        hasMore: boolean;
+      }>(`/api/agents/${sessionId}/events/page?beforeSeq=${historyCursor}&limit=${HISTORY_PAGE}`);
+      const store = chatStore.getState();
+      // A full replay (reconnect) replaced the transcript meanwhile: its
+      // cursor wins, and this page would duplicate or misplace events.
+      if (store.historyCursor !== historyCursor) return;
+      const before = store.messages.length;
+      store.prependHistory(page.events, { beforeSeq: page.firstSeq, hasMore: page.hasMore });
+      const added = chatStore.getState().messages.length - before;
+      setVisibleCount((v) => v + Math.min(Math.max(added, 0), PAGE_SIZE));
+    } catch {
+      setErrorToast('Failed to load earlier messages');
+    } finally {
+      loadingOlderRef.current = false;
+    }
   }
 
   function scrollToBottom() {
@@ -1077,7 +1145,7 @@ export default function ChatScreen() {
     }
     wsService.send({ type: 'approve_input', sessionId });
     setWaitingApproval(false);
-    useChatStore.getState().setActivePermission(null);
+    chatStore.getState().setActivePermission(null);
     setApprovalDetail(null);
   }
 
@@ -1095,7 +1163,7 @@ export default function ChatScreen() {
     }
     wsService.send({ type: 'reject_input', sessionId });
     setWaitingApproval(false);
-    useChatStore.getState().setActivePermission(null);
+    chatStore.getState().setActivePermission(null);
     setApprovalDetail(null);
   }
 
@@ -1110,7 +1178,7 @@ export default function ChatScreen() {
       model: selectedModel ?? undefined,
       messageId,
     });
-    useChatStore.getState().setActivePrompt(null);
+    chatStore.getState().setActivePrompt(null);
   }
 
   function sendQueuedPrompt(promptText: string) {
@@ -1315,6 +1383,7 @@ export default function ChatScreen() {
           label: sessionOwner === 'remote' ? 'Yield Control to Desktop' : 'Take Control',
           selected: sessionOwner === 'remote',
         },
+        { label: 'New Session' },
       ],
       onSelect: (index) => {
         if (index === 0) {
@@ -1358,10 +1427,14 @@ export default function ChatScreen() {
             toggleSessionControl();
           }
         }
+        if (index === 11) {
+          router.navigate('/(tabs)');
+        }
       },
     });
   }
 
+  const navDivider = c.isDark ? Glass.opacity.dark.border : Glass.opacity.light.border;
   const statusColor = STATUS_COLORS[agentStatus] ?? Colors.surface[400];
   const sendDisabled = !input.trim() && attachments.length === 0;
   const hasInput = !sendDisabled;
@@ -1515,23 +1588,37 @@ export default function ChatScreen() {
             >
               <View style={{ height: insets.top }} />
               <View style={styles.headerContent}>
-                {/* Single left-edge nav control. The drawer already is the
-                    session list + new-chat surface, so a second "back" chevron
-                    pointed at the same place; two nav controls in the leading
-                    corner also reads wrong on iOS. */}
-                <ScalePressable
-                  pressedScale={0.9}
-                  onPress={isWide ? toggleSidebar : openSidebar}
-                  style={[styles.headerAction, styles.headerBack, {}]}
-                  hitSlop={4}
-                  accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
+                {/* Leading capsule: back to the previous page + session drawer. */}
+                <GlassCapsule
+                  c={c}
+                  style={styles.headerGroupLeft}
+                  contentStyle={styles.headerGroupContent}
                 >
-                  <Ionicons name="reorder-three" size={26} color={c.textPrimary} />
-                </ScalePressable>
-                <ScalePressable
-                  onPress={() => setShowDiffReview(true)}
-                  style={[styles.headerTitles]}
-                >
+                  <ScalePressable
+                    pressedScale={0.9}
+                    onPress={() => {
+                      if (router.canGoBack()) router.back();
+                      else router.navigate('/(tabs)');
+                    }}
+                    style={styles.headerGroupBtn}
+                    hitSlop={4}
+                    accessibilityLabel="Back"
+                  >
+                    <Ionicons name="chevron-back" size={18} color={c.textPrimary} />
+                  </ScalePressable>
+                  <View style={[styles.groupDivider, { backgroundColor: navDivider }]} />
+                  <ScalePressable
+                    pressedScale={0.9}
+                    onPress={isWide ? toggleSidebar : openSidebar}
+                    style={styles.headerGroupBtn}
+                    hitSlop={4}
+                    accessibilityLabel={isWide ? 'Toggle sidebar' : 'Open sidebar'}
+                  >
+                    <Ionicons name="reorder-three" size={20} color={c.textPrimary} />
+                  </ScalePressable>
+                </GlassCapsule>
+
+                <View style={styles.headerTitles}>
                   <View style={styles.headerNameRow}>
                     <View style={[styles.statusDotOuter, { borderColor: statusColor }]}>
                       {running && <PulsingDot color={statusColor} />}
@@ -1561,60 +1648,30 @@ export default function ChatScreen() {
                       ? `  \u2022  ${Math.round(contextFraction * 100)}%`
                       : ''}
                   </Text>
-                </ScalePressable>
+                </View>
 
-                {/* iOS 26 merged button group — one chrome capsule, hairline lenses. */}
+                {/* Trailing capsule: find, review (with change count), more. */}
                 <GlassCapsule
                   c={c}
-                  style={styles.headerGroup}
+                  style={styles.headerGroupRight}
                   contentStyle={styles.headerGroupContent}
                 >
                   <ScalePressable
                     pressedScale={0.9}
-                    onPress={() => router.navigate('/(tabs)')}
-                    style={[styles.headerGroupBtn, {}]}
-                    hitSlop={4}
-                    accessibilityLabel="New chat"
-                  >
-                    <Ionicons name="create-outline" size={16} color={c.textSecondary} />
-                  </ScalePressable>
-                  <View
-                    style={[
-                      styles.groupDivider,
-                      {
-                        backgroundColor: c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                      },
-                    ]}
-                  />
-                  <ScalePressable
-                    pressedScale={0.9}
-                    onPress={() => {
-                      setFindOpen(true);
-                    }}
-                    style={[styles.headerGroupBtn, {}]}
+                    onPress={() => setFindOpen(true)}
+                    style={styles.headerGroupBtn}
                     hitSlop={4}
                     accessibilityLabel="Find in conversation"
                   >
                     <Ionicons name="search" size={15} color={c.textSecondary} />
                   </ScalePressable>
-                  <View
-                    style={[
-                      styles.groupDivider,
-                      {
-                        backgroundColor: c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                      },
-                    ]}
-                  />
                   {gitStatus.trim().length > 0 && (
                     <>
+                      <View style={[styles.groupDivider, { backgroundColor: navDivider }]} />
                       <ScalePressable
                         pressedScale={0.9}
                         onPress={() => setShowDiffReview(true)}
-                        style={[styles.headerGroupBtn, {}]}
+                        style={styles.headerGroupBtn}
                         hitSlop={4}
                         accessibilityLabel="Review changes"
                       >
@@ -1623,48 +1680,14 @@ export default function ChatScreen() {
                           {gitStatus.split('\n').filter(Boolean).length}
                         </Text>
                       </ScalePressable>
-                      <View
-                        style={[
-                          styles.groupDivider,
-                          {
-                            backgroundColor: c.isDark
-                              ? Glass.opacity.dark.border
-                              : Glass.opacity.light.border,
-                          },
-                        ]}
-                      />
                     </>
                   )}
-                  <ScalePressable
-                    pressedScale={0.9}
-                    onPress={toggleSessionControl}
-                    style={[styles.headerGroupBtn, {}]}
-                    hitSlop={4}
-                    accessibilityLabel={
-                      sessionOwner === 'remote' ? 'Yield control to desktop' : 'Take control'
-                    }
-                  >
-                    <Ionicons
-                      name={sessionOwner === 'remote' ? 'phone-portrait' : 'desktop-outline'}
-                      size={15}
-                      color={sessionOwner === 'remote' ? Colors.success[400] : c.textSecondary}
-                    />
-                  </ScalePressable>
-                  <View
-                    style={[
-                      styles.groupDivider,
-                      {
-                        backgroundColor: c.isDark
-                          ? Glass.opacity.dark.border
-                          : Glass.opacity.light.border,
-                      },
-                    ]}
-                  />
+                  <View style={[styles.groupDivider, { backgroundColor: navDivider }]} />
                   <ScalePressable
                     pressedScale={0.9}
                     ref={moreBtnRef}
                     onPress={openMoreMenu}
-                    style={[styles.headerGroupBtn, {}]}
+                    style={styles.headerGroupBtn}
                     hitSlop={4}
                     accessibilityLabel="More actions"
                   >
@@ -1759,7 +1782,7 @@ export default function ChatScreen() {
                     styles.messageList,
                     {
                       paddingTop: insets.top + HEADER_HEIGHT,
-                      paddingBottom: insets.bottom + 140,
+                      paddingBottom: COMPOSER_OVERLAP + 12,
                     },
                   ]}
                   renderItem={renderGroupedItem}
@@ -1789,7 +1812,7 @@ export default function ChatScreen() {
                   style={[
                     styles.scrollToBottomBtn,
                     scrollBtnStyle,
-                    { bottom: insets.bottom + 140 },
+                    { bottom: COMPOSER_OVERLAP + 12 },
                   ]}
                   pointerEvents={isNearBottom ? 'none' : 'auto'}
                 >
@@ -1941,7 +1964,7 @@ export default function ChatScreen() {
             </Animated.View>
           )}
 
-          <Animated.View style={[composerStyle, styles.contentColumn]}>
+          <Animated.View style={[composerStyle, styles.contentColumn, styles.composerFloat]}>
             {autocomplete && (
               <AgentInputAutocomplete
                 type={autocomplete.type}
@@ -1994,7 +2017,9 @@ export default function ChatScreen() {
             {/* Unified Messages-grade glass card: attachments · input · integrated toolbar */}
             <GlassCapsule
               c={c}
-              radius={22}
+              radius={26}
+              translucent
+              intensity={90}
               style={styles.composerCard}
               contentStyle={styles.composerCardContent}
             >
@@ -2986,7 +3011,7 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
   },
   headerAction: {
-    width: 34,
+    width: 30,
     height: 34,
     borderRadius: 17,
     alignItems: 'center',
@@ -2995,9 +3020,8 @@ const styles = StyleSheet.create({
   headerBack: {
     marginRight: 2,
   },
-  headerGroup: {
-    marginLeft: 'auto',
-  },
+  headerGroupLeft: {},
+  headerGroupRight: {},
   headerGroupContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3092,6 +3116,11 @@ const styles = StyleSheet.create({
   /** Wraps transcript + empty state; its animated bottom inset tracks the keyboard. */
   contentArea: {
     flex: 1,
+    // Extends under the floating composer so the transcript scrolls behind it.
+    marginBottom: -COMPOSER_OVERLAP,
+  },
+  composerFloat: {
+    zIndex: 5,
   },
   scrollToBottomBtn: {
     position: 'absolute',

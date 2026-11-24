@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { useEffect, useMemo } from 'react';
+import { createStore, type StateCreator, type StoreApi } from 'zustand';
 import type {
   ChatImage,
   ParsedEvent,
@@ -40,6 +41,14 @@ interface InternalState {
   _streamTimer: ReturnType<typeof setTimeout> | null;
   _itemIdToMsgId: Map<string, string>;
   _streamingMsgIdByType: Map<string, string>;
+  /** Every event applied, in order — the source for rebuilding on prepend. */
+  _events: ParsedEvent[];
+}
+
+/** Where "load earlier" continues from (daemon event_history cursor). */
+export interface HistoryCursor {
+  beforeSeq?: number | null;
+  hasMore?: boolean;
 }
 
 interface ChatState extends InternalState {
@@ -52,7 +61,18 @@ interface ChatState extends InternalState {
   activePermission: PermissionRequestEvent | null;
   promptQueue: string[];
   sessionOwner: 'local' | 'remote' | null;
+  /** Store seq to page back from; null when the daemon gave no cursor. */
+  historyCursor: number | null;
+  /** True when the daemon has events older than what is loaded. */
+  hasOlderHistory: boolean;
   addEvent: (event: ParsedEvent) => void;
+  /**
+   * Replace the transcript with a full daemon replay. Messages the daemon
+   * never confirmed (pending/failed sends) survive and stay retryable.
+   */
+  applyReplay: (events: ParsedEvent[], cursor?: HistoryCursor) => void;
+  /** Prepend an older page of events ("load earlier"). */
+  prependHistory: (events: ParsedEvent[], cursor: HistoryCursor) => void;
   addUserMessage: (content: string, messageId?: string, images?: ChatImage[]) => void;
   /** Resolve an optimistic send by the daemon ack's messageId. */
   resolveDelivery: (messageId: string, ok: boolean) => void;
@@ -166,7 +186,82 @@ function flushStream(
   });
 }
 
-export const useChatStore = create<ChatState>()((set, get) => ({
+/** End the streaming state of the open thinking block, if any. */
+function settleThinking(
+  set: (fn: (s: ChatState) => Partial<ChatState>) => void,
+  get: () => ChatState,
+) {
+  const id = get()._streamingMsgIdByType.get('thinking');
+  if (!id) return;
+  set((s) => {
+    const streaming = new Map(s._streamingMsgIdByType);
+    streaming.delete('thinking');
+    return {
+      _streamingMsgIdByType: streaming,
+      messages: s.messages.map((m) => (m.id === id && m.isStreaming ? { ...m, isStreaming: false } : m)),
+    };
+  });
+}
+
+function cursorState(cursor?: HistoryCursor): Pick<ChatState, 'historyCursor' | 'hasOlderHistory'> {
+  const beforeSeq = cursor?.beforeSeq ?? null;
+  return { historyCursor: beforeSeq, hasOlderHistory: beforeSeq !== null && !!cursor?.hasMore };
+}
+
+/** A daemon echo this close to (or after) an optimistic send counts as it. */
+const ECHO_SKEW_MS = 60_000;
+
+/**
+ * Rebuild the transcript from `events`, keeping what the daemon can't know
+ * about: unconfirmed sends, the prompt queue and session ownership. A pending
+ * send whose echo is in the replay was delivered (ack lost) and is dropped.
+ */
+function rebuildFromEvents(
+  set: (partial: Partial<ChatState> | ((s: ChatState) => Partial<ChatState>)) => void,
+  get: () => ChatState,
+  events: ParsedEvent[],
+): void {
+  const before = get();
+  const unsent = before.messages.filter((m) => m.delivery === 'pending' || m.delivery === 'failed');
+  const kept = { promptQueue: before.promptQueue, sessionOwner: before.sessionOwner };
+  get().clear();
+  set(kept);
+  for (const e of events) get().addEvent(e);
+  flushStream(set, get);
+  if (unsent.length === 0) return;
+
+  set((s) => {
+    const echoes = s.messages.filter((m) => m.role === 'user' && !m.delivery);
+    const claimed = new Set<string>();
+    let counter = s._counter;
+    let turn = s._turnCounter;
+    const restored: ChatMessage[] = [];
+    for (const m of unsent) {
+      if (m.delivery === 'pending') {
+        const echo = echoes.find(
+          (e) =>
+            !claimed.has(e.id) &&
+            e.content === m.content &&
+            e.timestamp >= m.timestamp - ECHO_SKEW_MS,
+        );
+        if (echo) {
+          claimed.add(echo.id);
+          continue;
+        }
+      }
+      counter++;
+      turn++;
+      restored.push({ ...m, id: `m-${counter}`, turnId: `t-${turn}` });
+    }
+    return {
+      messages: [...s.messages, ...restored],
+      _counter: counter,
+      _turnCounter: turn,
+    };
+  });
+}
+
+const initChatState: StateCreator<ChatState> = (set, get) => ({
   messages: [],
   agentStatus: 'unknown',
   statusDetail: undefined,
@@ -175,14 +270,42 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   activePermission: null,
   promptQueue: [],
   sessionOwner: null,
+  historyCursor: null,
+  hasOlderHistory: false,
   _counter: 0,
   _turnCounter: 0,
   _streamBuffer: '',
   _streamTimer: null,
   _itemIdToMsgId: new Map<string, string>(),
   _streamingMsgIdByType: new Map<string, string>(),
+  _events: [],
+
+  applyReplay: (events, cursor) => {
+    rebuildFromEvents(set, get, events);
+    set(cursorState(cursor));
+  },
+
+  prependHistory: (events, cursor) => {
+    const s = get();
+    // Status and open prompts are live state, not transcript: keep them.
+    const live = {
+      agentStatus: s.agentStatus,
+      statusDetail: s.statusDetail,
+      waitingApproval: s.waitingApproval,
+      activePrompt: s.activePrompt,
+      activePermission: s.activePermission,
+    };
+    rebuildFromEvents(set, get, [...events, ...s._events]);
+    set({ ...live, ...cursorState(cursor) });
+    // Settle bubbles the rebuild left streaming when the turn is over.
+    if (live.agentStatus === 'idle' || live.agentStatus === 'stopped') {
+      get().setStatus(live.agentStatus);
+    }
+  },
 
   addEvent: (event) => {
+    // Internal log only (never rendered), so an in-place push is fine.
+    get()._events.push(event);
     if (__DEV__ && (event.type === 'chat_message' || event.type === 'status_change')) {
       const contentLen =
         'content' in event ? ((event as { content?: string }).content?.length ?? 0) : 0;
@@ -218,6 +341,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (get()._streamBuffer) {
       flushStream(set, get);
+    }
+
+    // The agent moved past its reasoning (a reply, a tool call, a prompt...):
+    // stop the "Thinking" animation on that block now instead of waiting for
+    // the turn to go idle, or it keeps pulsing above the answer it produced.
+    if (
+      event.type !== 'thinking' &&
+      event.type !== 'status_change' &&
+      event.type !== 'turn_boundary' &&
+      event.type !== 'token_usage'
+    ) {
+      settleThinking(set, get);
     }
 
     set((state) => {
@@ -978,12 +1113,82 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activePermission: null,
       promptQueue: [],
       sessionOwner: null,
+      historyCursor: null,
+      hasOlderHistory: false,
       _counter: 0,
       _turnCounter: 0,
       _streamBuffer: '',
       _streamTimer: null,
       _itemIdToMsgId: new Map<string, string>(),
       _streamingMsgIdByType: new Map<string, string>(),
+      _events: [],
     });
   },
-}));
+});
+
+export type ChatStore = StoreApi<ChatState>;
+
+/** A standalone chat store. Screens use `useChatSessionStore`; tests use this. */
+export function createChatStore(): ChatStore {
+  return createStore<ChatState>()(initChatState);
+}
+
+/**
+ * One store per session. The chat store used to be a single global, and every
+ * mounted chat screen wrote into it: expo-router keeps screens under the top
+ * of the stack mounted (still subscribed, still attached), a late HTTP/WS
+ * replay from the previous screen landed after the next screen's clear(), and
+ * one session's transcript, status and queued prompts showed up in another.
+ * Keying the state by sessionId makes cross-session writes impossible instead
+ * of relying on every handler's filter.
+ */
+const sessionStores = new Map<string, ChatStore>();
+const retainCounts = new Map<string, number>();
+/** Unretained stores kept for instant re-entry before the oldest is evicted. */
+const MAX_IDLE_STORES = 4;
+
+export function getChatStore(sessionId: string): ChatStore {
+  let store = sessionStores.get(sessionId);
+  if (!store) {
+    store = createChatStore();
+    sessionStores.set(sessionId, store);
+  } else {
+    // Re-insert so Map order tracks recency for eviction.
+    sessionStores.delete(sessionId);
+    sessionStores.set(sessionId, store);
+  }
+  return store;
+}
+
+function evictIdleStores(): void {
+  const idle = [...sessionStores.keys()].filter((id) => !retainCounts.get(id));
+  for (const id of idle.slice(0, Math.max(0, idle.length - MAX_IDLE_STORES))) {
+    sessionStores.get(id)?.getState().clear();
+    sessionStores.delete(id);
+  }
+}
+
+export function retainChatStore(sessionId: string): () => void {
+  retainCounts.set(sessionId, (retainCounts.get(sessionId) ?? 0) + 1);
+  return () => {
+    const n = (retainCounts.get(sessionId) ?? 1) - 1;
+    if (n > 0) retainCounts.set(sessionId, n);
+    else retainCounts.delete(sessionId);
+    evictIdleStores();
+  };
+}
+
+/** The store for `sessionId`, kept alive while the calling component is mounted. */
+export function useChatSessionStore(sessionId: string | undefined): ChatStore {
+  const key = sessionId ?? '';
+  const store = useMemo(() => getChatStore(key), [key]);
+  useEffect(() => retainChatStore(key), [key]);
+  return store;
+}
+
+/** Test hook: drop every session store. */
+export function resetChatStores(): void {
+  for (const s of sessionStores.values()) s.getState().clear();
+  sessionStores.clear();
+  retainCounts.clear();
+}

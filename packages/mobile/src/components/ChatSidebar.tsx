@@ -39,6 +39,9 @@ const GROUP_MODE_OPTIONS: { mode: SessionGroupMode; label: string }[] = [
   { mode: 'time', label: 'Time' },
 ];
 
+/** Sessions shown per group before a "Show more" row appears. */
+const GROUP_PAGE_SIZE = 4;
+
 interface ChatSidebarProps {
   currentSessionId?: string;
   onSelectSession: (sessionId: string) => void;
@@ -129,6 +132,12 @@ export function ChatSidebar({
   const setGroupMode = useSidebarPrefs((s) => s.setGroupMode);
   const loadSidebarPrefs = useSidebarPrefs((s) => s.load);
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(new Set());
+  /** Rows revealed per group; every "Show more" tap reveals another page. */
+  const [shownByGroup, setShownByGroup] = useState<Readonly<Record<string, number>>>({});
+  const showMore = useCallback((key: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShownByGroup((cur) => ({ ...cur, [key]: (cur[key] ?? GROUP_PAGE_SIZE) + GROUP_PAGE_SIZE }));
+  }, []);
 
   useEffect(() => {
     void loadSidebarPrefs();
@@ -195,6 +204,7 @@ export function ChatSidebar({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setGroupMode(mode);
       setCollapsedKeys(new Set());
+      setShownByGroup({});
     },
     [setGroupMode],
   );
@@ -277,7 +287,7 @@ export function ChatSidebar({
         )}
       </View>
 
-      {/* Action: + New Chat Button (ChatGPT style) */}
+      {/* Action: New Session */}
       <ScalePressable
         pressedScale={0.98}
         onPress={handleNewChatPress}
@@ -290,7 +300,7 @@ export function ChatSidebar({
         ]}
       >
         <Ionicons name="create-outline" size={18} color={c.textPrimary} />
-        <Text style={[styles.newChatText, { color: c.textPrimary }]}>New Chat</Text>
+        <Text style={[styles.newChatText, { color: c.textPrimary }]}>New Session</Text>
       </ScalePressable>
 
       {/* Search Bar */}
@@ -371,16 +381,34 @@ export function ChatSidebar({
                 onToggle={() => toggleGroup(group.key)}
               />
               {!collapsed &&
-                group.items.map((item) => (
-                  <SessionRow
-                    key={item.id}
-                    item={item}
-                    projectLabel={projectLabels.get(item.projectPath) ?? ''}
-                    selected={item.id === currentSessionId}
-                    onPress={handleSelect}
-                    onDelete={item.live ? undefined : handleDeleteSession}
-                  />
-                ))}
+                group.items
+                  .slice(0, searchQuery ? undefined : (shownByGroup[group.key] ?? GROUP_PAGE_SIZE))
+                  .map((item) => (
+                    <SessionRow
+                      key={item.id}
+                      item={item}
+                      projectLabel={projectLabels.get(item.projectPath) ?? ''}
+                      selected={item.id === currentSessionId}
+                      onPress={handleSelect}
+                      onDelete={item.live ? undefined : handleDeleteSession}
+                    />
+                  ))}
+              {!collapsed &&
+                !searchQuery &&
+                group.items.length > (shownByGroup[group.key] ?? GROUP_PAGE_SIZE) && (
+                  <ScalePressable
+                    pressedScale={0.98}
+                    onPress={() => showMore(group.key)}
+                    style={styles.showMoreRow}
+                    accessibilityLabel={`Show more sessions in ${group.title}`}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={14} color={c.textTertiary} />
+                    <Text style={[styles.showMoreText, { color: c.textTertiary }]}>
+                      Show more (
+                      {group.items.length - (shownByGroup[group.key] ?? GROUP_PAGE_SIZE)} left)
+                    </Text>
+                  </ScalePressable>
+                )}
             </View>
           );
         })}
@@ -564,6 +592,19 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: Spacing.sm,
+  },
+  showMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginLeft: 4,
+  },
+  showMoreText: {
+    ...Typography.caption1,
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',

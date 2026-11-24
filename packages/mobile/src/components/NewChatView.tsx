@@ -14,7 +14,8 @@ import {
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import type { AgentType } from '@baton/shared';
+import * as ImagePicker from 'expo-image-picker';
+import type { AgentType, ChatImage } from '@baton/shared';
 import { formatModelName } from '@baton/shared/utils';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { useRecentStore } from '../stores/recent';
@@ -23,6 +24,8 @@ import { apiFetch } from '../services/api';
 import { wsService } from '../services/websocket';
 import { Typography, Spacing, CornerRadius, Glass, Colors } from '../constants/theme';
 import { DirectoryPicker } from './DirectoryPicker';
+import { AttachmentStrip, type PendingAttachment } from './AttachmentStrip';
+import { AgentInputAutocomplete } from './AgentInputAutocomplete';
 import { PopoverMenu, type MenuOption, type AnchorRect } from './messages/PopoverMenu';
 import { ScalePressable } from './Pressables';
 
@@ -104,6 +107,9 @@ const STARTER_PROMPTS = [
   },
 ];
 
+const MAX_RECENT_PROJECTS = 4;
+const MAX_ATTACHMENTS = 4;
+
 interface NewChatViewProps {
   onStartSession: (sessionId: string) => void;
   onOpenSidebar?: () => void;
@@ -127,7 +133,8 @@ export function NewChatView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [input, setInput] = useState('');
   const [starting, setStarting] = useState(false);
-
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [inputFocused, setInputFocused] = useState(false);
   // Model & thinking state
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -187,6 +194,94 @@ export function NewChatView({
     [selectedAgent],
   );
 
+  /** Distinct recent project directories, newest first. */
+  const recentProjects = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of sessions) {
+      if (!s.projectPath || seen.has(s.projectPath)) continue;
+      seen.add(s.projectPath);
+      out.push(s.projectPath);
+      if (out.length >= MAX_RECENT_PROJECTS) break;
+    }
+    return out;
+  }, [sessions]);
+
+  // `@file` and `/command` completion, same triggers as the chat composer.
+  const autocomplete = useMemo<{ type: 'file' | 'command'; query: string } | null>(() => {
+    if (!inputFocused && !input) return null;
+    const fileMatch = input.match(/@([a-zA-Z0-9_\-./\\]*)$/);
+    if (fileMatch) return { type: 'file', query: fileMatch[1] };
+    const cmdMatch = input.match(/^\/([a-zA-Z0-9_\-]*)$/);
+    if (cmdMatch) return { type: 'command', query: cmdMatch[1] };
+    return null;
+  }, [input, inputFocused]);
+
+  const handleAutocompleteSelect = useCallback(
+    (replacement: string) => {
+      if (autocomplete?.type === 'file') {
+        setInput((prev) => prev.replace(/@([a-zA-Z0-9_\-./\\]*)$/, replacement));
+      } else if (autocomplete?.type === 'command') {
+        setInput(`${replacement} `);
+      }
+    },
+    [autocomplete],
+  );
+
+  async function pickAttachments() {
+    const remaining = MAX_ATTACHMENTS - attachments.length;
+    if (remaining <= 0) {
+      setStartError(`Up to ${MAX_ATTACHMENTS} images per message`);
+      return;
+    }
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        quality: 0.8,
+        base64: true,
+        exif: false,
+      });
+      if (res.canceled) return;
+      const picked: PendingAttachment[] = [];
+      for (const asset of res.assets) {
+        if (!asset.base64) continue;
+        const mediaType = asset.mimeType as PendingAttachment['mediaType'] | undefined;
+        if (
+          mediaType !== 'image/jpeg' &&
+          mediaType !== 'image/png' &&
+          mediaType !== 'image/webp' &&
+          mediaType !== 'image/gif'
+        ) {
+          setStartError(`Unsupported image type: ${asset.mimeType ?? 'unknown'}`);
+          continue;
+        }
+        // Base64 is ~4/3 the binary size; ~6M chars ≈ 4.5MB image.
+        if (asset.base64.length > 6_000_000) {
+          setStartError(`${asset.fileName ?? 'Image'} is too large (max ~4 MB)`);
+          continue;
+        }
+        picked.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          mediaType,
+          data: asset.base64,
+          width: asset.width,
+          height: asset.height,
+        });
+      }
+      if (picked.length > 0) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        setStartError(null);
+        setAttachments((prev) => [...prev, ...picked].slice(0, MAX_ATTACHMENTS));
+      }
+    } catch {
+      setStartError('Could not open the photo library');
+    }
+  }
+
+  const canSend = (input.trim().length > 0 || attachments.length > 0) && !starting;
+
   const thinkingBadge = useMemo(() => {
     if (thinkingMode === 'none') return 'No thinking';
     if (thinkingMode === 'auto') return 'Auto';
@@ -237,8 +332,10 @@ export function NewChatView({
   }, [measureAnchor]);
 
   const handleStart = async (customPrompt?: string) => {
-    const promptText = (customPrompt ?? input).trim();
-    if (!promptText && !customPrompt) return;
+    const hasAttachments = attachments.length > 0;
+    const typed = (customPrompt ?? input).trim();
+    if (!typed && !hasAttachments) return;
+    const promptText = typed || '(image)';
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (!projectPath) {
@@ -283,9 +380,13 @@ export function NewChatView({
             : { mode: thinkingMode },
       });
       if (promptText) {
-        wsService.send({ type: 'chat_input', sessionId, content: promptText });
+        const images: ChatImage[] | undefined = hasAttachments
+          ? attachments.map(({ mediaType, data }) => ({ mediaType, data }))
+          : undefined;
+        wsService.send({ type: 'chat_input', sessionId, content: promptText, images });
       }
       setInput('');
+      setAttachments([]);
       onStartSession(sessionId);
     } catch (err) {
       setStartError(err instanceof Error ? err.message : 'Failed to start session');
@@ -325,24 +426,6 @@ export function NewChatView({
             <Text style={[styles.agentChipText, { color: c.textPrimary }]}>{activeMeta.label}</Text>
           </View>
         </View>
-
-        {/* Directory Picker Button */}
-        <ScalePressable
-          onPress={() => setPickerOpen(true)}
-          style={[
-            styles.dirPickerBtn,
-            {
-              backgroundColor: c.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-              borderColor: c.cardBorder,
-            },
-          ]}
-        >
-          <Ionicons name="folder-outline" size={13} color={c.textSecondary} />
-          <Text style={[styles.dirText, { color: c.textSecondary }]} numberOfLines={1}>
-            {folderName}
-          </Text>
-          <Ionicons name="chevron-down" size={11} color={c.textTertiary} />
-        </ScalePressable>
       </View>
 
       {/* Main Body */}
@@ -420,6 +503,88 @@ export function NewChatView({
                 );
               })}
             </View>
+          </View>
+
+          {/* Project: current choice, recent projects, browse */}
+          <View style={styles.projectSection}>
+            <Text style={[styles.sectionLabel, { color: c.textTertiary }]}>PROJECT</Text>
+            <View
+              style={[
+                styles.projectCurrent,
+                {
+                  backgroundColor: c.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                  borderColor: c.cardBorder,
+                },
+              ]}
+            >
+              <Ionicons name="folder-open-outline" size={16} color={activeMeta.color} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.projectName, { color: c.textPrimary }]} numberOfLines={1}>
+                  {folderName}
+                </Text>
+                {projectPath ? (
+                  <Text
+                    style={[styles.projectPath, { color: c.textTertiary }]}
+                    numberOfLines={1}
+                    ellipsizeMode="middle"
+                  >
+                    {projectPath}
+                  </Text>
+                ) : null}
+              </View>
+              <ScalePressable
+                onPress={() => setPickerOpen(true)}
+                hitSlop={6}
+                style={[styles.browseBtn, { borderColor: c.cardBorder }]}
+                accessibilityLabel="Browse folders"
+              >
+                <Ionicons name="search-outline" size={13} color={c.textSecondary} />
+                <Text style={[styles.browseText, { color: c.textSecondary }]}>Browse</Text>
+              </ScalePressable>
+            </View>
+            {recentProjects.length > 0 && (
+              <View style={styles.recentList}>
+                {recentProjects.map((p) => {
+                  const active = p === projectPath;
+                  return (
+                    <ScalePressable
+                      key={p}
+                      pressedScale={0.98}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setProjectPath(p);
+                      }}
+                      style={[
+                        styles.recentRow,
+                        {
+                          borderColor: active ? activeMeta.color : c.cardBorder,
+                          borderWidth: active ? 1.5 : StyleSheet.hairlineWidth,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={active ? 'checkmark-circle' : 'time-outline'}
+                        size={14}
+                        color={active ? activeMeta.color : c.textTertiary}
+                      />
+                      <Text
+                        style={[styles.recentName, { color: c.textPrimary }]}
+                        numberOfLines={1}
+                      >
+                        {p.split('/').filter(Boolean).pop() || p}
+                      </Text>
+                      <Text
+                        style={[styles.recentPath, { color: c.textTertiary }]}
+                        numberOfLines={1}
+                        ellipsizeMode="head"
+                      >
+                        {p}
+                      </Text>
+                    </ScalePressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* Starter Prompts */}
@@ -556,6 +721,16 @@ export function NewChatView({
           </Text>
         ) : null}
         <View style={styles.composerInnerWrap}>
+          {autocomplete && projectPath ? (
+            <AgentInputAutocomplete
+              type={autocomplete.type}
+              query={autocomplete.query}
+              projectPath={projectPath}
+              colors={c}
+              onSelect={handleAutocompleteSelect}
+              onClose={() => setInputFocused(false)}
+            />
+          ) : null}
           <View
             style={[
               styles.inputBox,
@@ -565,39 +740,57 @@ export function NewChatView({
               },
             ]}
           >
-            <TextInput
-              ref={inputRef}
-              value={input}
-              onChangeText={setInput}
-              placeholder={`Message ${activeMeta.label}...`}
-              placeholderTextColor={c.textTertiary}
-              style={[styles.inputField, { color: c.textPrimary }]}
-              multiline
-              maxLength={4000}
-            />
+            <ScalePressable
+              onPress={pickAttachments}
+              hitSlop={4}
+              style={styles.attachBtn}
+              accessibilityLabel="Attach images"
+            >
+              <Ionicons
+                name={attachments.length > 0 ? 'image' : 'add'}
+                size={20}
+                color={attachments.length > 0 ? Colors.primary[400] : c.textSecondary}
+              />
+            </ScalePressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AttachmentStrip
+                images={attachments}
+                onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+                colors={c}
+              />
+              <TextInput
+                ref={inputRef}
+                value={input}
+                onChangeText={setInput}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                placeholder={`Message ${activeMeta.label}...`}
+                placeholderTextColor={c.textTertiary}
+                style={[styles.inputField, { color: c.textPrimary }]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                multiline
+                maxLength={4000}
+              />
+            </View>
             <ScalePressable
               onPress={() => handleStart()}
-              disabled={!input.trim() || starting}
+              disabled={!canSend}
               style={[
                 styles.sendBtn,
                 {
-                  backgroundColor:
-                    input.trim() && !starting
-                      ? c.accentBg
-                      : c.isDark
-                        ? 'rgba(255,255,255,0.1)'
-                        : 'rgba(0,0,0,0.1)',
+                  backgroundColor: canSend
+                    ? c.accentBg
+                    : c.isDark
+                      ? 'rgba(255,255,255,0.1)'
+                      : 'rgba(0,0,0,0.1)',
                 },
               ]}
             >
               {starting ? (
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
-                <Ionicons
-                  name="arrow-up"
-                  size={18}
-                  color={input.trim() ? '#ffffff' : c.textTertiary}
-                />
+                <Ionicons name="arrow-up" size={18} color={canSend ? '#ffffff' : c.textTertiary} />
               )}
             </ScalePressable>
           </View>
@@ -830,6 +1023,75 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 1,
   },
+  projectSection: {
+    gap: 4,
+  },
+  projectCurrent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: CornerRadius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  projectName: {
+    ...Typography.subhead,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  projectPath: {
+    ...Typography.caption2,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  browseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  browseText: {
+    ...Typography.caption1,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  recentList: {
+    gap: 6,
+    marginTop: 4,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: CornerRadius.medium,
+  },
+  recentName: {
+    ...Typography.subhead,
+    fontSize: 13,
+    fontWeight: '500',
+    flexShrink: 0,
+    maxWidth: '40%',
+  },
+  recentPath: {
+    ...Typography.caption2,
+    fontSize: 11,
+    flex: 1,
+    textAlign: 'right',
+  },
+  attachBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
   promptsSection: {
     gap: 4,
   },
@@ -898,7 +1160,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingLeft: 14,
+    paddingLeft: 6,
     paddingRight: 6,
     paddingVertical: 6,
     minHeight: 46,
