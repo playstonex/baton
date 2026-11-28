@@ -4,6 +4,7 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { wsService } from '../services/websocket.js';
+import { resumeSessionRequest } from '../services/session-resume.js';
 import { StatusBadge, StatusDot, Button } from '../lib/ui.js';
 import { IconFile, IconGitBranch, IconActivity, IconStop, IconChat } from '../lib/icons.js';
 import { UsagePill } from '../components/UsagePill.js';
@@ -94,6 +95,8 @@ export function TerminalScreen() {
   const [status, setStatus] = useState<string>('unknown');
   const [sessionOwner, setSessionOwner] = useState<'local' | 'remote' | null>(null);
   const [isClaimed, setIsClaimed] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   const attachSession = useCallback(() => {
     if (!sessionId) return;
@@ -221,6 +224,26 @@ export function TerminalScreen() {
     navigate('/');
   }
 
+  function reconnect() {
+    wsService.connect();
+  }
+
+  async function resumeAgent() {
+    if (!sessionId || resuming) return;
+    setResuming(true);
+    setResumeError(null);
+    try {
+      const newId = await resumeSessionRequest(sessionId);
+      navigate(`/terminal/${newId}`);
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setResuming(false);
+    }
+  }
+
+  const isStopped = status === 'stopped' || status === 'error';
+
   function claimSession() {
     if (!sessionId) return;
     wsService.send({ type: 'control', action: 'claim_session', sessionId });
@@ -275,6 +298,17 @@ export function TerminalScreen() {
             </Button>
           )}
           <StatusBadge status={connected ? 'connected' : 'disconnected'} dot={false} />
+          {!connected && (
+            <Button size="sm" variant="primary" onClick={reconnect}>
+              Reconnect
+            </Button>
+          )}
+          {connected && isStopped && (
+            <Button size="sm" variant="primary" onClick={resumeAgent} disabled={resuming}>
+              {resuming ? 'Resuming…' : 'Resume Session'}
+            </Button>
+          )}
+          {resumeError && <span className="text-xs text-danger">{resumeError}</span>}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <UsagePill />

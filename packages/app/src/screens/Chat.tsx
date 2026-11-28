@@ -5,6 +5,7 @@ import { formatModelName } from '@baton/shared';
 import { useStore } from 'zustand';
 import { useChatSessionStore } from '../stores/chat.js';
 import { wsService } from '../services/websocket.js';
+import { resumeSessionRequest } from '../services/session-resume.js';
 import { Button } from '../lib/ui.js';
 import { UsagePill } from '../components/UsagePill.js';
 import { ThinkingStates, MatrixLoader } from '../components/index.js';
@@ -67,6 +68,8 @@ export function ChatScreen() {
     resolveApproval,
     clear,
   } = useStore(chatStore);
+  const [connected, setConnected] = useState(wsService.connected);
+  const [resuming, setResuming] = useState(false);
   const [input, setInput] = useState('');
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [showPermMenu, setShowPermMenu] = useState(false);
@@ -170,7 +173,9 @@ export function ChatScreen() {
       }
     });
 
+    setConnected(wsService.connected);
     const unsubState = wsService.on('_state', () => {
+      setConnected(wsService.connected);
       if (wsService.connected) {
         attachSession();
         wsService.send({ type: 'model_list_request', sessionId });
@@ -309,6 +314,19 @@ export function ChatScreen() {
   }
 
   const isStopped = agentStatus === 'stopped' || agentStatus === 'error';
+
+  async function resumeAgent() {
+    if (!sessionId || resuming) return;
+    setResuming(true);
+    try {
+      const newId = await resumeSessionRequest(sessionId);
+      navigate(`/terminal/${newId}`);
+    } catch (err) {
+      console.error(`Failed to resume: ${err}`);
+    } finally {
+      setResuming(false);
+    }
+  }
   const running = isRunning(agentStatus) && !isStopped;
 
   return (
@@ -648,6 +666,16 @@ export function ChatScreen() {
                 <path d="M1 8h14M9 2l6 6-6 6" />
               </svg>
               Send
+            </Button>
+          )}
+          {!connected && (
+            <Button size="sm" variant="primary" onClick={() => wsService.connect()}>
+              Reconnect
+            </Button>
+          )}
+          {connected && isStopped && (
+            <Button size="sm" variant="primary" onClick={resumeAgent} disabled={resuming}>
+              {resuming ? 'Resuming…' : 'Resume Session'}
             </Button>
           )}
           {isStopped && (
